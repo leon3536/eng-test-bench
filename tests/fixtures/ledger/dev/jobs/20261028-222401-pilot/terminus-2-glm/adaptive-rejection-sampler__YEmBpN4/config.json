@@ -1,0 +1,19 @@
+{
+  "task": {
+    "path": "adaptive-rejection-sampler",
+    "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+    "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+    "source": "terminal-bench"
+  },
+  "trial_name": "adaptive-rejection-sampler__YEmBpN4",
+  "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot\\terminus-2-glm",
+  "agent": {
+    "name": "terminus-2",
+    "model_name": "openrouter/z-ai/glm-5.3",
+    "kwargs": {
+      "reasoning_effort": "medium",
+      "max_turns": 150
+    }
+  },
+  "job_id": "d7b642d8-d275-4ba4-882b-547fb96847ae"
+}

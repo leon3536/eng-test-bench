@@ -1,0 +1,31 @@
+.venv/
+.env
+# Run data and downloads. Anchored to the project root (and to each profile)
+# so folders of the same name under tests/fixtures stay tracked.
+/jobs/
+/runs/
+profiles/*/jobs/
+profiles/*/runs/
+profiles/*/assistant/
+profiles/*/queue.json
+/datasets/
+/ledger/
+/assistant/
+/queue.json
+# designs/ is tracked: small, readable records of what was run and why.
+/designs/**/*.tmp
+profiles/*/designs/**/*.tmp
+# Temp files fsutil leaves next to a data-root file (queue.json) after a crash.
+/.*.tmp
+profiles/*/.*.tmp
+# The instance lock (kept in runs/, listed here in case it moves) and the
+# copies the queue keeps of a queue.json it could not read.
+/.bench.lock
+profiles/*/.bench.lock
+/queue.json.corrupt-*
+profiles/*/queue.json.corrupt-*
+config/*.overrides.yaml
+config/overrides.yaml
+config/*.tmp
+__pycache__/
+*.pyc

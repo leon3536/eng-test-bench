@@ -1,0 +1,25 @@
+{
+  "job_name": "pi-glm",
+  "jobs_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "pi",
+      "model_name": "openrouter/z-ai/glm-5.3",
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_turns": 150
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "terminal-bench",
+      "version": "2.0",
+      "task_names": [
+        "adaptive-rejection-sampler"
+      ]
+    }
+  ]
+}

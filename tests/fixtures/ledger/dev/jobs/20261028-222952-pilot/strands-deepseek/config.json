@@ -1,0 +1,20 @@
+{
+  "job_name": "strands-deepseek",
+  "jobs_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "strands",
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash"
+    }
+  ],
+  "datasets": [
+    {
+      "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench",
+      "task_names": [
+        "adaptive-rejection-sampler"
+      ]
+    }
+  ]
+}

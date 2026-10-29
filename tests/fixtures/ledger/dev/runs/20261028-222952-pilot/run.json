@@ -1,0 +1,468 @@
+{
+  "id": "20261028-222952-pilot",
+  "mode": "pilot",
+  "created_at": "2026-10-29T05:29:52+00:00",
+  "budget_usd": 5.0,
+  "tasks": [
+    "adaptive-rejection-sampler"
+  ],
+  "arms": [
+    {
+      "name": "claude-code-deepseek",
+      "status": "done_with_errors",
+      "message": "1 of 1 trials errored before finishing",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 1.4385,
+      "started_at": "2026-10-29T05:29:58+00:00",
+      "finished_at": "2026-10-29T05:37:51+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "terminus-2-deepseek",
+      "status": "done",
+      "message": "",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.0475,
+      "started_at": "2026-10-29T05:29:58+00:00",
+      "finished_at": "2026-10-29T05:40:28+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "mini-swe-agent-deepseek",
+      "status": "failed",
+      "message": "PermissionError: [WinError 5] Access is denied: 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.tmp' -> 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.json'",
+      "trials_total": 1,
+      "trials_done": 0,
+      "spend_usd": 0,
+      "started_at": "2026-10-29T05:29:58+00:00",
+      "finished_at": "2026-10-29T05:35:20+00:00",
+      "returncode": null
+    },
+    {
+      "name": "pi-deepseek",
+      "status": "done",
+      "message": "",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.0419,
+      "started_at": "2026-10-29T05:29:58+00:00",
+      "finished_at": "2026-10-29T05:41:31+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "strands-deepseek",
+      "status": "done_with_errors",
+      "message": "1 of 1 trials errored before finishing",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.0,
+      "started_at": "2026-10-29T05:29:58+00:00",
+      "finished_at": "2026-10-29T05:31:35+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "claude-code-glm",
+      "status": "done_with_errors",
+      "message": "1 of 1 trials errored before finishing",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 1.0768,
+      "started_at": "2026-10-29T05:31:35+00:00",
+      "finished_at": "2026-10-29T05:38:36+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "terminus-2-glm",
+      "status": "failed",
+      "message": "PermissionError: [WinError 5] Access is denied: 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.tmp' -> 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.json'",
+      "trials_total": 1,
+      "trials_done": 0,
+      "spend_usd": 0.0,
+      "started_at": "2026-10-29T05:35:20+00:00",
+      "finished_at": "2026-10-29T05:35:20+00:00",
+      "returncode": null
+    },
+    {
+      "name": "mini-swe-agent-glm",
+      "status": "done_with_errors",
+      "message": "1 of 1 trials errored before finishing",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.0,
+      "started_at": "2026-10-29T05:35:20+00:00",
+      "finished_at": "2026-10-29T05:41:04+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "pi-glm",
+      "status": "done",
+      "message": "",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.1396,
+      "started_at": "2026-10-29T05:37:51+00:00",
+      "finished_at": "2026-10-29T05:47:35+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "strands-glm",
+      "status": "done_with_errors",
+      "message": "1 of 1 trials errored before finishing",
+      "trials_total": 1,
+      "trials_done": 1,
+      "spend_usd": 0.0,
+      "started_at": "2026-10-29T05:38:36+00:00",
+      "finished_at": "2026-10-29T05:39:48+00:00",
+      "returncode": 0
+    }
+  ],
+  "plan": {
+    "mode": "pilot",
+    "tasks": [
+      "adaptive-rejection-sampler"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": null,
+    "trials": 10,
+    "budget_usd": 5.0,
+    "worst_case_capped_usd": 4.0,
+    "uncapped_arms": [
+      "terminus-2-deepseek",
+      "pi-deepseek",
+      "strands-deepseek",
+      "terminus-2-glm",
+      "pi-glm",
+      "strands-glm"
+    ],
+    "arms": [
+      {
+        "name": "claude-code-deepseek",
+        "agent": "claude-code",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "1",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent claude-code --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name claude-code-deepseek --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_budget_usd=\\\"1\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent terminus-2 --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name terminus-2-deepseek --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "mini-swe-agent",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "1",
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent mini-swe-agent --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name mini-swe-agent-deepseek --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"1\\\"",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "pi-deepseek",
+        "agent": "pi",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent pi --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name pi-deepseek --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "strands-deepseek",
+        "agent": "strands",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent strands --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name strands-deepseek --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "claude-code-glm",
+        "agent": "claude-code",
+        "provider": "openrouter",
+        "model": "openrouter/z-ai/glm-5.3",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "1",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent claude-code --model openrouter/z-ai/glm-5.3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name claude-code-glm --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_budget_usd=\\\"1\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "provider": "openrouter",
+        "model": "openrouter/z-ai/glm-5.3",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent terminus-2 --model openrouter/z-ai/glm-5.3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name terminus-2-glm --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "mini-swe-agent-glm",
+        "agent": "mini-swe-agent",
+        "provider": "openrouter",
+        "model": "openrouter/z-ai/glm-5.3",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "1",
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent mini-swe-agent --model openrouter/z-ai/glm-5.3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name mini-swe-agent-glm --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"1\\\"",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "pi-glm",
+        "agent": "pi",
+        "provider": "openrouter",
+        "model": "openrouter/z-ai/glm-5.3",
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 150,
+            "source": "run cap"
+          }
+        ],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent pi --model openrouter/z-ai/glm-5.3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name pi-glm --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler --ak reasoning_effort=\\\"medium\\\" --ak max_turns=150",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "strands-glm",
+        "agent": "strands",
+        "provider": "openrouter",
+        "model": "openrouter/z-ai/glm-5.3",
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [],
+        "command": "harbor run --path datasets\\terminal-bench@2.0 --agent strands --model openrouter/z-ai/glm-5.3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\<run-id> --job-name strands-glm --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name adaptive-rejection-sampler",
+        "problems": [],
+        "warnings": []
+      }
+    ],
+    "problems": []
+  },
+  "config": {
+    "dataset": "terminal-bench@2.0",
+    "tasks_file": "config/tasks.txt",
+    "providers": {
+      "openrouter": {
+        "env_key": "OPENROUTER_API_KEY",
+        "model_prefix": "openrouter/"
+      }
+    },
+    "modes": {
+      "pilot": {
+        "n_tasks": 1,
+        "n_attempts": 1
+      },
+      "sample": {
+        "n_tasks": 3,
+        "n_attempts": 1
+      }
+    },
+    "run": {
+      "effort": "medium",
+      "n_concurrent": 1,
+      "parallel_arms": 5,
+      "budget_usd": 5,
+      "per_trial_cap_usd": 1,
+      "max_turns": 150,
+      "timeout_multiplier": 1.0
+    },
+    "baseline_arm": "claude-code-deepseek",
+    "arms": [
+      {
+        "name": "claude-code-deepseek",
+        "agent": "claude-code",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "mini-swe-agent",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      {
+        "name": "pi-deepseek",
+        "agent": "pi",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      {
+        "name": "strands-deepseek",
+        "agent": "strands",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "effort": "omit"
+      },
+      {
+        "name": "claude-code-glm",
+        "agent": "claude-code",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3"
+      },
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3"
+      },
+      {
+        "name": "mini-swe-agent-glm",
+        "agent": "mini-swe-agent",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3"
+      },
+      {
+        "name": "pi-glm",
+        "agent": "pi",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3"
+      },
+      {
+        "name": "strands-glm",
+        "agent": "strands",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3",
+        "effort": "omit"
+      }
+    ]
+  },
+  "dataset": {
+    "dataset": "terminal-bench@2.0",
+    "tasks_dir": "terminal-bench",
+    "tasks": 89,
+    "downloaded_at": "2026-10-29T05:29:58+00:00",
+    "harbor": "0.25.0",
+    "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+  },
+  "status": "failed",
+  "message": "PermissionError: [WinError 5] Access is denied: 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.tmp' -> 'C:\\\\Git\\\\EngineeringTestBench\\\\profiles\\\\dev\\\\runs\\\\20261028-222952-pilot\\\\run.json'",
+  "finished_at": "2026-10-29T05:47:35+00:00",
+  "spend_usd": 2.7443
+}

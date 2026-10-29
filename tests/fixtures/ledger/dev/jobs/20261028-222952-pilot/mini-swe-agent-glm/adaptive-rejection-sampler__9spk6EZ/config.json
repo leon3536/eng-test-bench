@@ -1,0 +1,17 @@
+{
+  "task": {
+    "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+    "source": "terminal-bench"
+  },
+  "trial_name": "adaptive-rejection-sampler__9spk6EZ",
+  "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot\\mini-swe-agent-glm",
+  "agent": {
+    "name": "mini-swe-agent",
+    "model_name": "openrouter/z-ai/glm-5.3",
+    "kwargs": {
+      "reasoning_effort": "medium",
+      "cost_limit": "1"
+    }
+  },
+  "job_id": "27428ffc-91ea-45da-bb75-611b49d7c6db"
+}

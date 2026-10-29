@@ -1,0 +1,39 @@
+{
+  "id": "3b421497-dc3d-4d00-847b-3eddbc34e99d",
+  "started_at": "2026-10-28T22:38:05.814123",
+  "updated_at": "2026-10-28T22:47:32.733445",
+  "finished_at": "2026-10-28T22:47:32.733445",
+  "n_total_trials": 1,
+  "stats": {
+    "n_completed_trials": 1,
+    "n_errored_trials": 0,
+    "n_running_trials": 0,
+    "n_pending_trials": 0,
+    "n_cancelled_trials": 0,
+    "n_retries": 0,
+    "evals": {
+      "pi__z-ai/glm-5.3__terminal-bench": {
+        "n_trials": 1,
+        "n_errors": 0,
+        "metrics": [
+          {
+            "mean": 0.0
+          }
+        ],
+        "pass_at_k": {},
+        "reward_stats": {
+          "reward": {
+            "0.0": [
+              "adaptive-rejection-sampler__iYyu6Jw"
+            ]
+          }
+        },
+        "exception_stats": {}
+      }
+    },
+    "n_input_tokens": 707943,
+    "n_cache_tokens": 605450,
+    "n_output_tokens": 60178,
+    "cost_usd": 0.139571247
+  }
+}

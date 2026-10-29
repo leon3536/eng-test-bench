@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Test Bench</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080b09'/%3E%3Cpath d='M16 6l10 10-10 10L6 16z' fill='none' stroke='%234cbb17' stroke-width='2.5'/%3E%3Crect x='13.5' y='13.5' width='5' height='5' fill='%234cbb17'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/report.css">
+<link rel="stylesheet" href="/static/designs.css">
+<link rel="stylesheet" href="/static/queue.css">
+<link rel="stylesheet" href="/static/assistant.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 9V2h7M23 2h7v7M30 23v7h-7M9 30H2v-7" fill="none" stroke="#3b4b3f" stroke-width="1.5"/>
+      <path d="M16 6.5 25.5 16 16 25.5 6.5 16Z" fill="none" stroke="#4cbb17" stroke-width="2"/>
+      <rect x="13.6" y="13.6" width="4.8" height="4.8" fill="#4cbb17"/>
+      <path d="M16 1v4M16 27v4M1 16h4M27 16h4" stroke="#4cbb17" stroke-width="1"/>
+    </svg>
+    <div>
+      <span class="brand-name">TEST BENCH</span>
+      <span class="brand-sub"><span class="brand-kicker">HARNESS EVAL</span> <span id="profile-tag" class="tag">default</span><span id="demo-tag" class="tag hazard" hidden>demo data</span></span>
+    </div>
+  </div>
+  <nav class="views" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tab-live" aria-controls="view-live" aria-selected="false" data-view="live"><span class="led" id="live-led"></span>LIVE</button>
+    <button type="button" role="tab" id="tab-launch" aria-controls="view-launch" aria-selected="false" data-view="launch">LAUNCH</button>
+    <button type="button" role="tab" id="tab-designs" aria-controls="view-designs" aria-selected="false" data-view="designs">DESIGNS</button>
+    <button type="button" role="tab" id="tab-queue" aria-controls="view-queue" aria-selected="false" data-view="queue">QUEUE</button>
+    <button type="button" role="tab" id="tab-report" aria-controls="view-report" aria-selected="false" data-view="report">REPORT</button>
+    <button type="button" role="tab" id="tab-analysis" aria-controls="view-analysis" aria-selected="false" data-view="analysis">ANALYSIS <span class="count" id="runs-count"></span></button>
+  </nav>
+  <div class="systems" id="systems" aria-label="System status"></div>
+  <div class="bar-end">
+    <button type="button" class="btn ghost small" id="open-assistant" aria-controls="assistant" aria-expanded="false" aria-label="Assistant"><span class="led" id="assistant-btn-led"></span><span class="ai-mark">◆</span><span class="btn-label">Assistant</span></button>
+    <button type="button" class="btn ghost small" id="open-settings" aria-label="Run settings"><span class="cfg-mark" aria-hidden="true">⚙</span><span class="btn-label">Run settings</span></button>
+    <span class="link"><span class="led" id="link-led"></span><b id="clock">--:--:--</b></span>
+    <button type="button" id="queue-chip" aria-label="Run queue" hidden></button>
+    <span id="status-pill">LINKING</span>
+  </div>
+</header>
+
+<main>
+  <div id="demo-banner" class="banner demo" hidden>Demo mode: runs and results on this page are simulated in the browser. Keys, configuration and the plan are real. Confirms open as usual, but nothing that bills is ever sent.</div>
+  <div id="config-error" class="banner bad" hidden></div>
+  <section id="view-live" class="view" role="tabpanel" aria-labelledby="tab-live" hidden></section>
+  <section id="view-launch" class="view" role="tabpanel" aria-labelledby="tab-launch" hidden></section>
+  <section id="view-designs" class="view" role="tabpanel" aria-labelledby="tab-designs" hidden></section>
+  <section id="view-queue" class="view" role="tabpanel" aria-labelledby="tab-queue" hidden></section>
+  <section id="view-report" class="view" role="tabpanel" aria-labelledby="tab-report" hidden></section>
+  <section id="view-analysis" class="view" role="tabpanel" aria-labelledby="tab-analysis" hidden></section>
+</main>
+
+<footer class="statusline">
+  <span>LINK <b id="sl-link">—</b></span>
+  <span>POLL <b id="sl-poll">—</b></span>
+  <span>LAST SYNC <b id="sl-sync">—</b></span>
+  <span class="grow"></span>
+  <span>DATASET <b id="sl-dataset">—</b></span>
+  <span>BASELINE <b id="sl-baseline">—</b></span>
+</footer>
+
+<div id="scrim" class="scrim" hidden></div>
+<aside id="drawer" class="drawer" aria-labelledby="drawer-title" inert>
+  <div class="drawer-head">
+    <span class="panel-code" id="drawer-code">CFG</span>
+    <h2 id="drawer-title">Settings</h2>
+    <button type="button" class="btn ghost small close" id="drawer-close" aria-label="Close panel">Close <span class="arrow">✕</span></button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<!-- Built by assistant.js (setup). -->
+<section id="assistant" class="assistant" aria-label="Assistant" hidden></section>
+
+<dialog id="key-dialog" aria-labelledby="key-title">
+  <form method="dialog">
+    <span class="panel-code dialog-code" aria-hidden="true">KEY</span>
+    <h3 id="key-title">Set key</h3>
+    <label class="field"><span class="label">Value</span>
+      <input type="password" id="key-value" class="mono" autocomplete="off" spellcheck="false">
+    </label>
+    <p class="muted">Written to the bench's key file. The dashboard only ever shows the last four characters.</p>
+    <div class="actions">
+      <button value="cancel" class="btn ghost" formnovalidate>Cancel</button>
+      <button value="save" id="key-save" class="btn primary">Save key</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+  <form method="dialog">
+    <span class="panel-code dialog-code" id="confirm-code" aria-hidden="true">CONFIRM</span>
+    <h3 id="confirm-title">Confirm</h3>
+    <div id="confirm-body" class="confirm-body"></div>
+    <div class="actions">
+      <button value="cancel" class="btn ghost" formnovalidate>Cancel</button>
+      <button value="ok" id="confirm-ok" class="btn primary">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="tooltip" role="tooltip" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+<script src="/static/report.js"></script>
+<script src="/static/designs.js"></script>
+<script src="/static/queue.js"></script>
+<script src="/static/assistant.js"></script>
+</body>
+</html>

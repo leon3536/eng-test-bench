@@ -1,0 +1,26 @@
+# Task sample for terminal-bench@2.0, drawn 2026-10-28 by `python -m bench.sample_tasks`.
+# Seed 20261028. 89 tasks; excluded 2 with an agent time limit over 60 minutes: build-pov-ray, sam-cell-seg.
+# Two blocks of 10, each in proportion to difficulty. The pilot uses line 1.
+
+# Block 1
+adaptive-rejection-sampler               # medium, 900s
+protein-assembly                         # hard, 1800s
+path-tracing                             # hard, 1800s
+openssl-selfsigned-cert                  # medium, 900s
+cobol-modernization                      # easy, 900s
+mteb-retrieve                            # medium, 1800s
+build-cython-ext                         # medium, 900s
+filter-js-from-html                      # medium, 1800s
+feal-differential-cryptanalysis          # hard, 1800s
+count-dataset-tokens                     # medium, 900s
+# Block 2
+caffe-cifar-10                           # medium, 1200s
+winning-avg-corewars                     # medium, 3600s
+compile-compcert                         # medium, 2400s
+torch-pipeline-parallelism               # hard, 900s
+financial-document-processor             # medium, 1200s
+polyglot-c-py                            # medium, 900s
+overfull-hbox                            # easy, 750s
+reshard-c4-data                          # medium, 3600s
+feal-linear-cryptanalysis                # hard, 1800s
+llm-inference-batching-scheduler         # hard, 1800s

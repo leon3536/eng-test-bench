@@ -1,0 +1,132 @@
+{
+  "id": "5aa299b1-a132-468c-8da7-44641bccf351",
+  "task_name": "adaptive-rejection-sampler",
+  "trial_name": "adaptive-rejection-sampler__jSiqhE7",
+  "trial_uri": "file:///C:/Git/EngineeringTestBench/profiles/dev/jobs/20261028-222952-pilot/pi-deepseek/adaptive-rejection-sampler__jSiqhE7",
+  "task_id": {
+    "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler"
+  },
+  "source": "terminal-bench",
+  "task_checksum": "4fde6e809c475b000ae3ea4135f906ffe4775bccae7dafd0b123f4ecc9fcf697",
+  "config": {
+    "task": {
+      "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+      "git_url": null,
+      "git_commit_id": null,
+      "name": null,
+      "ref": null,
+      "overwrite": false,
+      "download_dir": null,
+      "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__jSiqhE7",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot\\pi-deepseek",
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent_timeout_multiplier": null,
+    "verifier_timeout_multiplier": null,
+    "agent_setup_timeout_multiplier": null,
+    "environment_build_timeout_multiplier": null,
+    "agent": {
+      "name": "pi",
+      "import_path": null,
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+      "base_url": null,
+      "model_api_key_name": null,
+      "model_api_format": null,
+      "skip_model_parsing": false,
+      "n_concurrent": null,
+      "concurrency_group": null,
+      "skills": [],
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": null,
+      "max_timeout_sec": null,
+      "resume_trajectory": false,
+      "load_trajectory": null,
+      "extra_allowed_hosts": [],
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_turns": 150
+      },
+      "mcp_servers": []
+    },
+    "user_agent": null,
+    "environment": {
+      "type": "docker",
+      "import_path": null,
+      "force_build": false,
+      "delete": true,
+      "stream": false,
+      "cpu_enforcement_policy": "auto",
+      "memory_enforcement_policy": "auto",
+      "override_cpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "override_gpus": null,
+      "override_tpu": null,
+      "mounts": null,
+      "extra_docker_compose": [],
+      "kwargs": {},
+      "extra_allowed_hosts": []
+    },
+    "verifier": {
+      "override_timeout_sec": null,
+      "max_timeout_sec": null,
+      "disable": false
+    },
+    "artifacts": [],
+    "extra_instruction_paths": [],
+    "extra_instructions": [],
+    "job_id": "981e3640-d159-447f-af6b-00b9a4c69663",
+    "source_trial": null
+  },
+  "agent_info": {
+    "name": "pi",
+    "version": "1.4.0",
+    "model_info": {
+      "name": "deepseek/deepseek-v4.1-flash",
+      "provider": "openrouter"
+    }
+  },
+  "agent_result": {
+    "n_input_tokens": 1360013,
+    "n_cache_tokens": 1252992,
+    "n_output_tokens": 59144,
+    "cost_usd": 0.012608063928,
+    "model_usage": {
+      "openrouter/deepseek/deepseek-v4.1-flash": {
+        "n_input_tokens": 1360013,
+        "n_cache_tokens": 1252992,
+        "n_output_tokens": 59144,
+        "cost_usd": 0.012608063928000002
+      }
+    },
+    "metadata": null
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  },
+  "verifier_environment_mode": "shared",
+  "exception_info": null,
+  "started_at": "2026-10-29T05:30:18.446051Z",
+  "finished_at": "2026-10-29T05:41:28.119020Z",
+  "environment_setup": {
+    "started_at": "2026-10-29T05:30:18.504759Z",
+    "finished_at": "2026-10-29T05:30:22.960338Z"
+  },
+  "agent_setup": {
+    "started_at": "2026-10-29T05:30:22.960413Z",
+    "finished_at": "2026-10-29T05:31:11.000896Z"
+  },
+  "agent_execution": {
+    "started_at": "2026-10-29T05:31:11.001237Z",
+    "finished_at": "2026-10-29T05:41:02.857290Z"
+  },
+  "verifier": {
+    "started_at": "2026-10-29T05:41:03.672571Z",
+    "finished_at": "2026-10-29T05:41:23.097211Z"
+  },
+  "step_results": null
+}

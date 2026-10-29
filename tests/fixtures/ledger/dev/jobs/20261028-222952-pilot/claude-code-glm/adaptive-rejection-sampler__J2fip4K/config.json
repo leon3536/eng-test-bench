@@ -1,0 +1,18 @@
+{
+  "task": {
+    "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+    "source": "terminal-bench"
+  },
+  "trial_name": "adaptive-rejection-sampler__J2fip4K",
+  "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot\\claude-code-glm",
+  "agent": {
+    "name": "claude-code",
+    "model_name": "openrouter/z-ai/glm-5.3",
+    "kwargs": {
+      "reasoning_effort": "medium",
+      "max_budget_usd": "1",
+      "max_turns": 150
+    }
+  },
+  "job_id": "d583f866-ff6f-4cdc-8327-e0f730bae179"
+}

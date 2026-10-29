@@ -1,0 +1,25 @@
+{
+  "job_name": "mini-swe-agent-deepseek",
+  "jobs_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "mini-swe-agent",
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "cost_limit": "1"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "terminal-bench",
+      "version": "2.0",
+      "task_names": [
+        "adaptive-rejection-sampler"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# Pinned so harness options, results format and container naming stay as tested.
+harbor==0.25.0
+anthropic==2.3.0
+# Harbor already depends on these; listed because the bench imports them directly.
+# pydantic comes with fastapi. The ledger uses the stdlib sqlite3.
+fastapi
+uvicorn
+python-dotenv
+pyyaml
+httpx
+# Not here on purpose: strands-harness and strands-agents. Harbor installs them
+# inside each task container from harnesses/strands_factory.

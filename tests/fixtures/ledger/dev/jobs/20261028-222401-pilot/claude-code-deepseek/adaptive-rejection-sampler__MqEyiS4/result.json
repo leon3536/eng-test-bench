@@ -1,0 +1,116 @@
+{
+  "id": "a8965092-8dfa-4419-b828-46de68693a79",
+  "task_name": "adaptive-rejection-sampler",
+  "trial_name": "adaptive-rejection-sampler__MqEyiS4",
+  "trial_uri": "file:///C:/Git/EngineeringTestBench/profiles/dev/jobs/20261028-222401-pilot/claude-code-deepseek/adaptive-rejection-sampler__MqEyiS4",
+  "task_id": {
+    "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+    "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+    "path": "adaptive-rejection-sampler"
+  },
+  "source": "terminal-bench",
+  "task_checksum": "cfa1b616968ca40188776311fda408198265c7d8a952466914f6875ca9bc0a9d",
+  "config": {
+    "task": {
+      "path": "adaptive-rejection-sampler",
+      "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+      "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+      "name": null,
+      "ref": null,
+      "overwrite": false,
+      "download_dir": null,
+      "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__MqEyiS4",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot\\claude-code-deepseek",
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent_timeout_multiplier": null,
+    "verifier_timeout_multiplier": null,
+    "agent_setup_timeout_multiplier": null,
+    "environment_build_timeout_multiplier": null,
+    "agent": {
+      "name": "claude-code",
+      "import_path": null,
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+      "base_url": null,
+      "model_api_key_name": null,
+      "model_api_format": null,
+      "skip_model_parsing": false,
+      "n_concurrent": null,
+      "concurrency_group": null,
+      "skills": [],
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": null,
+      "max_timeout_sec": null,
+      "resume_trajectory": false,
+      "load_trajectory": null,
+      "extra_allowed_hosts": [],
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_budget_usd": "1",
+        "max_turns": 150
+      },
+      "mcp_servers": []
+    },
+    "user_agent": null,
+    "environment": {
+      "type": "docker",
+      "import_path": null,
+      "force_build": false,
+      "delete": true,
+      "stream": false,
+      "cpu_enforcement_policy": "auto",
+      "memory_enforcement_policy": "auto",
+      "override_cpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "override_gpus": null,
+      "override_tpu": null,
+      "mounts": null,
+      "extra_docker_compose": [],
+      "kwargs": {},
+      "extra_allowed_hosts": []
+    },
+    "verifier": {
+      "override_timeout_sec": null,
+      "max_timeout_sec": null,
+      "disable": false
+    },
+    "artifacts": [],
+    "extra_instruction_paths": [],
+    "extra_instructions": [],
+    "job_id": "68987802-6dc3-41ac-abd2-9adf313ce12e",
+    "source_trial": null
+  },
+  "agent_info": {
+    "name": "claude-code",
+    "version": "unknown",
+    "model_info": {
+      "name": "deepseek/deepseek-v4.1-flash",
+      "provider": "openrouter"
+    }
+  },
+  "agent_result": null,
+  "verifier_result": null,
+  "verifier_environment_mode": "shared",
+  "exception_info": {
+    "exception_type": "NonZeroAgentExitCodeError",
+    "exception_message": "Command failed (exit 137): apt-get update && apt-get install -y curl nodejs npm\nstdout: Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nGet:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]\nGet:4 http://archive.ubuntu.com/ubuntu n ... [56128 chars truncated] ... d64 1.22.0-2.1build1 [26.4 kB]\nGet:290 http://archive.ubuntu.com/ubuntu noble/main amd64 libxcb-shm0 amd64 1.15-1ubuntu2 [5756 B]\nGet:291 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [117 kB]\nGet:292 http://archive.ubuntu.com/ubuntu noble/main amd64 libencode-locale-perl all 1.05-3 [11.6 kB]\nGet:293 http://archive.ubuntu.com/ubuntu noble/main amd64 libipc-system-simple-perl all 1.30-2 [22.3 kB]\nGet:294 http://archive.ubuntu.com/ubuntu noble/main amd64 libfile-basedir-perl all 0.09-2 [14.4 kB]\nGet:295 http://archive.ubuntu.com/ubuntu noble/main amd64 liburi-perl all 5.27-1 [88.0 kB]\nGet:296 http://archive.ubuntu.com/ubuntu noble/main amd64 libfile-desktopentry-perl all 0.22-3 [16.8 kB]\n\nstderr: None",
+    "exception_traceback": "Traceback (most recent call last):\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 606, in run\n    await self._prepare()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 652, in _prepare\n    await self._setup_agent()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 1885, in _setup_agent\n    await asyncio.wait_for(\n    ...<2 lines>...\n    )\n  File \"C:\\Users\\praem\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\tasks.py\", line 507, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1136, in setup\n    await self.install(environment)\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\claude_code.py\", line 642, in install\n    await self.ensure_system_dependencies(\n        environment, (\"curl\", \"bash\", \"nodejs\", \"npm\", \"procps\")\n    )\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 837, in ensure_system_dependencies\n    await self.exec_as_root(environment, command=command, env=env)\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1068, in exec_as_root\n    return await self._exec(\n           ^^^^^^^^^^^^^^^^^\n        environment, command, user=\"root\", env=env, cwd=cwd, timeout_sec=timeout_sec\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1048, in _exec\n    raise self._classify_exec_error(command, result)\nharbor.agents.installed.base.NonZeroAgentExitCodeError: Command failed (exit 137): apt-get update && apt-get install -y curl nodejs npm\nstdout: Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nGet:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]\nGet:4 http://archive.ubuntu.com/ubuntu n ... [56128 chars truncated] ... d64 1.22.0-2.1build1 [26.4 kB]\nGet:290 http://archive.ubuntu.com/ubuntu noble/main amd64 libxcb-shm0 amd64 1.15-1ubuntu2 [5756 B]\nGet:291 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [117 kB]\nGet:292 http://archive.ubuntu.com/ubuntu noble/main amd64 libencode-locale-perl all 1.05-3 [11.6 kB]\nGet:293 http://archive.ubuntu.com/ubuntu noble/main amd64 libipc-system-simple-perl all 1.30-2 [22.3 kB]\nGet:294 http://archive.ubuntu.com/ubuntu noble/main amd64 libfile-basedir-perl all 0.09-2 [14.4 kB]\nGet:295 http://archive.ubuntu.com/ubuntu noble/main amd64 liburi-perl all 5.27-1 [88.0 kB]\nGet:296 http://archive.ubuntu.com/ubuntu noble/main amd64 libfile-desktopentry-perl all 0.22-3 [16.8 kB]\n\nstderr: None\n",
+    "occurred_at": "2026-10-29T05:25:03.244698Z"
+  },
+  "started_at": "2026-10-29T05:24:28.477081Z",
+  "finished_at": "2026-10-29T05:25:04.388160Z",
+  "environment_setup": {
+    "started_at": "2026-10-29T05:24:28.629943Z",
+    "finished_at": "2026-10-29T05:24:36.392945Z"
+  },
+  "agent_setup": {
+    "started_at": "2026-10-29T05:24:36.393021Z",
+    "finished_at": "2026-10-29T05:25:03.222690Z"
+  },
+  "agent_execution": null,
+  "verifier": null,
+  "step_results": null
+}

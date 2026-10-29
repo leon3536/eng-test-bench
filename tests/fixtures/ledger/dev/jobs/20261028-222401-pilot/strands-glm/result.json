@@ -1,0 +1,43 @@
+{
+  "id": "459b1d15-570d-440a-aa01-cd4549640a82",
+  "started_at": "2026-10-28T22:25:29.455863",
+  "updated_at": "2026-10-28T22:26:31.530716",
+  "finished_at": "2026-10-28T22:26:31.530716",
+  "n_total_trials": 1,
+  "stats": {
+    "n_completed_trials": 1,
+    "n_errored_trials": 1,
+    "n_running_trials": 0,
+    "n_pending_trials": 0,
+    "n_cancelled_trials": 0,
+    "n_retries": 0,
+    "evals": {
+      "strands__z-ai/glm-5.3__terminal-bench": {
+        "n_trials": 1,
+        "n_errors": 1,
+        "metrics": [
+          {
+            "mean": 0.0
+          }
+        ],
+        "pass_at_k": {},
+        "reward_stats": {
+          "reward": {
+            "0.0": [
+              "adaptive-rejection-sampler__5r3QmTY"
+            ]
+          }
+        },
+        "exception_stats": {
+          "NonZeroAgentExitCodeError": [
+            "adaptive-rejection-sampler__5r3QmTY"
+          ]
+        }
+      }
+    },
+    "n_input_tokens": null,
+    "n_cache_tokens": null,
+    "n_output_tokens": null,
+    "cost_usd": null
+  }
+}

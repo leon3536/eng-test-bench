@@ -1,0 +1,115 @@
+{
+  "id": "91d889a9-35fa-47a9-baec-9e868c30e667",
+  "task_name": "adaptive-rejection-sampler",
+  "trial_name": "adaptive-rejection-sampler__YEmBpN4",
+  "trial_uri": "file:///C:/Git/EngineeringTestBench/profiles/dev/jobs/20261028-222401-pilot/terminus-2-glm/adaptive-rejection-sampler__YEmBpN4",
+  "task_id": {
+    "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+    "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+    "path": "adaptive-rejection-sampler"
+  },
+  "source": "terminal-bench",
+  "task_checksum": "cfa1b616968ca40188776311fda408198265c7d8a952466914f6875ca9bc0a9d",
+  "config": {
+    "task": {
+      "path": "adaptive-rejection-sampler",
+      "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+      "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+      "name": null,
+      "ref": null,
+      "overwrite": false,
+      "download_dir": null,
+      "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__YEmBpN4",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot\\terminus-2-glm",
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent_timeout_multiplier": null,
+    "verifier_timeout_multiplier": null,
+    "agent_setup_timeout_multiplier": null,
+    "environment_build_timeout_multiplier": null,
+    "agent": {
+      "name": "terminus-2",
+      "import_path": null,
+      "model_name": "openrouter/z-ai/glm-5.3",
+      "base_url": null,
+      "model_api_key_name": null,
+      "model_api_format": null,
+      "skip_model_parsing": false,
+      "n_concurrent": null,
+      "concurrency_group": null,
+      "skills": [],
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": null,
+      "max_timeout_sec": null,
+      "resume_trajectory": false,
+      "load_trajectory": null,
+      "extra_allowed_hosts": [],
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_turns": 150
+      },
+      "mcp_servers": []
+    },
+    "user_agent": null,
+    "environment": {
+      "type": "docker",
+      "import_path": null,
+      "force_build": false,
+      "delete": true,
+      "stream": false,
+      "cpu_enforcement_policy": "auto",
+      "memory_enforcement_policy": "auto",
+      "override_cpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "override_gpus": null,
+      "override_tpu": null,
+      "mounts": null,
+      "extra_docker_compose": [],
+      "kwargs": {},
+      "extra_allowed_hosts": []
+    },
+    "verifier": {
+      "override_timeout_sec": null,
+      "max_timeout_sec": null,
+      "disable": false
+    },
+    "artifacts": [],
+    "extra_instruction_paths": [],
+    "extra_instructions": [],
+    "job_id": "d7b642d8-d275-4ba4-882b-547fb96847ae",
+    "source_trial": null
+  },
+  "agent_info": {
+    "name": "terminus-2",
+    "version": "2.0.0",
+    "model_info": {
+      "name": "z-ai/glm-5.3",
+      "provider": "openrouter"
+    }
+  },
+  "agent_result": null,
+  "verifier_result": null,
+  "verifier_environment_mode": "shared",
+  "exception_info": {
+    "exception_type": "RuntimeError",
+    "exception_message": "Failed to start tmux session. Error: None",
+    "exception_traceback": "Traceback (most recent call last):\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 606, in run\n    await self._prepare()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 652, in _prepare\n    await self._setup_agent()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 1885, in _setup_agent\n    await asyncio.wait_for(\n    ...<2 lines>...\n    )\n  File \"C:\\Users\\praem\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\tasks.py\", line 507, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\terminus_2\\terminus_2.py\", line 603, in setup\n    await self._session.start()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\terminus_2\\tmux_session.py\", line 509, in start\n    raise RuntimeError(\n        f\"Failed to start tmux session. Error: {start_session_result.stderr}\"\n    )\nRuntimeError: Failed to start tmux session. Error: None\n",
+    "occurred_at": "2026-10-29T05:25:10.416348Z"
+  },
+  "started_at": "2026-10-29T05:24:56.059980Z",
+  "finished_at": "2026-10-29T05:25:11.335934Z",
+  "environment_setup": {
+    "started_at": "2026-10-29T05:24:56.153130Z",
+    "finished_at": "2026-10-29T05:24:59.796506Z"
+  },
+  "agent_setup": {
+    "started_at": "2026-10-29T05:24:59.796576Z",
+    "finished_at": "2026-10-29T05:25:10.412414Z"
+  },
+  "agent_execution": null,
+  "verifier": null,
+  "step_results": null
+}

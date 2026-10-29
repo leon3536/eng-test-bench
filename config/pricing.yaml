@@ -1,0 +1,39 @@
+# USD per million tokens, by provider then model id (without the provider prefix).
+#
+# The bench prices every trial from its token counts with this table, so all
+# arms are costed the same way. The harness's own reported cost is shown next
+# to it where the harness provides one.
+#
+# A reported name matches a row only exactly or with a date/version tag added
+# (claude-haiku-5-5-20261001); glm-5.3-flash does not match glm-5.3. A model
+# with no row of its own is unpriced, so add a row before running it.
+#
+# Harbor reports cache reads but not cache writes: writes are counted in
+# n_input with the uncached input, so they are priced at the plain input rate.
+# Anthropic bills 5-minute cache writes at 1.25x input, so real bills run
+# slightly higher than computed cost.
+# cache_read: null means "price cache reads at the input rate".
+
+anthropic:            # first-party API rates, as of 2026-10-06
+  claude-opus-5-5:   {input: 4.00,  output: 20.00, cache_read: 0.20}
+  claude-sonnet-5-5: {input: 2.00,  output: 10.00, cache_read: 0.20}
+  # Flat <=100K-prompt rate; $0.50/$2.50 per MTok above 100K is not applied
+  # (computed cost under-counts long Haiku subagent requests).
+  claude-haiku-5-5:  {input: 0.10,  output: 0.50,  cache_read: 0.01}   # cache read from LiteLLM's table
+  claude-fable-5-1:  {input: 10.00, output: 50.00, cache_read: 0.25}
+  # Server-side fallback targets, used to cost the run-design assistant when a
+  # fallback model answers. Input/output from the claude-api skill's model
+  # notes ($5/$25); cache_read assumed at 0.1x input. Verify on the live pricing page.
+  claude-opus-5:     {input: 5.00,  output: 25.00, cache_read: 0.50}
+  claude-opus-4-8:   {input: 5.00,  output: 25.00, cache_read: 0.50}
+
+fireworks: {}         # add models from fireworks.ai/pricing before using them
+
+openrouter:          # OpenRouter list prices on 2026-10-29, https://openrouter.ai/api/v1/models; they change often
+  # The list price is one endpoint's (wafer/us, fp4), not what a routed request
+  # is billed: per-provider rates are at /api/v1/models/{author}/{slug}/endpoints,
+  # and pilot 3 (2026-10-29) was billed 1.3x-3.1x these figures. Neither model
+  # has a cache-write, per-request or reasoning rate: reasoning bills as output,
+  # and every Harbor adapter counts it in n_output.
+  deepseek-v4.1-flash: {input: 0.045,  output: 0.50, cache_read: 0.006}
+  glm-5.3:             {input: 0.0699, output: 1.40, cache_read: 0.0689}

@@ -1,0 +1,153 @@
+{
+  "id": "cca6994c-1fdc-44ba-8569-62e0f183f6dc",
+  "task_name": "adaptive-rejection-sampler",
+  "trial_name": "adaptive-rejection-sampler__S7WbKtt",
+  "trial_uri": "file:///C:/Git/EngineeringTestBench/profiles/dev/jobs/20261028-222952-pilot/terminus-2-deepseek/adaptive-rejection-sampler__S7WbKtt",
+  "task_id": {
+    "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler"
+  },
+  "source": "terminal-bench",
+  "task_checksum": "4fde6e809c475b000ae3ea4135f906ffe4775bccae7dafd0b123f4ecc9fcf697",
+  "config": {
+    "task": {
+      "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+      "git_url": null,
+      "git_commit_id": null,
+      "name": null,
+      "ref": null,
+      "overwrite": false,
+      "download_dir": null,
+      "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__S7WbKtt",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot\\terminus-2-deepseek",
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent_timeout_multiplier": null,
+    "verifier_timeout_multiplier": null,
+    "agent_setup_timeout_multiplier": null,
+    "environment_build_timeout_multiplier": null,
+    "agent": {
+      "name": "terminus-2",
+      "import_path": null,
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+      "base_url": null,
+      "model_api_key_name": null,
+      "model_api_format": null,
+      "skip_model_parsing": false,
+      "n_concurrent": null,
+      "concurrency_group": null,
+      "skills": [],
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": null,
+      "max_timeout_sec": null,
+      "resume_trajectory": false,
+      "load_trajectory": null,
+      "extra_allowed_hosts": [],
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_turns": 150
+      },
+      "mcp_servers": []
+    },
+    "user_agent": null,
+    "environment": {
+      "type": "docker",
+      "import_path": null,
+      "force_build": false,
+      "delete": true,
+      "stream": false,
+      "cpu_enforcement_policy": "auto",
+      "memory_enforcement_policy": "auto",
+      "override_cpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "override_gpus": null,
+      "override_tpu": null,
+      "mounts": null,
+      "extra_docker_compose": [],
+      "kwargs": {},
+      "extra_allowed_hosts": []
+    },
+    "verifier": {
+      "override_timeout_sec": null,
+      "max_timeout_sec": null,
+      "disable": false
+    },
+    "artifacts": [],
+    "extra_instruction_paths": [],
+    "extra_instructions": [],
+    "job_id": "80def936-697a-4215-9901-0259a43385bc",
+    "source_trial": null
+  },
+  "agent_info": {
+    "name": "terminus-2",
+    "version": "2.0.0",
+    "model_info": {
+      "name": "deepseek/deepseek-v4.1-flash",
+      "provider": "openrouter"
+    }
+  },
+  "agent_result": {
+    "n_input_tokens": 291001,
+    "n_cache_tokens": 260864,
+    "n_output_tokens": 89078,
+    "cost_usd": 0.047460349,
+    "model_usage": {
+      "deepseek/deepseek-v4.1-flash": {
+        "n_input_tokens": 291001,
+        "n_cache_tokens": 260864,
+        "n_output_tokens": 89078,
+        "cost_usd": 0.047460349
+      }
+    },
+    "metadata": {
+      "n_episodes": 16,
+      "api_request_times_msec": [
+        1766.3838863372803,
+        1122.0297813415527,
+        1638.9107704162598,
+        724.3843078613281,
+        87633.77285003662,
+        158618.8747882843,
+        5375.4143714904785,
+        5252.5482177734375,
+        20217.057943344116,
+        28651.39150619507,
+        6741.529226303101,
+        4864.544630050659,
+        10183.36009979248,
+        12867.063045501709,
+        31422.61290550232,
+        48397.533655166626
+      ],
+      "summarization_count": 0
+    }
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 0.0
+    }
+  },
+  "verifier_environment_mode": "shared",
+  "exception_info": null,
+  "started_at": "2026-10-29T05:30:18.416385Z",
+  "finished_at": "2026-10-29T05:40:24.962983Z",
+  "environment_setup": {
+    "started_at": "2026-10-29T05:30:18.470773Z",
+    "finished_at": "2026-10-29T05:30:22.961235Z"
+  },
+  "agent_setup": {
+    "started_at": "2026-10-29T05:30:22.961361Z",
+    "finished_at": "2026-10-29T05:30:43.109990Z"
+  },
+  "agent_execution": {
+    "started_at": "2026-10-29T05:30:43.110260Z",
+    "finished_at": "2026-10-29T05:40:03.063790Z"
+  },
+  "verifier": {
+    "started_at": "2026-10-29T05:40:03.865085Z",
+    "finished_at": "2026-10-29T05:40:20.475961Z"
+  },
+  "step_results": null
+}
