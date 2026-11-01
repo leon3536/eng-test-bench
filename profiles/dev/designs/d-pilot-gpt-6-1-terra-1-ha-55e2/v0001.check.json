@@ -1,0 +1,290 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": []
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 1,
+    "budget_usd": 0.5,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "strands"
+    ],
+    "arms": [
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "openai",
+        "model": "openai/gpt-6.1-terra",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_kwargs",
+            "value": {
+              "model_spec": "openai/gpt-6.1-terra",
+              "effort": "medium"
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3746e08dca1b",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model openai/gpt-6.1-terra --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak \"factory_kwargs={\\\"model_spec\\\": \\\"openai/gpt-6.1-terra\\\", \\\"effort\\\": \\\"medium\\\"}\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak version=\\\"1.57.2\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:739296f77edc360f57f7265e5ac949f15213228b9b2aec26327ee0f866fa94d8",
+    "warnings": [],
+    "peak_containers": 1,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "off",
+      "error": null,
+      "images": 0,
+      "build_min": 0.0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 4,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "lanes": 1,
+        "max_containers": 6,
+        "build_jobs": 6,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "strands"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 1,
+      "lanes": 1,
+      "max_containers": 6,
+      "build_jobs": 6,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "1 task race(s) x 1 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "strands"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:739296f77edc360f57f7265e5ac949f15213228b9b2aec26327ee0f866fa94d8",
+    "ledger_fingerprint": "sha256:0061cd4ad9a071f9",
+    "seed": 25969466749973,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "openai",
+          "model": "gpt-6.1-terra",
+          "effort": "harness default",
+          "config_hash": "6de398ffd3a49323",
+          "options_fingerprint": "3746e08dca1b"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "60 trials of strands on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, fireworks:kimi-k3, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at openai:gpt-6.1-terra prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 60,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261029-055852-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1",
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.050885,
+          "p50": 0.020378,
+          "p90": 0.118644
+        },
+        "total": {
+          "p10": 0.007023,
+          "p50": 0.02211,
+          "p90": 0.118319
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.11,
+          "p90": 3.29
+        },
+        "arm_minutes": {
+          "p50": 3.11,
+          "p90": 4.29
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 49.28,
+          "basis": "measured",
+          "trials": 24
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.007023,
+        "p50": 0.02211,
+        "p90": 0.118319
+      },
+      "budget_usd": 0.5,
+      "p_within_budget": 0.999,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "strands"
+      ],
+      "inflight_allowance_usd": 0.237288,
+      "wall_minutes": {
+        "p50": 3.11,
+        "p90": 4.29
+      },
+      "peak_containers": 1,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "max_containers": 6,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "openai",
+          "model": "gpt-6.1-terra",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-10-31T20:59:45+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:47c69cb4279e4f69d842f75fd582e9598e2daee763d654df688530af45711737",
+  "ledger_fingerprint": "sha256:0061cd4ad9a071f9",
+  "reuse_fingerprint": null
+}

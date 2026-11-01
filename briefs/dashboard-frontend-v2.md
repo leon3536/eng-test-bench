@@ -36,7 +36,7 @@ views need.
 | **agent** | What Harbor runs. Either a registered name (`claude-code`, `pi`, `strands`, `terminus-2`) or an import path `module.path:Class` (for example `bench.agents.mini_swe_agent:MiniSweAgentWithMcp`). |
 | **kind** | `"name"` or `"import_path"`, derived from the agent. |
 | **family** | The harness label that results pool and compare under, for example `mini-swe-agent` for the import-path agent above. It defaults to the agent. Always show the family; show the agent as secondary text. |
-| **multiple** | **baseline ÷ harness** on the same tasks and model. 2.0× means the harness used half of what Claude Code used. |
+| **multiple** | **harness ÷ baseline** on the same tasks and model. 0.5× means the harness used half of what Claude Code used; under 1× is less, over 1× more. |
 | **trial_key** | `<harbor job id>/<trial name>`, one trial in the ledger. |
 | **run_key** | `<profile>/<run id>`, for example `dev/20261028-222952-pilot`. |
 | **group key** | One pooled line in the report, for example `fam:openrouter\|z-ai/glm-5.3\|pi`. |
@@ -138,7 +138,8 @@ views need.
 
 ```
 { readiness: [...], keys: [...], config: {...}, config_error, runs: [Run], active_run,
-  ledger:    { available: bool, error: str|null, trials: int, last_ingest_at: iso|null, rescan_running: bool },
+  ledger:    { available: bool, error: str|null, trials: int, last_ingest_at: iso|null, rescan_running: bool,
+               version: str|null },
   queue:     { state: "paused"|"running", pause_reason: str, active_item: QueueItem|null,
                waiting: int, held: int, cap_remaining_usd: number|null },
   assistant: { enabled: bool, available: bool, reason: str|null, today_usd: number|null,
@@ -215,9 +216,17 @@ views need.
 The shape is the same as before, with these additions:
 
 ```
-top level: source: "config", label: "<mode>", spec_hash: "sha256:...", warnings: [str], peak_containers: int
+top level: source: "config", label: "<mode>", spec_hash: "sha256:...", warnings: [str], peak_containers: int,
+           skipped_arms: [name]
 per arm:   family, kind, tasks: int (task count), options_fingerprint: "12 hex", reserve_note: str
 ```
+
+With `&reuse=measured` the plan is the run with each arm's measured tasks
+left out (README, "Reusing measured trials"), plus `mode` and `reuse` (the
+reuse summary). `skipped_arms` lists arms with nothing left; a run with
+nothing left has the problem "Nothing to run: ...". Re-plan when
+`state.ledger.version` changes: it moves with every new trial, outcome and
+exclusion. Any other `reuse` value is a 400.
 
 Notes:
 
@@ -234,9 +243,12 @@ Notes:
 
 ### `POST /api/runs` (do not call)
 
-- The body is unchanged: `{mode, arms}`. Extra fields are ignored. Stop
-  sending `launch_code`: launch codes are dropped (decided 2026-10-29, see
-  LAUNCH below).
+- The body is `{mode, arms}`, plus `reuse: "off"|"measured"` and, with
+  `measured`, the confirmed plan's `spec_hash` (400 without it; 409 "The
+  ledger changed since that plan was made..." when the run resolved again
+  differs). Any other `reuse` value is a 400; other extra fields are
+  ignored. Stop sending `launch_code`: launch codes are dropped (decided
+  2026-10-29, see LAUNCH below).
 - New 409s:
   - `"The queue is active; pause it or add this run to the queue"`;
   - `"Docker is not running"`;
@@ -270,7 +282,7 @@ Add a small "N setup failures left out" note per arm when `excluded > 0`.
 | `GET /api/ledger/trials/{id}` | | TrialRow plus detail (below). `id` is the numeric `id`, not the trial_key. 404 if unknown. |
 | `POST /api/ledger/exclusions` | `{target_type: "trial"\|"run", target_id: trial_key\|run_key, action: "exclude"\|"include", reason: str (1-500)}` | **201** `{id, target_type, target_id, action, reason, created_at}`. 400 for a missing reason, 404 for an unknown target. |
 | `GET /api/ledger/exclusions` | | `{exclusions: [{id, target_type, target_id, action, reason, created_at, effective: bool}]}`. The latest row for a target wins. `effective` marks the one in force. |
-| `POST /api/ledger/export` | `{filters?: Filters, format: "csv"\|"jsonl"}` | A file: `ledger-<UTC stamp>.csv` (BOM, CRLF) or `.jsonl`. |
+| `POST /api/ledger/export` | `{filters?: Filters, format: "csv"\|"jsonl"}` | A file: `ledger-<tasks>-<UTC stamp>.csv` (BOM, CRLF) or `.jsonl`, `<tasks>` as the report export's; each row ends with `filters`. |
 
 LedgerStatus (real values from the current data):
 
@@ -333,6 +345,7 @@ Facets. All lists carry trial counts:
              trials, first_seen, last_seen}],
   harness_versions: [{family, value, trials}], harbor_versions: [{value, trials}],
   efforts: [{value: str|null, trials}],                  // null = harness default
+  setup_modes: [{value: "stock"|"prebaked"|"fallback"|null, trials}],   // null = killed before environment start
   datasets: [{value, snapshots: [{id, trials}]}],        // ids like "git:69671fbaac6d", "local:terminal-bench@2.0@2026-10-29T05:29:58+00:00"
   tasks: [{value, trials, digests: int, order: int|null}],   // order = position in config/tasks.txt, 0-based
   runs: [{run_key, profile, run_id, source, created_at, status, trials}],
@@ -356,6 +369,7 @@ options, cautions, dataset, dataset_snapshot, task, task_digest_short, outcome, 
 harbor_cause, exception_type, exception_head, reward, passed, n_input, n_cache, n_output, tokens_total,
 cost_usd, cost_at_ingest_usd, reported_cost_usd, unpriced_models, primary_share, started_at, finished_at,
 phases: {env_setup_sec, agent_setup_sec, agent_exec_sec, verifier_sec}, total_sec,
+setup: {mode: "stock"|"prebaked"|"fallback"|null, limit_sec, image, image_id, recipe, baked_at, reason},
 exclusion: {action, reason, created_at}|null, log_url: "/api/runs/<run_id>/log/<arm>"|null
 ```
 
@@ -389,10 +403,10 @@ All four routes are **POST only to carry nested JSON. They change nothing.**
 | `POST /api/report` | `{filters?: Filters, options?: Options}` | Report |
 | `POST /api/report/coverage` | `{filters?, options?}` | `{provenance, task_order: [str], untouched_tasks: [str], comparisons: [{key, provider, model, group, baseline_group, headline, coverage: Coverage}]}` |
 | `POST /api/report/pairs` | `{filters?, options?, comparison: key}` | `{comparison, pairs: [PairRow], excluded_trials: [{trial_key, side: "arm"\|"baseline", task, outcome, reason}]}`. 404 for an unknown key. |
-| `POST /api/report/export` | `{filters?, options?, level: "trials"\|"pairs"\|"comparisons"}` | CSV file `bench-report-<8 hex>-<level>.csv` |
+| `POST /api/report/export` | `{filters?, options?, level: "trials"\|"pairs"\|"comparisons"}` | CSV file `bench-report-<8 hex>-<tasks>-<level>.csv`, `<tasks>` being `<n>-scope-tasks`, `all-tasks` or `<n>-tasks` |
 | `POST /api/report/snapshots` | `{name: 1-80 chars, filters?, options?}` | **201** `{id: "rs-...", name, created_at, fingerprint, trials_used}` |
-| `GET /api/report/snapshots` | | `{snapshots: [{id, name, created_at, fingerprint, trials_used}]}`, newest first |
-| `GET /api/report/snapshots/{id}` | | `{id, name, created_at, request: {filters, options}, response: Report}`. 404 if unknown. |
+| `GET /api/report/snapshots` | | `{snapshots: [{id, name, created_at, fingerprint, trials_used, direction}]}`, newest first; `direction` is null for one saved before multiples were harness ÷ baseline |
+| `GET /api/report/snapshots/{id}` | | `{id, name, created_at, request: {filters, options}, response: Report}`. 404 if unknown. An older snapshot's response comes back converted, with `provenance.converted_from`. |
 
 **Filters.** Every key is optional, and an empty list means no constraint.
 An unknown key or a bad value answers 400. Each list holds at most 500 items.
@@ -402,7 +416,8 @@ An unknown key or a bad value answers 400. Each list holds at most 500 items.
   models: ["provider:model"], families: [str], implementations: ["builtin"|import path],
   configs: [config_hash], exclude_configs: [config_hash], harness_versions: [str], harbor_versions: [str],
   efforts: [str|null], datasets: [str], snapshots: [snapshot id], tasks: [str],
-  runs: [run_key], exclude_runs: [run_key], include_cautioned: bool (default false) }
+  runs: [run_key], exclude_runs: [run_key], setup_modes: ["stock"|"prebaked"|"fallback"|null],
+  include_cautioned: bool (default false) }
 ```
 
 **Options.** Every key is optional. The defaults come from the profile's
@@ -420,7 +435,8 @@ An unknown key or a bad value answers 400. Each list holds at most 500 items.
   bootstrap: {resamples: 500..10000, seed: int},           // 2000, 20261028
   min_pairs: {estimate: int, verdict: int},                // 3, 8
   coverage_target: {ratio_halfwidth: 1.01..10, pass_delta_pp: number, prior_sd_log: number},  // 1.25, 5, 0.6
-  include_pairs: bool }                                    // false; true adds pairs_table to each comparison
+  include_pairs: bool,                                     // false; true adds pairs_table to each comparison
+  setup: "any"|"stock"|"prebaked" }                        // any; stock includes fallback, null setup only in any
 ```
 
 The pricing modes:
@@ -436,7 +452,9 @@ The pricing modes:
 ```
 { spec: {filters (normalised), options (normalised)},
   provenance: {generated_at, fingerprint: "sha256:<16 hex>", trials_used, exclusions_applied, pricing, pricing_sha,
-               parser_versions: [int], classifier_version, stats_version, harbor_versions: [str], includes_active_run: bool},
+               parser_versions: [int], classifier_version, stats_version, harbor_versions: [str], includes_active_run: bool,
+               direction: "harness_over_baseline"},
+  scope: {kind: "scope"|"all"|"chosen", tasks: int, scope_tasks: int, tasks_file: "config/tasks.txt"},
   totals: {trials, runs, profiles: [str], by_outcome: {}, excluded_manual: int, spend_usd},
   groups: [Group], comparisons: [Comparison],
   coverage: {task_order: [str], groups: [group key], cells: {<group key>: {<task>: {valid, passed, by_outcome: {}}}}},
@@ -536,12 +554,12 @@ demo mode:
 
 ```json
 { "status": "ok", "n": 12, "need": 0,
-  "geomean": {"estimate": 2.41, "lo": 1.88, "hi": 3.09, "sd_log": 0.46, "gsd": 1.58, "method": "t_on_log_ratios"},
-  "ratio_of_means": {"estimate": 2.62, "lo": 2.05, "hi": 3.30, "method": "task_bootstrap"},
-  "per_task": {"min": 1.1, "q1": 1.9, "median": 2.4, "q3": 3.0, "max": 5.2}, "leave_one_out": [2.28, 2.60],
-  "sensitivity": {"crashes_excluded": 2.47, "misconfigured_cap_included": null, "same_run_only": 2.35}, "robust": true,
-  "reference": {"published": {"low": 2.0, "high": 3.0, "source": "S1-S5: changing harness moves cost 2x to 3x"},
-                "band": [2.0, 3.0], "estimator": "ratio_of_means", "applies": true, "position": "inside", "verdict": "overlaps"},
+  "geomean": {"estimate": 0.41, "lo": 0.32, "hi": 0.53, "sd_log": 0.46, "gsd": 1.58, "method": "t_on_log_ratios"},
+  "ratio_of_means": {"estimate": 0.38, "lo": 0.30, "hi": 0.49, "method": "task_bootstrap"},
+  "per_task": {"min": 0.19, "q1": 0.33, "median": 0.42, "q3": 0.53, "max": 0.91}, "leave_one_out": [0.38, 0.44],
+  "sensitivity": {"crashes_excluded": 0.40, "misconfigured_cap_included": null, "same_run_only": 0.43}, "robust": true,
+  "reference": {"published": {"low": 0.333, "high": 0.5, "source": "S1-S5: changing harness moves cost 2x to 3x"},
+                "band": [0.333, 0.5], "estimator": "ratio_of_means", "applies": true, "position": "inside", "verdict": "overlaps"},
   "dropped": {"no_arm_valid": 1, "no_baseline_valid": 0, "tokens_not_reported": 0, "unpriced": 0, "zero_value": 0} }
 ```
 
@@ -893,6 +911,104 @@ id: 1
 
 ---
 
+### Pre-baked images (added 2026-10-29)
+
+A pre-baked image is a task image with one harness already installed exactly
+as Harbor installs it (README, "Pre-baked harness images"). These are the
+shapes the LAUNCH Setup cells, the IMAGES panel and the queue use.
+
+**`GET /api/state`** gains a `prebake` block (or `{"error": ...}`):
+
+```
+prebake: { active: BuildSummary|null,   // the build running in this bench
+           last: BuildSummary|null,     // the newest build
+           elsewhere: bool,             // a build from python -m bench.prebake holds the build lock
+           version: str,                // "<id>:<status>:<finished_at>": re-plan LAUNCH when it changes
+           prefix: str, auto_build: bool }
+BuildSummary: { id, kind: "build"|"pull", label, created_at, finished_at|null,
+                status: "running"|"done"|"done_with_errors"|"failed"|"cancelled"|"interrupted",
+                message, jobs, items: int, counts: {<item status>: n} }
+```
+
+**`readiness`** rows may carry `warn: true` with `ok: true`: usable, but worth
+a look (show amber). Two rows are new, before `"Assistant"`:
+- `"Pre-baked images"`: for the profile's largest mode and enabled arms, how
+  many tasks have a ready image, for example
+  `"0 of 50 ready for the sample mode (claude-code 0/10, ...). Trials without one ..."`.
+  Under `require` with images missing it is `ok: false`.
+- `"Docker disk"`: the drive holding Docker Desktop's disk image, and
+  Docker's own free space as last measured. Below `prebake.host_reserve_gb`
+  it is `ok: false` and the detail says how to move the disk image.
+
+**`GET /api/plan`** additions:
+
+```
+per arm:   prebake: { mode, family, supported, reason, version, recipe, variant, prefix, expect_stock,
+                      setup_timeout_multiplier: number|null, env_build_timeout_multiplier,
+                      images?: { tasks, ready: [task], missing: [task], stale: {task: why},
+                                 unverifiable: [task], unknown: {task: why}, noop: [task], over_age: [task],
+                                 oldest_baked_at: iso|null, build_min, build_gb, all_ready: bool,
+                                 error: str|null } }
+           setup_warnings: [str]          // the entries of warnings that are about the harness setup
+top level: prebake: { mode, images: int (to build, de-duplicated), build_min, build_wall_min, build_gb, jobs,
+                      task_images: int, pull: [task image not on this machine], error, pull_error }
+           image_problems: [str]          // problems about images not ready under require
+```
+
+- `prebake.mode` is `"off"`: the block is `{mode, setup_timeout_multiplier,
+  env_build_timeout_multiplier}` only.
+- `images` is missing for an arm that cannot use pre-baked images
+  (`supported: false`, with `reason`), and `{error}` alone when Docker did not
+  answer.
+- `resolved_arms[].prebake` in run.json is the same block, as the run saw it.
+
+**ArmRun** gains `setup_fallbacks` (trials that did not get their pre-baked
+image) and `setup_note` (`"2 trials ran stock setup (no pre-baked image)"`).
+While a queue item builds its images first (`prebake.auto_build`), it stays
+`starting` and its `message` says how far the build is.
+
+**Config:** `PUT /api/config/run` takes `prebake` (`"off"|"prefer"|"require"`),
+`setup_timeout_multiplier` (`"auto"` or a number above 0) and
+`env_build_timeout_multiplier` (a number above 0). Designs' `run` takes the
+same three keys.
+
+**Routes.** Writes need `X-Bench: 1`. A selection is `{mode, arms, reuse}`
+(LAUNCH's), `{design: "id@vN"}` or `{run: "<run id>"}`; with none, the
+config's largest mode and enabled arms.
+
+- `GET /api/prebake/status?mode=&arms=&reuse=&design=&run=&refresh=1`: the
+  selection's BuildPlan: `items` (images to build), `ready`, `unsupported`,
+  `unknown`, `notes`, `images`, `minutes`, `wall_minutes`, `jobs`, `need_gb`
+  and `readiness` per arm; plus `pull`, `mode`, `prefix`, `max_age_days`,
+  `builds` (BuildSummary list), `active`, `blocked` (why no build may start
+  now, or `""`) and `disk`. `refresh` lists Docker's images again.
+- `POST /api/prebake/build` `{selection, jobs?, rebuild?}`: starts a build of
+  the selection's missing images (201, the build). 409 during a run, while
+  the queue is active, during another build, or when the disk check refuses
+  (the detail says why).
+- `GET /api/prebake/builds`: `{builds: [BuildSummary], active}`, builds from
+  the command line included.
+- `GET /api/prebake/builds/{id}`: the build with its `items`: `{n, family,
+  version, task_image, image, tasks, arms, status, message, seconds, ...}`.
+  Item statuses: `queued`, `recording`, `building`, `verifying`, `awaiting
+  equivalence`, `promoted`, `failed`, `cancelled`.
+- `GET /api/prebake/builds/{id}/log/{n}?lines=`: text, item `n`'s log, or the
+  build's own log for `n` = 0.
+- `POST /api/prebake/builds/{id}/cancel`: cancels a running build (its
+  staging tags are removed).
+- `POST /api/prebake/pull` `{selection}`: pulls the selection's task images
+  that are not on this machine. 409 when there are none.
+- `POST /api/prebake/prune`: `{}` is the dry run, `{dry_run: true,
+  candidates: [{ref, id, kind, reason, baked_at, size}], notes}`; `{refs:
+  [...]}` (the list the dry run showed) removes those that are still
+  candidates and answers `{removed, failed, skipped, ...}`.
+- `POST /api/prebake/disk`: measures Docker's own free space with `df` in a
+  throwaway container of a local task image; answers the `disk` block with
+  `vm_free_gb` and `vm_checked_at`.
+
+In demo mode the four writes are answered in the browser (demo-images.js), so
+nothing changes Docker.
+
 ## The UI to build
 
 Follow the existing look:
@@ -992,7 +1108,7 @@ The tab is built from these parts:
    - **Card header:** the model, the baseline label, the paired-task count
      and a caveat count.
    - **Two small forest plots, Tokens and Cost.** Use inline SVG.
-     - The x-axis is log scale from 0.25× to 8×, with a line at 1×.
+     - The x-axis is log scale from 0.125× to 4× (harness ÷ baseline), with a line at 1×.
      - Shade the published `reference.band`. Its `source` goes in a tooltip.
      - Per harness row:
        - a filled dot with a whisker for `geomean` (estimate, lo, hi);
@@ -1005,8 +1121,8 @@ The tab is built from these parts:
      `pass.reference.band` and add "can detect ±N pts" from `mde_pp`.
    - **A table under the plots,** one row per comparison:
      - pairs n;
-     - Tokens × as "2.41× [1.88–3.09]", with the ratio of means in small text;
-     - Cost × in the same layout;
+     - Tokens vs Claude Code as "0.41× [0.32–0.53]", with the ratio of means in small text;
+     - Cost vs Claude Code in the same layout;
      - published value or band, with the source in a tooltip;
      - verdict chip:
 
@@ -1014,8 +1130,8 @@ The tab is built from these parts:
        |---|---|
        | `within` | "within published range" |
        | `overlaps` | "overlaps" |
-       | `above` | "above" |
-       | `below` | "below" |
+       | `above` | "above published range": the harness used more, relative to the baseline, than published |
+       | `below` | "below published range": the harness used less, relative to the baseline, than published |
        | `insufficient` | "too few pairs" |
        | `not_applicable` | "n/a for this model", plus where the estimate falls (`position`) |
 
@@ -1025,9 +1141,11 @@ The tab is built from these parts:
 
      Use `headline` as each row's sentence. Every number must appear as text
      as well as in a plot.
-   - **Fixed explainer:** "Multiple = baseline ÷ harness on the same tasks and
-     model; 2.0× means the harness used half. Intervals are 90%. Pass rates on
-     fewer than about 100 tasks cannot confirm a 5-point claim."
+   - **Fixed explainer:** "Multiple = harness ÷ baseline on the same tasks and
+     model: 0.5× means the harness used half as much, under 1× less than the
+     baseline, over 1× more. Intervals are 90%. Tasks: 27 tasks from
+     config/tasks.txt. Pass rates on fewer than about 100 tasks cannot confirm
+     a 5-point claim."
    - Wording never says "confirmed".
 4. **Group summary,** labelled "unpaired; task mix may differ". Per Group:
    - outcome mini-bar;
@@ -1632,3 +1750,31 @@ key, the report setting aside floors below a harness's uncut trials, and
   `message` may end with "N finished trial(s) ran but recorded no usage; …
   recorded spend is a lower bound." Show "N without usage (spend not
   counted)" next to "N killed (spend not counted)".
+
+## Revision: multiples are harness ÷ baseline, and the task scope
+
+- **Every multiple is harness ÷ baseline** (it was baseline ÷ harness):
+  `geomean`, `ratio_of_means`, `per_task`, `leave_one_out`, `sensitivity`,
+  `reference.band` and `reference.published`, `PairRow.ratio_tokens` and
+  `ratio_cost`, the coverage tool's `cost_multiple` and `tokens_multiple`,
+  `estimate.pairing[].multiple_now` and the run results' `tokens_multiple`
+  and `cost_multiple`. 0.72× reads "costs 0.72 times what Claude Code
+  costs". `config/reference.yaml` restates the published figures the same
+  way (2x-3x is 0.333-0.5), so "below the published range" now means the
+  harness is relatively cheaper than published. Pass-rate deltas stay
+  harness minus baseline, in points.
+- Labels name the baseline: "Tokens vs Claude Code", "Cost vs Claude Code",
+  "Tokens H ÷ B" in the pairs table, and the forest axis runs 0.125× to 4×.
+- `provenance.direction` is `"harness_over_baseline"` and `stats_version`
+  is 4. A snapshot saved earlier is converted when it is read and carries
+  `provenance.converted_from: "baseline_over_harness"`; show that it was.
+- **Task scope.** The REPORT tab sends `filters.tasks` = the config's
+  `tasks` (`config.tasks_file` names the file) unless the person ticks tasks
+  or chooses **All tasks**, which the strip offers in one click, saying
+  "27 tasks from config/tasks.txt". The Report's `scope` says which applied.
+  Report exports name it in the file name, and every CSV row ends with the
+  filters used (`filters`; pairs and comparisons also `direction`); the
+  ledger export does the same (`ledger-27-scope-tasks-<stamp>.csv`, a
+  trailing `filters` column or JSONL field). **All tasks** is never saved:
+  every visit opens on the scope. Estimate `pairing` entries count on the
+  same tasks and carry `scope: {tasks, tasks_file, outside}`.

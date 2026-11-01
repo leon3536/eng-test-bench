@@ -10,6 +10,7 @@ trials and ingests them through a real temp ledger.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import itertools
 import math
@@ -41,6 +42,24 @@ openrouter:
 """
 
 REFERENCE_YAML = """\
+defaults:
+  direction: harness_over_baseline
+  estimator: ratio_of_means
+  tolerance: 1.5
+  applies_to: ['anthropic:claude-*']
+consensus:
+  cost_per_trial: {low: 1/3, high: 1/2, source: "S1-S5"}
+  pass_rate_delta_pp: {low: -5, high: 5, source: "S1-S5"}
+arms:
+  pi:
+    tokens_per_trial: {value: 1/3.1, source: "S10 via S9"}
+  strands:
+    cost_per_trial: {value: 1/2.1, source: "S8"}
+  mini-swe-agent:
+    note: "no per-task total published"
+"""
+# The same figures as the file stated them before multiples were harness / baseline.
+REFERENCE_YAML_BASELINE_OVER_HARNESS = """\
 defaults:
   direction: baseline_over_harness
   estimator: ratio_of_means
@@ -140,7 +159,8 @@ def trow(task: str, family: str, *, provider: str = "anthropic", model: str = "c
 
 
 def scaled(k: float, i: int) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
-    """(arm tokens, baseline tokens) for task i, the baseline exactly k times the arm."""
+    """(arm tokens, baseline tokens) for task i, the baseline exactly k times
+    the arm: the task's multiple (arm / baseline) is 1/k."""
     arm = (100000 * (i + 1), 40000 * (i + 1), 2000 * (i + 1))
     return arm, tuple(round(k * x) for x in arm)  # type: ignore[return-value]
 
@@ -210,9 +230,9 @@ class ReportCase(BenchTestCase):
         self.addCleanup(report.clear_cache)
 
     def config(self, *, tasks: Sequence[str] | None = None, report_yaml: str = "",
-               baseline: str = "claude-code") -> settings.Config:
+               baseline: str = "claude-code", reference: str = REFERENCE_YAML) -> settings.Config:
         text = CONFIG_YAML.replace("BASELINE", baseline) + textwrap.dedent(report_yaml)
-        return self.load_test_config(text, pricing=PRICING_YAML, reference=REFERENCE_YAML,
+        return self.load_test_config(text, pricing=PRICING_YAML, reference=reference,
                                      tasks=list(tasks) if tasks is not None else SAMPLE)
 
     def build(self, ledger: Any, cfg: settings.Config, options: Mapping | None = None,
@@ -390,7 +410,7 @@ class DevPilots(ReportCase):
         (row,) = pairs["pairs"]
         self.assertEqual((row["task"], row["digest_short"], row["same_run"]),
                          ("adaptive-rejection-sampler", "b4c60177f24d", True))
-        self.assertAlmostEqual(row["ratio_cost"], 0.026779541 / 0.041905897)
+        self.assertAlmostEqual(row["ratio_cost"], 0.041905897 / 0.026779541)  # pi / claude-code
         with self.assertRaises(KeyError):
             report.build_pairs(self.ledger, self.cfg, Filters(), o, "fam:x~fam:y")
         unused = report.build_pairs(self.ledger, self.cfg, Filters(), report.parse_options(None, self.cfg), key)
@@ -408,7 +428,7 @@ class Estimates(ReportCase):
         cfg = self.config()
         rep = self.build(FakeLedger(pair_rows(KS)), cfg)
         c = self.comparison(rep, "pi")
-        logs = [math.log(k) for k in KS]
+        logs = [math.log(1 / k) for k in KS]  # pi / claude-code on each task
         mean, sd = statistics.fmean(logs), statistics.stdev(logs)
         half = 1.833 * sd / math.sqrt(10)  # t(0.90, 9)
         for metric in ("tokens_total", "tokens_uncached", "cost"):
@@ -423,13 +443,16 @@ class Estimates(ReportCase):
         arm = [sum(scaled(k, i)[0][::2]) for i, k in enumerate(KS)]
         base = [sum(scaled(k, i)[1][::2]) for i, k in enumerate(KS)]
         rom = c["metrics"]["tokens_total"]["ratio_of_means"]
-        self.assertAlmostEqual(rom["estimate"], sum(base) / sum(arm), places=9)
+        self.assertAlmostEqual(rom["estimate"], sum(arm) / sum(base), places=9)
         self.assertLess(rom["lo"], rom["estimate"])
         self.assertGreater(rom["hi"], rom["estimate"])
         self.assertEqual(rom["method"], "task_bootstrap")
-        self.assertAlmostEqual(c["metrics"]["tokens_total"]["per_task"]["median"], statistics.median(KS))
+        per_task = c["metrics"]["tokens_total"]["per_task"]
+        self.assertAlmostEqual(per_task["median"], statistics.median(1 / k for k in KS))
+        self.assertAlmostEqual(per_task["min"], 1 / max(KS))
+        self.assertAlmostEqual(per_task["max"], 1 / min(KS))
         self.assertEqual(c["pairs"]["same_run_fraction"], 1.0)
-        self.assertIn("claude-code used", c["headline"])
+        self.assertIn(f"pi used {math.exp(mean):.2f}x the cost of claude-code", c["headline"])  # cost = tokens here
         self.assertIn("90% CI", c["headline"])
         again = self.build(FakeLedger(pair_rows(KS)), cfg)  # another ledger, the same numbers
         self.assertEqual(self.comparison(again, "pi")["metrics"]["cost"]["ratio_of_means"], c["metrics"]["cost"]
@@ -438,14 +461,14 @@ class Estimates(ReportCase):
     def test_repeats_average_inside_a_cell(self) -> None:
         rows = pair_rows(KS)
         arm0, _ = scaled(1.0, 0)
-        # task-0's first baseline trial is 2x (KS[0]); two more at 3x and 4x.
+        # task-0's first baseline trial is 2x the arm (KS[0]); two more at 3x and 4x.
         rows += [trow("task-0", "claude-code", tokens=tuple(round(f * x) for x in arm0)) for f in (3.0, 4.0)]
         rep = self.build(FakeLedger(rows), self.config(), {"include_pairs": True})
         c = self.comparison(rep, "pi")
         self.assertEqual(c["metrics"]["tokens_total"]["n"], 10)  # still one vote per task
         first = c["pairs_table"][0]
         self.assertEqual((first["task"], first["arm"]["trials"], first["baseline"]["trials"]), ("task-0", 1, 3))
-        self.assertAlmostEqual(first["ratio_tokens"], 3.0)  # mean of 2x, 3x and 4x
+        self.assertAlmostEqual(first["ratio_tokens"], 1 / 3.0)  # the arm over the mean of 2x, 3x and 4x
 
     def test_statuses_follow_the_thresholds(self) -> None:
         cfg = self.config()
@@ -486,7 +509,7 @@ class Estimates(ReportCase):
         self.assertEqual((pooled["metrics"]["cost"]["n"], pooled["pairs"]["same_run_fraction"]), (10, 0.5))
         self.assertTrue(any(x.startswith("50% of paired tasks were run in different runs") for x in pooled["caveats"]))
         self.assertAlmostEqual(pooled["metrics"]["cost"]["sensitivity"]["same_run_only"],
-                               math.exp(statistics.fmean(math.log(k) for k in KS[:5])))
+                               math.exp(statistics.fmean(math.log(1 / k) for k in KS[:5])))
         same = self.comparison(self.build(FakeLedger(rows), cfg, {"pairing": {"same_run_only": True}}), "pi")
         self.assertEqual(same["metrics"]["cost"]["n"], 5)
 
@@ -505,13 +528,14 @@ class References(ReportCase):
     def test_reference_lookup(self) -> None:
         cfg = self.config()
         pi = report.reference_for(cfg.reference, "pi", *OPUS, "tokens_total")
-        self.assertAlmostEqual(pi["band"][0], 2.0667, places=4)
-        self.assertAlmostEqual(pi["band"][1], 4.65, places=4)
+        self.assertAlmostEqual(pi["published"]["value"], 1 / 3.1)
+        self.assertAlmostEqual(pi["band"][0], 1 / 4.65)  # 1/3.1 within x/÷1.5: [1/(3.1 x 1.5), 1.5/3.1]
+        self.assertAlmostEqual(pi["band"][1], 1.5 / 3.1)
         self.assertEqual((pi["estimator"], pi["applies"]), ("ratio_of_means", True))
-        self.assertEqual(report.reference_for(cfg.reference, "pi", *OPUS, "cost")["band"], [2.0, 3.0])
+        self.assertEqual(report.reference_for(cfg.reference, "pi", *OPUS, "cost")["band"], [1 / 3, 0.5])
         strands = report.reference_for(cfg.reference, "strands", *OPUS, "cost")["band"]
-        self.assertAlmostEqual(strands[0], 1.4)
-        self.assertAlmostEqual(strands[1], 3.15)
+        self.assertAlmostEqual(strands[0], 1 / 3.15)
+        self.assertAlmostEqual(strands[1], 1 / 1.4)
         self.assertIsNone(report.reference_for(cfg.reference, "mini-swe-agent", *OPUS, "tokens_total"))
         self.assertEqual(report.reference_for(cfg.reference, "pi", *OPUS, "pass")["band"], [-5.0, 5.0])
         self.assertFalse(report.reference_for(cfg.reference, "pi", *GLM, "cost")["applies"])
@@ -519,23 +543,25 @@ class References(ReportCase):
 
     def test_verdicts_against_published_figures(self) -> None:
         cfg = self.config()
+        # ks: claude-code / pi on each task, so pi's multiples are near 1/3, 1/6 and 1/1.2. Against the
+        # published 0.333-0.5 (Claude Code at 2x-3x), 1/6 is below it (relatively cheaper) and 1/1.2 above.
         cases = {
-            "near 3": ([3.0, 3.1, 2.9, 3.2, 2.8, 3.0, 3.1, 2.95, 3.05, 3.0], "within", "overlaps"),
-            "near 6": ([6.0, 6.2, 5.9, 6.4, 5.8, 6.1, 6.0, 6.3, 5.7, 6.0], "above", "above"),
-            "near 1.2": ([1.2, 1.25, 1.15, 1.3, 1.1, 1.2, 1.22, 1.18, 1.24, 1.16], "below", "below"),
+            "near 1/3": ([3.0, 3.1, 2.9, 3.2, 2.8, 3.0, 3.1, 2.95, 3.05, 3.0], "within", "overlaps"),
+            "near 1/6": ([6.0, 6.2, 5.9, 6.4, 5.8, 6.1, 6.0, 6.3, 5.7, 6.0], "below", "below"),
+            "near 1/1.2": ([1.2, 1.25, 1.15, 1.3, 1.1, 1.2, 1.22, 1.18, 1.24, 1.16], "above", "above"),
         }
         for name, (ks, tokens, cost) in cases.items():
             with self.subTest(name):
                 c = self.comparison(self.build(FakeLedger(pair_rows(ks)), cfg), "pi")
                 ref = c["metrics"]["tokens_total"]["reference"]
                 self.assertEqual(ref["verdict"], tokens)
-                self.assertAlmostEqual(ref["band"][0], 2.0667, places=4)
+                self.assertAlmostEqual(ref["band"][0], 1 / 4.65)
                 self.assertEqual(c["metrics"]["cost"]["reference"]["verdict"], cost)
-                self.assertEqual(c["metrics"]["cost"]["reference"]["band"], [2.0, 3.0])
+                self.assertEqual(c["metrics"]["cost"]["reference"]["band"], [1 / 3, 0.5])
                 self.assertIsNone(c["metrics"]["tokens_uncached"]["reference"])
                 phrase = {"overlaps": "overlaps", "above": "lies above", "below": "lies below"}[cost]
-                self.assertTrue(c["headline"].endswith(f"the ratio-of-means interval {phrase} the published 2-3x"),
-                                c["headline"])
+                self.assertTrue(c["headline"].endswith(f"the ratio-of-means interval {phrase} the published "
+                                                       "0.33-0.50x"), c["headline"])
         rows = []
         for i, k in enumerate(KS):
             a, b = scaled(k, i)
@@ -559,7 +585,201 @@ class References(ReportCase):
         self.assertNotIn("Harbor reports no cache-write tokens", " ".join(c["caveats"]))
         opus = self.comparison(self.build(FakeLedger(pair_rows(KS)), self.config()), "pi")
         self.assertNotIn(report.NOT_APPLICABLE_CAVEAT, opus["caveats"])
-        self.assertTrue(any("cache-write tokens" in x for x in opus["caveats"]))
+        # Cache writes are priced from the harness logs now: no blanket caveat on Anthropic either.
+        self.assertFalse(any("cache-write" in x or "cache writes" in x for x in opus["caveats"]))
+
+    def test_a_reference_written_baseline_over_harness_gives_the_same_report(self) -> None:
+        # A reference.yaml from before the flip (2-3, 3.1, 2.1) is inverted on reading: the same bands and verdicts.
+        old = self.config(reference=REFERENCE_YAML_BASELINE_OVER_HARNESS)
+        for ks in (KS, [6.0, 6.2, 5.9, 6.4, 5.8, 6.1, 6.0, 6.3, 5.7, 6.0]):
+            with self.subTest(ks=ks[0]):
+                rows = pair_rows(ks) + pair_rows(ks, arm="strands")
+                new_rep, old_rep = self.build(FakeLedger(rows), self.config()), self.build(FakeLedger(rows), old)
+                for arm in ("pi", "strands"):
+                    for metric in ("tokens_total", "cost"):
+                        self.assertEqual(self.comparison(old_rep, arm)["metrics"][metric]["reference"],
+                                         self.comparison(new_rep, arm)["metrics"][metric]["reference"])
+                    self.assertEqual(self.comparison(old_rep, arm)["headline"],
+                                     self.comparison(new_rep, arm)["headline"])
+        for family, metric in (("pi", "tokens_total"), ("strands", "cost"), ("terminus-2", "cost")):
+            self.assertEqual(report.reference_for(old.reference, family, *OPUS, metric),
+                             report.reference_for(self.config().reference, family, *OPUS, metric))
+
+
+class Direction(ReportCase):
+    """Every multiple is harness / baseline: under 1x, the harness used less than the baseline."""
+
+    def test_a_harness_that_spends_half_reads_0_5(self) -> None:
+        rows = pair_rows([2.0] * 8)  # claude-code spends twice what pi spends on every task
+        rep = self.build(FakeLedger(rows), self.config(), {"include_pairs": True})
+        c = self.comparison(rep, "pi")
+        for metric in ("tokens_total", "tokens_uncached", "cost"):
+            with self.subTest(metric):
+                m = c["metrics"][metric]
+                self.assertAlmostEqual(m["geomean"]["estimate"], 0.5, places=6)
+                self.assertAlmostEqual(m["ratio_of_means"]["estimate"], 0.5, places=6)
+                self.assertAlmostEqual(m["per_task"]["median"], 0.5, places=6)
+                self.assertTrue(all(abs(v - 0.5) < 1e-6 for v in m["leave_one_out"]))
+        self.assertTrue(all(abs(p["ratio_tokens"] - 0.5) < 1e-6 and abs(p["ratio_cost"] - 0.5) < 1e-6
+                            for p in c["pairs_table"]))
+        pairs = report.build_pairs(FakeLedger(rows), self.config(), Filters(), None, c["key"])["pairs"]
+        self.assertAlmostEqual(pairs[0]["ratio_cost"], pairs[0]["arm"]["cost"] / pairs[0]["baseline"]["cost"])
+        self.assertTrue(c["headline"].startswith(
+            "pi vs claude-code on anthropic:claude-opus-5-5: pi used 0.50x the cost of claude-code"), c["headline"])
+        self.assertEqual(rep["provenance"]["direction"], stats.DIRECTION)
+
+    def test_the_unrecorded_sensitivities_keep_their_sides(self) -> None:
+        # unrecorded_arm_high costs the arm's unrecorded trials high: the multiple rises; the baseline's: it falls.
+        ks = [2.0, 2.1, 1.9, 2.0, 2.05, 1.95, 2.0, 2.0]
+        timeout: dict[str, Any] = dict(outcome="agent_limit", passed=False, exception_type="AgentTimeoutError",
+                                       total_sec=960.0)
+        for side, other in (("pi", "claude-code"), ("claude-code", "pi")):
+            with self.subTest(lost=side):
+                rows = pair_rows(ks)
+                rows += [trow("task-1", side, tokens=(0, 0, 0), run_key="dev/r2", **timeout),
+                         trow("task-1", other, tokens=(200000, 80000, 4000), run_key="dev/r2")]
+                m = self.comparison(self.build(FakeLedger(rows), self.config()), "pi")["metrics"]["cost"]
+                high = m["sensitivity"]["unrecorded_arm_high" if side == "pi" else "unrecorded_baseline_high"]
+                self.assertIsNone(m["sensitivity"]["unrecorded_baseline_high" if side == "pi" else
+                                                   "unrecorded_arm_high"])
+                if side == "pi":
+                    self.assertGreater(high, m["geomean"]["estimate"])
+                else:
+                    self.assertLess(high, m["geomean"]["estimate"])
+
+
+class TaskScope(ReportCase):
+    def test_the_scope_says_which_tasks_a_report_covers(self) -> None:
+        rows = pair_rows(KS, tasks=SAMPLE[:8] + ["out-of-scope-1", "out-of-scope-2"])
+        cfg = self.config()
+        everything = self.build(FakeLedger(rows), cfg)
+        self.assertEqual(everything["scope"], {"kind": "all", "tasks": 0, "scope_tasks": 20,
+                                               "tasks_file": report.tasks_file(cfg)})
+        self.assertTrue(everything["scope"]["tasks_file"].endswith("tasks.txt"))
+        self.assertEqual(self.comparison(everything, "pi")["metrics"]["cost"]["n"], 10)
+        scoped = self.build(FakeLedger(rows), cfg, filters={"tasks": SAMPLE})
+        self.assertEqual((scoped["scope"]["kind"], scoped["scope"]["tasks"]), ("scope", 20))
+        self.assertEqual(scoped["spec"]["filters"]["tasks"], SAMPLE)  # the filter actually used is recorded
+        chosen = self.build(FakeLedger(rows), cfg, filters={"tasks": SAMPLE[:3]})
+        self.assertEqual((chosen["scope"]["kind"], chosen["scope"]["tasks"]), ("chosen", 3))
+        self.assertEqual(report.task_scope(self.config(tasks=[]), Filters())["kind"], "all")
+
+    def test_a_scoped_report_compares_on_the_scope_tasks_only(self) -> None:
+        # The real ledger keeps every trial; this one serves the tasks filter as Ledger.query does.
+        rows = pair_rows(KS, tasks=SAMPLE[:8] + ["out-of-scope-1", "out-of-scope-2"])
+
+        class Scoped(FakeLedger):
+            def query(self, f: Filters, **kw: Any) -> tuple[int, list[dict]]:
+                total, out = super().query(f, **kw)
+                out = [r for r in out if not f.tasks or r["task"] in f.tasks]
+                return len(out), out
+
+        scoped = self.build(Scoped(rows), self.config(), filters={"tasks": SAMPLE})
+        c = self.comparison(scoped, "pi")
+        self.assertEqual(c["metrics"]["cost"]["n"], 8)
+        self.assertAlmostEqual(c["metrics"]["cost"]["geomean"]["estimate"],
+                               math.exp(statistics.fmean(math.log(1 / k) for k in KS[:8])))
+
+
+class SavedReports(ReportCase):
+    """Snapshots saved before multiples were harness / baseline are converted when read."""
+
+    def old_report(self) -> dict:
+        metric = {
+            "status": "ok", "n": 9, "need": 0,
+            "geomean": {"estimate": 2.0, "lo": 1.6, "hi": 2.5, "sd_log": 0.3, "gsd": 1.35, "method": "t_on_log_ratios"},
+            "ratio_of_means": {"estimate": 2.5, "lo": 2.0, "hi": 3.2, "method": "task_bootstrap"},
+            "per_task": {"min": 1.25, "q1": 1.6, "median": 2.0, "q3": 2.5, "max": 4.0}, "leave_one_out": [1.9, 2.2],
+            "sensitivity": {"crashes_excluded": 2.0, "misconfigured_cap_included": None, "same_run_only": 1.6,
+                            "unrecorded_arm_high": 1.25, "unrecorded_baseline_high": None},
+            "robust": True, "dropped": {},
+            "reference": {"published": {"low": 2.0, "high": 3.0, "source": "S1-S5"}, "band": [2.0, 3.0],
+                          "estimator": "ratio_of_means", "applies": True, "position": "above",
+                          "verdict": "insufficient",
+                          "withheld": "had those cost 2x pi's usual spend, the verdict would be 'below', not 'above'"},
+        }
+        tokens = copy.deepcopy(metric)
+        tokens["reference"] = {"published": {"value": 3.1, "source": "S10"}, "band": [2.0667, 4.65],
+                               "estimator": "ratio_of_means", "applies": True, "position": "inside",
+                               "verdict": "below", "withheld": None}
+        comparison = {
+            "key": "fam:a|m|pi~fam:a|m|claude-code", "provider": "anthropic", "model": "claude-opus-5-5",
+            "group": "fam:a|m|pi", "baseline_group": "fam:a|m|claude-code", "arm_name": "pi",
+            "baseline_name": "claude-code", "headline": "pi vs claude-code: claude-code used 2.00x the cost of pi",
+            "metrics": {"tokens_total": tokens, "tokens_uncached": copy.deepcopy(metric), "cost": metric},
+            "pass": {"status": "ok", "n": 9, "need": 0, "delta_pp": {"estimate": -11.1, "lo": -30.0, "hi": 8.0}},
+            "coverage": {"metric": "cost", "halfwidth_factor_now": 1.25},
+            "caveats": ["No cost verdict: had those cost 2x pi's usual spend, the verdict would be 'below', not "
+                        "'above'.", "Effort differs."],
+            "pairs_table": [{"task": "t", "ratio_tokens": 4.0, "ratio_cost": 2.0}],
+        }
+        return {"spec": {"filters": {"tasks": ["t"]}, "options": {"ci_level": 0.9}},
+                "provenance": {"fingerprint": "sha256:abc", "stats_version": 3, "trials_used": 18},
+                "comparisons": [comparison], "groups": [], "totals": {"trials": 18}}
+
+    def test_an_old_report_is_converted(self) -> None:
+        old = self.old_report()
+        kept = copy.deepcopy(old)
+        out = report.saved_report(old, old["spec"], self.config())
+        self.assertEqual(old, kept)  # never in place
+        self.assertEqual((out["provenance"]["direction"], out["provenance"]["converted_from"]),
+                         ("harness_over_baseline", "baseline_over_harness"))
+        c = out["comparisons"][0]
+        cost = c["metrics"]["cost"]
+        self.assertEqual(cost["geomean"], {"estimate": 0.5, "lo": 0.4, "hi": 0.625, "sd_log": 0.3, "gsd": 1.35,
+                                           "method": "t_on_log_ratios"})
+        self.assertEqual((cost["ratio_of_means"]["estimate"], cost["ratio_of_means"]["lo"],
+                          cost["ratio_of_means"]["hi"]), (0.4, 0.3125, 0.5))
+        self.assertEqual(cost["per_task"], {"min": 0.25, "q1": 0.4, "median": 0.5, "q3": 0.625, "max": 0.8})
+        self.assertEqual(cost["leave_one_out"], [1 / 2.2, 1 / 1.9])
+        self.assertEqual(cost["sensitivity"], {"crashes_excluded": 0.5, "misconfigured_cap_included": None,
+                                               "same_run_only": 0.625, "unrecorded_arm_high": 0.8,
+                                               "unrecorded_baseline_high": None})
+        ref = cost["reference"]
+        self.assertEqual(ref["published"], {"low": 1 / 3, "high": 0.5, "source": "S1-S5"})
+        self.assertEqual(ref["band"], [1 / 3, 0.5])
+        self.assertEqual((ref["position"], ref["verdict"]), ("below", "insufficient"))
+        self.assertEqual(ref["withheld"], "had those cost 2x pi's usual spend, the verdict would be 'above', not "
+                                          "'below'")
+        tokens = c["metrics"]["tokens_total"]["reference"]
+        self.assertEqual((tokens["published"]["value"], tokens["verdict"], tokens["position"]),
+                         (1 / 3.1, "above", "inside"))
+        self.assertEqual(c["pass"]["delta_pp"]["estimate"], -11.1)  # points are never inverted
+        self.assertEqual(c["pairs_table"][0]["ratio_tokens"], 0.25)
+        self.assertEqual(c["caveats"][0], "No cost verdict: had those cost 2x pi's usual spend, the verdict would be "
+                                          "'above', not 'below'.")
+        self.assertTrue(c["headline"].startswith("pi vs claude-code on anthropic:claude-opus-5-5: pi used 0.50x the "
+                                                 "cost of claude-code (90% CI 0.40-0.62x, 9 tasks)"), c["headline"])
+        self.assertEqual((out["scope"]["kind"], out["scope"]["tasks"]), ("chosen", 1))
+
+    def test_a_report_saved_since_is_left_as_it_is(self) -> None:
+        cfg = self.config()
+        rep = self.build(FakeLedger(pair_rows(KS)), cfg)
+        out = report.saved_report(rep, rep["spec"], cfg)
+        self.assertEqual(out, rep)
+        self.assertNotIn("converted_from", out["provenance"])
+        # Converting what an old version would have saved gives today's report back.
+        old = copy.deepcopy(rep)
+        old["provenance"].pop("direction")
+        old.pop("scope")
+        for c in old["comparisons"]:
+            for m in c["metrics"].values():
+                report._invert_metric(m)
+        again = report.saved_report(old, old["spec"], cfg)
+        again["provenance"].pop("converted_from")
+        self.assertEqual(json_round(again), json_round(rep))
+        self.assertIsNone(report.saved_report(None, None, cfg))
+
+
+def json_round(value: Any) -> Any:
+    """Floats to 12 significant digits, for comparing a value inverted twice."""
+    if isinstance(value, float):
+        return float(f"{value:.12g}")
+    if isinstance(value, dict):
+        return {k: json_round(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [json_round(v) for v in value]
+    return value
 
 
 class PassRates(ReportCase):
@@ -623,9 +843,9 @@ class Sensitivity(ReportCase):
             rows.append(trow(f"task-{i}", "pi", tokens=a, outcome="agent_crash" if i < 5 else "passed"))
             rows.append(trow(f"task-{i}", "claude-code", tokens=b))
         m = self.comparison(self.build(FakeLedger(rows), self.config()), "pi")["metrics"]["cost"]
-        primary = math.exp((5 * math.log(10) + 5 * math.log(2)) / 10)
+        primary = math.exp((5 * math.log(1 / 10) + 5 * math.log(1 / 2)) / 10)
         self.assertAlmostEqual(m["geomean"]["estimate"], primary, places=6)
-        self.assertAlmostEqual(m["sensitivity"]["crashes_excluded"], 2.0, places=6)
+        self.assertAlmostEqual(m["sensitivity"]["crashes_excluded"], 1 / 2.0, places=6)
         self.assertAlmostEqual(m["sensitivity"]["misconfigured_cap_included"], primary, places=6)
         self.assertAlmostEqual(m["sensitivity"]["same_run_only"], primary, places=6)
         self.assertLess(m["leave_one_out"][0], m["leave_one_out"][1])
@@ -772,6 +992,79 @@ class Grouping(ReportCase):
                                            "no comparison."])
 
 
+class SetupModes(ReportCase):
+    """How a trial got its harness (a stock install or a pre-baked image) is
+    provenance: one arm's trials of either kind share its group and pairs."""
+
+    def rows(self) -> list[dict]:
+        rows = []
+        for i, k in enumerate(KS[:6]):
+            arm, base = scaled(k, i)
+            # pi runs pre-baked on tasks 0-2 and stock on 3-5, and both ways on task 0; the baseline stock.
+            rows.append(dict(trow(f"task-{i}", "pi", tokens=arm), setup_mode="prebaked" if i < 3 else "stock"))
+            rows.append(dict(trow(f"task-{i}", "claude-code", tokens=base), setup_mode="stock"))
+        rows.append(dict(trow("task-0", "pi", tokens=scaled(KS[0], 0)[0]), setup_mode="fallback"))
+        rows.append(dict(trow("task-1", "claude-code", tokens=scaled(KS[1], 1)[1]), setup_mode="prebaked"))
+        rows.append(dict(trow("task-2", "pi", tokens=scaled(KS[2], 2)[0]), setup_mode=None))
+        return rows
+
+    def test_a_pre_baked_and_a_stock_trial_of_one_arm_share_a_cell_and_pair(self) -> None:
+        o = report.parse_options(None, self.config())
+        rows = self.rows()
+        task_0 = [r for r in rows if r["task"] == "task-0"]
+        baked, stock = (next(r for r in task_0 if r["family"] == "pi" and r["setup_mode"] == mode)
+                        for mode in ("prebaked", "fallback"))
+        base = next(r for r in task_0 if r["family"] == "claude-code")
+        self.assertEqual(report.group_key(baked, o), report.group_key(stock, o))
+        self.assertEqual(report._pair_key(baked, o), report._pair_key(stock, o))
+        self.assertEqual(report._pair_key(baked, o), report._pair_key(base, o))
+        prepared = report.prepare_rows(rows, o, None, pricing.load_table())
+        for r in prepared:
+            r["group"] = report.group_key(r, o)
+        cells = report.build_cells(prepared, o)
+        cell = cells[(report.group_key(baked, o), report._pair_key(baked, o))]
+        self.assertEqual(sorted(cell["trial_keys"]), sorted([baked["trial_key"], stock["trial_key"]]))
+        rep = self.build(FakeLedger(rows), self.config())
+        groups = {g["family"]: g for g in rep["groups"]}
+        self.assertEqual(groups["pi"]["setup_modes"], {"fallback": 1, "prebaked": 3, "stock": 3, "unknown": 1})
+        self.assertEqual(groups["claude-code"]["setup_modes"], {"prebaked": 1, "stock": 6})
+        c = self.comparison(rep, "pi")
+        self.assertEqual(c["metrics"]["tokens_total"]["n"], 6)  # every task pairs, whichever setup each side had
+
+    def test_the_setup_option_filters_trials(self) -> None:
+        cfg = self.config()
+        rows = self.rows()
+        totals = {setup: self.build(FakeLedger(rows), cfg, {"setup": setup})["totals"]["trials"]
+                  for setup in report.SETUP_FILTERS}
+        self.assertEqual(totals, {"any": 15, "stock": 10, "prebaked": 4})  # a fallback ran stock; None only in any
+        self.assertEqual(report.parse_options(None, cfg).setup, "any")
+        prebaked = self.build(FakeLedger(rows), cfg, {"setup": "prebaked"})
+        self.assertEqual(prebaked["spec"]["options"]["setup"], "prebaked")
+        self.assertEqual({g["family"]: g["setup_modes"] for g in prebaked["groups"]},
+                         {"pi": {"prebaked": 3}, "claude-code": {"prebaked": 1}})
+        self.assertEqual(len(report.analysis_rows(FakeLedger(rows), cfg)), 15)  # the estimates see every trial
+        o = report.parse_options({"setup": "stock"}, cfg)
+        self.assertEqual(report.parse_options(report.options_dict(o), cfg), o)
+        for bad in ("baked", "", 1, True):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                report.parse_options({"setup": bad}, cfg)
+
+    def test_minutes_without_setup(self) -> None:
+        o = report.parse_options(None, self.config())
+        row = dict(trow("task-0", "pi", total_sec=600.0), setup_mode="stock")
+        never = dict(trow("task-1", "pi", total_sec=30.0), setup_mode="stock")
+        never["phases"] = {**never["phases"], "agent_setup_sec": None}
+        prepared = {r["task"]: r for r in report.prepare_rows([row, never], o, None, None)}
+        self.assertEqual((prepared["task-0"]["setup_minutes"], prepared["task-0"]["minutes_ex_setup"]),
+                         (0.5, 9.5))  # 30 s of agent setup in 600 s
+        self.assertEqual((prepared["task-1"]["setup_minutes"], prepared["task-1"]["minutes_ex_setup"]), (None, 0.5))
+        analysis = report._analysis_row(prepared["task-0"])
+        self.assertEqual((analysis["setup_mode"], analysis["minutes_ex_setup"]), ("stock", 9.5))
+        rep = self.build(FakeLedger(self.rows()), self.config())
+        pi = next(g for g in rep["groups"] if g["family"] == "pi")
+        self.assertEqual(pi["per_trial"]["minutes_ex_setup"]["median"], 9.5)
+
+
 class UnrecordedUsage(ReportCase):
     """Pilot 3's pi-glm timed out after 900 s before its first model call
     completed; Harbor recorded 0/0/0. It used to enter the means as a $0
@@ -809,7 +1102,7 @@ class UnrecordedUsage(ReportCase):
                 (pair,) = c["pairs_table"]
                 self.assertEqual((pair["arm"]["trials"], pair["arm"]["valid"]), (2, 2))
                 self.assertAlmostEqual(pair["arm"]["cost"], real_cost)
-                self.assertAlmostEqual(pair["ratio_cost"], rows[2]["cost_usd"] / real_cost)
+                self.assertAlmostEqual(pair["ratio_cost"], real_cost / rows[2]["cost_usd"])
                 self.assertIn("No usage was recorded for 1 of 2 pi trials and 0 of 1 claude-code trials; they count "
                               "for pass rate but are left out of tokens and cost. Such trials often ran to a time "
                               "limit, so the side with more of them may look cheaper than it is.", c["caveats"])
@@ -864,7 +1157,7 @@ class UnrecordedUsage(ReportCase):
                 self.assertEqual((pi["trials"]["usage_unmeasured"], pi["trials"]["usage_lower_bound"]), (1, 0))
                 self.assertEqual(pi["trials"]["valid_reward"], 2)
                 c = self.comparison(rep, "pi", where=GLM)
-                self.assertAlmostEqual(c["pairs_table"][0]["ratio_cost"], rows[2]["cost_usd"] / real_cost)
+                self.assertAlmostEqual(c["pairs_table"][0]["ratio_cost"], real_cost / rows[2]["cost_usd"])
                 self.assertIn("1 pi trial cut short by a time limit recorded fewer tokens than every uncut pi trial "
                               "on the same task, though it ran longer, so part of what it spent is missing; like "
                               "trials with no usage recorded, it counts for pass rate only.", c["caveats"])
@@ -918,11 +1211,11 @@ class UnrecordedUsage(ReportCase):
 
     def test_a_verdict_that_rests_on_floors_is_withheld(self) -> None:
         # The arm's three biggest tasks timed out after one completed call:
-        # the floors, kept at their recorded value, move 'below' to 'overlaps'.
+        # the floors, kept at their recorded value, move 'above' to 'overlaps'.
         ks = [1.55, 1.65, 1.6, 1.5, 1.7, 1.6, 1.55, 1.65, 1.6, 1.6]
         cfg = self.config()
         clean = self.comparison(self.build(FakeLedger(self.near(ks)), cfg), "pi")["metrics"]["cost"]
-        self.assertEqual(clean["reference"]["verdict"], "below")
+        self.assertEqual(clean["reference"]["verdict"], "above")
         self.assertEqual((clean["sensitivity"]["unrecorded_arm_high"], clean["robust"]), (None, True))
         rows = [r for r in self.near(ks) if not (r["family"] == "pi" and r["task"] in ("task-7", "task-8", "task-9"))]
         rows += [trow(f"task-{i}", "pi", tokens=(6000, 0, 250), outcome="agent_limit", passed=False,
@@ -931,11 +1224,11 @@ class UnrecordedUsage(ReportCase):
         cost = c["metrics"]["cost"]
         self.assertEqual((cost["status"], cost["n"]), ("ok", 10))  # the estimate is still shown
         reason = ("3 paired tasks rest on pi trials cut short or with no usage recorded; had those cost 2x pi's usual "
-                  "spend on their task, the verdict would be 'below', not 'overlaps'")
+                  "spend on their task, the verdict would be 'above', not 'overlaps'")
         self.assertEqual((cost["reference"]["verdict"], cost["reference"]["withheld"]), ("insufficient", reason))
         self.assertIn(f"verdict withheld: {reason}", c["headline"])
         self.assertIn(f"No cost verdict: {reason}.", c["caveats"])
-        self.assertLess(cost["sensitivity"]["unrecorded_arm_high"], cost["geomean"]["lo"])
+        self.assertGreater(cost["sensitivity"]["unrecorded_arm_high"], cost["geomean"]["hi"])  # pi dearer
         self.assertIsNone(cost["sensitivity"]["unrecorded_baseline_high"])
         self.assertIs(cost["robust"], False)
 
@@ -988,7 +1281,7 @@ class UnrecordedUsage(ReportCase):
                       exception_type="AgentTimeoutError", total_sec=960.0) for task in lost]
         cost = self.comparison(self.build(FakeLedger(rows), self.config()), "pi")["metrics"]["cost"]
         self.assertEqual((cost["reference"]["verdict"], cost["reference"]["withheld"]), ("within", None))
-        self.assertLess(cost["sensitivity"]["unrecorded_arm_high"], cost["geomean"]["estimate"])
+        self.assertGreater(cost["sensitivity"]["unrecorded_arm_high"], cost["geomean"]["estimate"])
 
 
 class Pricing(ReportCase):
@@ -1058,6 +1351,215 @@ class Pricing(ReportCase):
                       "trials out until a price is added.", c["caveats"])
         priced = self.comparison(self.build(FakeLedger(pair_rows(KS, where=GLM)), self.config()), "pi", where=GLM)
         self.assertFalse(any(x.startswith("No price in config/pricing.yaml") for x in priced["caveats"]))
+
+
+class CostBasis(ReportCase):
+    """Which trials count toward a cost multiple, and on which figures."""
+
+    def test_a_fallback_model_trial_never_counts_toward_cost(self) -> None:
+        rows = pair_rows(KS)
+        rows[0]["primary_share"] = 0.04  # task-0's pi trial: a fallback model answered nearly all of it
+        rep = self.build(FakeLedger(rows), self.config())
+        c = self.comparison(rep, "pi")
+        self.assertEqual((c["metrics"]["cost"]["n"], c["metrics"]["tokens_total"]["n"]), (9, 10))
+        self.assertIn("1 pi trial spent more than 5% of its tokens on models other than claude-opus-5-5 (a fallback "
+                      "model answered); it counts for pass rate only.", c["caveats"])
+        self.assertEqual(c["pass"]["n"], 10)
+        pairs = report.build_pairs(FakeLedger(rows), self.config(), None, None, c["key"])
+        (left,) = [t for t in pairs["excluded_trials"] if t["trial_key"] == rows[0]["trial_key"]]
+        self.assertEqual(left["reason"], "fallback model: 96% of its tokens on models other than claude-opus-5-5")
+        self.assertFalse(report.fallback_model({"primary_share": None}))
+        self.assertFalse(report.fallback_model({"primary_share": report.PRIMARY_SHARE_MIN}))
+
+    def test_reported_pricing_uses_the_harnesses_figures_only_where_both_sides_have_them(self) -> None:
+        def priced(pi_factor: float | None) -> list[dict]:
+            rows = pair_rows(KS)
+            for r in rows:
+                factor = 1.5 if r["family"] == "claude-code" else pi_factor
+                r["reported_cost_usd"] = None if factor is None else r["cost_usd"] * factor
+            return rows
+
+        cfg = self.config()
+
+        def cost(rows: list[dict], mode: str) -> float:
+            rep = self.build(FakeLedger(rows), cfg, {"pricing": mode})
+            return self.comparison(rep, "pi")["metrics"]["cost"]["geomean"]["estimate"]
+
+        current = cost(priced(None), "current")
+        # pi reports nothing (as strands does): both sides are priced from the table, never pi's computed figure
+        # against Claude Code's own bill.
+        self.assertAlmostEqual(cost(priced(None), "reported"), current)
+        # Both report: their own figures.
+        self.assertAlmostEqual(cost(priced(1.2), "reported"), current * 1.2 / 1.5)
+        # Task by task: pi reports on half the tasks, so only those pairs use the reported figures.
+        rows = priced(1.2)
+        for r in rows:
+            if r["family"] == "pi" and int(r["task"].split("-")[1]) % 2:
+                r["reported_cost_usd"] = None
+        mixed = report.build_pairs(FakeLedger(rows), cfg, None, report.parse_options({"pricing": "reported"}, cfg),
+                                   self.comparison(self.build(FakeLedger(rows), cfg), "pi")["key"])["pairs"]
+        plain = report.build_pairs(FakeLedger(rows), cfg, None, None,
+                                   self.comparison(self.build(FakeLedger(rows), cfg), "pi")["key"])["pairs"]
+        for m, p in zip(mixed, plain):
+            factor = 1.0 if int(m["task"].split("-")[1]) % 2 else 1.2 / 1.5
+            self.assertAlmostEqual(m["ratio_cost"], p["ratio_cost"] * factor)
+
+    def test_flagged_trials_get_caveats_with_their_bounds(self) -> None:
+        rows = pair_rows(KS)
+        pi = [r for r in rows if r["family"] == "pi"]
+        cc = [r for r in rows if r["family"] == "claude-code"]
+        pi[0]["flags"] = {"unsaved_calls": {"calls": 1, "cost_usd_max": 0.0096}}
+        pi[1]["flags"] = {"unsaved_calls": {"calls": 2, "cost_usd_max": 0.02}}
+        cc[0]["flags"] = {"declined_attempts": {"attempts": 1, "cost_usd_max": 0.026},
+                          "reported_cost_mismatch": {"reported_usd": 0.72, "computed_usd": 0.70, "diff_pct": 3.689}}
+        cc[1]["flags"] = {"cache_writes_unknown": {"calls": 0, "models": ["claude-opus-5-5"],
+                                                   "reason": "no harness log"}}
+        cc[2]["flags"] = {"unfinished_calls": {"calls": 1, "cost_usd_max": None}, "trial_folder_missing": True}
+        caveats = self.comparison(self.build(FakeLedger(rows), self.config()), "pi")["caveats"]
+        expected = [
+            "2 pi trials lost model calls that completed but were never saved (a timeout during a command): 3 calls "
+            "missing from the cost (up to $0.03 in all).",
+            "1 claude-code trial has model attempts declined before another model answered (a refusal fallback); "
+            "only the session log lists them and whether they are billed is unknown, so the cost leaves them out "
+            "(up to $0.03 in all).",
+            "1 claude-code trial started model calls that never finished (a kill mid-call): 1 call missing from the "
+            "cost.",
+            "1 claude-code trial reports a cost of its own more than 0.5% from the cost computed from its tokens "
+            "(largest +3.7%): a call the log does not show, or a price that differs.",
+            "1 claude-code trial has cache writes no harness log gave; they are priced as fresh input, so the cost "
+            "is low by the write premium.",
+            "1 claude-code trial had no trial folder when last re-derived; their cache writes and log checks are the "
+            "figures stored before.",
+        ]
+        for text in expected:
+            self.assertIn(text, caveats)
+
+
+class ModelComparisons(ReportCase):
+    """compare 'models': the harness held fixed, each model against the
+    baseline model on the same task content, model / baseline model."""
+
+    def rows(self, *, deepseek_snapshot: str = "local:tb@1") -> list[dict]:
+        rows = []
+        for i, k in enumerate(KS):
+            cheap, opus = scaled(k, i)  # DeepSeek's tokens are 1/k of Opus's on task i
+            for family in ("claude-code", "pi"):
+                rows.append(trow(f"task-{i}", family, tokens=opus))
+                rows.append(trow(f"task-{i}", family, provider=DEEPSEEK[0], model=DEEPSEEK[1], tokens=cheap,
+                                 outcome="failed" if i % 2 else "passed", snapshot=deepseek_snapshot))
+        return rows
+
+    @staticmethod
+    def key(family: str, where: tuple[str, str]) -> str:
+        return f"fam:{where[0]}|{where[1]}|{family}"
+
+    def test_each_harness_compares_each_model_with_the_baseline_model(self) -> None:
+        cfg = self.config()
+        rep = self.build(FakeLedger(self.rows()), cfg, {"compare": "models"})
+        self.assertEqual(rep["spec"]["options"]["compare"], "models")
+        self.assertEqual(rep["spec"]["options"]["baseline"]["model"], "anthropic:claude-opus-5-5")
+        keys = sorted(c["key"] for c in rep["comparisons"])
+        self.assertEqual(keys, sorted(f"{self.key(f, DEEPSEEK)}~{self.key(f, OPUS)}" for f in ("claude-code", "pi")))
+        c = next(c for c in rep["comparisons"] if c["harness"] == "claude-code")
+        self.assertEqual((c["compare"], c["provider"], c["model"], c["baseline_provider"], c["baseline_model"]),
+                         ("models", DEEPSEEK[0], DEEPSEEK[1], OPUS[0], OPUS[1]))
+        self.assertEqual((c["arm_name"], c["baseline_name"]), (DEEPSEEK[1], OPUS[1]))
+        tokens = c["metrics"]["tokens_total"]
+        self.assertEqual((tokens["status"], tokens["n"]), ("ok", 10))
+        # model / baseline model: DeepSeek used 1/k of Opus's tokens on each task.
+        self.assertAlmostEqual(tokens["geomean"]["estimate"], math.exp(-statistics.fmean(math.log(k) for k in KS)))
+        # Pass rate: candidate minus baseline, in points.
+        self.assertAlmostEqual(c["pass"]["delta_pp"]["estimate"], -50.0)
+        # The published figures compare harnesses: no reference and no verdict on a model comparison.
+        self.assertTrue(all(m["reference"] is None for m in c["metrics"].values()))
+        self.assertIsNone(c["pass"]["reference"])
+        self.assertIn(report.MODELS_NO_VERDICT, c["caveats"])
+        self.assertTrue(c["headline"].startswith(f"{DEEPSEEK[1]} vs {OPUS[1]} with claude-code: {DEEPSEEK[1]} used "),
+                        c["headline"])
+        baselines = sorted(g["key"] for g in rep["groups"] if g["is_baseline"])
+        self.assertEqual(baselines, sorted(self.key(f, OPUS) for f in ("claude-code", "pi")))
+        # The same rows compared the usual way: harnesses on each model.
+        harnesses = self.build(FakeLedger(self.rows()), cfg)
+        self.assertEqual(sorted(c["key"] for c in harnesses["comparisons"]),
+                         sorted(f"{self.key('pi', w)}~{self.key('claude-code', w)}" for w in (OPUS, DEEPSEEK)))
+        self.assertTrue(all(c["compare"] == "harnesses" for c in harnesses["comparisons"]))
+
+    def test_the_baseline_model_comes_from_the_config_and_the_option_overrides_it(self) -> None:
+        ledger = FakeLedger(self.rows())
+        flipped = self.config(report_yaml=f"baseline_model: {DEEPSEEK[0]}:{DEEPSEEK[1]}\n")
+        self.assertEqual(flipped.baseline_model, f"{DEEPSEEK[0]}:{DEEPSEEK[1]}")
+        self.assertEqual(self.config().baseline_model, "anthropic:claude-opus-5-5")
+        override = {"compare": "models", "baseline": {"model": f"{DEEPSEEK[0]}:{DEEPSEEK[1]}"}}
+        for cfg, options in ((flipped, {"compare": "models"}), (self.config(), override)):
+            with self.subTest(options=options):
+                c = next(c for c in self.build(ledger, cfg, options)["comparisons"] if c["harness"] == "pi")
+                self.assertEqual((c["model"], c["baseline_model"]), (OPUS[1], DEEPSEEK[1]))
+                self.assertAlmostEqual(c["metrics"]["tokens_total"]["geomean"]["estimate"],
+                                       math.exp(statistics.fmean(math.log(k) for k in KS)))
+                self.assertAlmostEqual(c["pass"]["delta_pp"]["estimate"], 50.0)
+        with self.assertRaises(settings.ConfigError):
+            self.config(report_yaml="baseline_model: claude-opus-5-5\n")
+
+    def test_pairs_need_the_same_task_content_across_models(self) -> None:
+        rep = self.build(FakeLedger(self.rows(deepseek_snapshot="local:tb@2")), self.config(), {"compare": "models"})
+        c = next(c for c in rep["comparisons"] if c["harness"] == "pi")
+        self.assertEqual(c["metrics"]["tokens_total"]["n"], 0)
+        self.assertEqual(len(c["pairs"]["arm_only_tasks"]), 10)
+        by_name = self.build(FakeLedger(self.rows(deepseek_snapshot="local:tb@2")), self.config(),
+                             {"compare": "models", "pairing": {"match_on": "name"}})
+        c = next(c for c in by_name["comparisons"] if c["harness"] == "pi")
+        self.assertEqual(c["metrics"]["tokens_total"]["n"], 10)
+
+    def test_a_low_count_headline_never_promises_a_verdict(self) -> None:
+        rows = [r for r in self.rows() if int(r["task"].split("-")[1]) < 5]
+        c = next(c for c in self.build(FakeLedger(rows), self.config(), {"compare": "models"})["comparisons"]
+                 if c["harness"] == "pi")
+        self.assertEqual(c["metrics"]["cost"]["status"], "low_n")
+        self.assertTrue(c["headline"].endswith("; 3 more for a settled figure"), c["headline"])
+
+    def test_grouped_by_config_both_sides_name_the_harness_alike(self) -> None:
+        # A config hash covers the model, so the two sides' group names differ; the harness name must not.
+        rows = self.rows()
+        for r in rows[:2]:
+            r["primary_share"] = 0.5  # claude-code on each model: a fallback model answered one task
+        rep = self.build(FakeLedger(rows), self.config(), {"compare": "models", "group_by": "config"})
+        self.assertEqual(len(rep["comparisons"]), 2)
+        for c in rep["comparisons"]:
+            groups = {g["key"]: g for g in rep["groups"]}
+            arm, base = groups[c["group"]], groups[c["baseline_group"]]
+            self.assertNotEqual(arm["name"], base["name"])
+            self.assertEqual((arm["harness_key"], arm["harness_name"]), (base["harness_key"], base["harness_name"]))
+            self.assertEqual(c["harness"], arm["harness_name"])
+            self.assertRegex(c["harness"], r"^(claude-code|pi) [0-9a-f]{6}$")
+            self.assertNotIn(arm["config_hash"][:6], c["headline"])
+            self.assertTrue(c["headline"].startswith(f"{DEEPSEEK[1]} vs {OPUS[1]} with {c['harness']}: "),
+                            c["headline"])
+            if c["harness"].startswith("claude-code"):
+                # The caveats name each side by the one harness name and its model.
+                fallback = sorted(t.split(" trial ")[0] for t in c["caveats"] if "a fallback model answered" in t)
+                self.assertEqual(fallback, [f"1 {c['harness']} on {m}" for m in sorted((DEEPSEEK[1], OPUS[1]))])
+        # Grouped by family, the harness name is the family, as before.
+        family = self.build(FakeLedger(self.rows()), self.config(), {"compare": "models"})
+        self.assertEqual(sorted(c["harness"] for c in family["comparisons"]), ["claude-code", "pi"])
+
+    def test_a_harness_without_the_baseline_model_is_named(self) -> None:
+        rows = [r for r in self.rows() if not (r["family"] == "pi" and r["provider"] == OPUS[0])]
+        rep = self.build(FakeLedger(rows), self.config(), {"compare": "models"})
+        self.assertEqual([c["harness"] for c in rep["comparisons"]], ["claude-code"])
+        self.assertIn("No trials on anthropic:claude-opus-5-5 with pi, so 1 group there has no comparison.",
+                      rep["warnings"])
+
+    def test_bad_compare_options_are_refused(self) -> None:
+        cfg = self.config()
+        for bad in ({"compare": "arms"}, {"baseline": {"model": "claude-opus-5-5"}}, {"baseline": {"model": 5}},
+                    {"baseline": {"model": ":x"}}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                report.parse_options(bad, cfg)
+        o = report.parse_options({"compare": "models", "baseline": {"model": " openrouter : z-ai/glm-5.3 "}}, cfg)
+        self.assertEqual((o.compare, o.baseline_model), ("models", "openrouter:z-ai/glm-5.3"))
+        self.assertEqual(report.parse_options(report.options_dict(o), cfg), o)
+        self.assertEqual(report.parse_options(None, self.config(report_yaml="report: {compare: models}\n")).compare,
+                         "models")
 
 
 class Options(ReportCase):
@@ -1183,13 +1685,27 @@ class Plumbing(ReportCase):
         cfg = self.config()
         o = report.parse_options(None, cfg)
         trials = list(report.export_rows(ledger, cfg, Filters(), o, "trials"))
-        self.assertEqual(trials[0], list(report.ANALYSIS_KEYS))
+        self.assertEqual(trials[0], [*report.ANALYSIS_KEYS, "filters"])
         self.assertEqual(len(trials), 21)
+        self.assertEqual({row[-1] for row in trials[1:]}, {"{}"})
         pairs = list(report.export_rows(ledger, cfg, Filters(), o, "pairs"))
         self.assertEqual((pairs[0][0], len(pairs)), ("comparison", 11))
         comparisons = list(report.export_rows(ledger, cfg, Filters(), o, "comparisons"))
         self.assertEqual([r[5] for r in comparisons[1:]], ["tokens_total", "tokens_uncached", "cost", "pass"])
         self.assertTrue(all(isinstance(v, str) for row in comparisons for v in row))
+        # Every row says how its multiples read and which filters made it.
+        scoped = Filters(tasks=("task-0", "task-1", "task-2"))
+        for level, rows in (("pairs", list(report.export_rows(ledger, cfg, scoped, o, "pairs"))),
+                            ("comparisons", list(report.export_rows(ledger, cfg, scoped, o, "comparisons")))):
+            with self.subTest(level):
+                self.assertEqual(rows[0][-2:], ["direction", "filters"])
+                self.assertEqual({tuple(r[-2:]) for r in rows[1:]},
+                                 {("harness_over_baseline", '{"tasks":["task-0","task-1","task-2"]}')})
+        head = comparisons[0]
+        cost = next(r for r in comparisons[1:] if r[5] == "cost")
+        c = self.comparison(self.build(ledger, cfg), "pi")["metrics"]["cost"]
+        self.assertEqual(float(cost[head.index("geomean")]), c["geomean"]["estimate"])
+        self.assertLess(float(cost[head.index("geomean")]), 1.0)  # pi is the cheaper side: under 1x
         with self.assertRaises(ValueError):
             report.export_rows(ledger, cfg, Filters(), o, "everything")  # fails on the call itself
 
@@ -1202,10 +1718,14 @@ class Plumbing(ReportCase):
 
     def test_report_shape(self) -> None:
         rep = self.build(FakeLedger(pair_rows(KS)), self.config())
-        self.assertEqual(set(rep), {"spec", "provenance", "totals", "groups", "comparisons", "coverage", "warnings"})
+        self.assertEqual(set(rep), {"spec", "provenance", "scope", "totals", "groups", "comparisons", "coverage",
+                                    "warnings"})
         self.assertEqual(set(rep["provenance"]) >= {"generated_at", "fingerprint", "trials_used", "exclusions_applied",
                                                     "pricing", "pricing_sha", "parser_versions", "classifier_version",
-                                                    "stats_version", "harbor_versions", "includes_active_run"}, True)
+                                                    "stats_version", "harbor_versions", "includes_active_run",
+                                                    "direction"}, True)
+        self.assertEqual((rep["provenance"]["direction"], rep["provenance"]["stats_version"]),
+                         ("harness_over_baseline", 4))
         group = rep["groups"][0]
         for key in ("key", "label", "provider", "model", "family", "implementation", "config_hash", "harness_version",
                     "is_baseline", "configs", "config_diff", "harness_versions", "runs", "tasks", "trials",
@@ -1249,7 +1769,7 @@ class RealLedger(ReportCase):
         rep = self.build(ledger, self.config())
         c = self.comparison(rep, "pi")
         self.assertAlmostEqual(c["metrics"]["tokens_total"]["geomean"]["estimate"],
-                               math.exp(statistics.fmean(math.log(k) for k in KS)), places=9)
+                               math.exp(statistics.fmean(math.log(1 / k) for k in KS)), places=9)
         self.assertEqual(c["metrics"]["cost"]["status"], "ok")
         self.assertEqual(rep["totals"]["trials"], 20)
         self.assertEqual(rep["provenance"]["exclusions_applied"], 1)  # the seeded pilot-1 exclusion

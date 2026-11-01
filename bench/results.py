@@ -1,12 +1,13 @@
 """Turns Harbor's per-trial result.json files into the numbers the bench
 compares: tokens, cost and pass rate per arm, and each arm's multiple of the
-baseline next to the published figure for it.
+baseline (arm / baseline, so 0.5 means half) next to the published figure
+for it.
 
 Pass rates on a 10-task sample are too noisy to compare. The token and cost
 multiples are the point of the sample, so only trials in which the agent
 actually used the model feed the per-trial means; a trial that died at setup
-with no tokens would otherwise drag an arm's mean down and inflate its
-multiple. Spend is real either way, so totals cover every trial. A trial
+with no tokens would otherwise drag an arm's mean down and make it look
+cheaper than the baseline. Spend is real either way, so totals cover every trial. A trial
 whose agent ran but recorded no usage (a timeout before any model call
 completed) is left out of the means too, and its spend is unknown: totals
 are then lower bounds, and usage_status says which trials they miss.
@@ -14,7 +15,9 @@ are then lower bounds, and usage_status says which trials they miss.
 Two cost figures are kept per trial: the bench's own (pricing.yaml applied to
 the token counts, the same for every arm) and the harness's. The budget uses
 the higher of the two, except where the harness is known to price this
-provider's models at another provider's rates.
+provider's models at another provider's rates. Cache writes are priced at
+their own rates from the counts in the harness's log, as the ledger prices
+them (extract.assign_cache_writes), since result.json holds none.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from typing import Any
 
 from harbor.models.trial.error_policy import FailureCause, policy_for
 
-from . import classify, extract, harnesses
+from . import classify, extract, fsutil, harnesses, pricing, stats
 from .settings import EFFORT_INHERIT, JOBS_DIR, Arm, Config, Price, is_variant
 
 # Failures that end a trial before it is a task attempt. Harbor still runs the
@@ -42,13 +45,48 @@ _NOT_AN_ATTEMPT = frozenset({FailureCause.MODEL_PROVIDER_FAILED, FailureCause.SA
 _DEFAULT_TOLERANCE = 1.5
 
 
-def _cost(price: Price, n_input: int, n_cache: int, n_output: int) -> float:
-    # Harbor counts cache reads inside n_input, and folds cache writes into it
-    # too, so writes are priced at the plain input rate. The ledger's
-    # pricing.unit_cost uses this same formula.
-    fresh = max(n_input - n_cache, 0)
+# Trial folder -> (result.json's (mtime, size), {model: (5-minute, 1-hour) writes}). A finished
+# trial's log no longer changes, and the run view re-reads every result.json on each refresh.
+_WRITES: dict[str, tuple[tuple[int, int], dict[str, tuple[int, int]]]] = {}
+_WRITES_KEEP = 4096
+
+
+def _cost(price: Price, n_input: int, n_cache: int, n_output: int, n_write_5m: int = 0,
+          n_write_1h: int = 0) -> float:
+    # Harbor counts cache reads and cache writes inside n_input; the writes the
+    # harness log gives are priced at their own rates, the rest at the input
+    # rate. The ledger's pricing.unit_cost uses this same formula.
+    fresh = max(n_input - n_cache - n_write_5m - n_write_1h, 0)
     cache_rate = price.input if price.cache_read is None else price.cache_read
-    return (fresh * price.input + n_cache * cache_rate + n_output * price.output) / 1e6
+    rate_5m = price.input if price.cache_write_5m is None else price.cache_write_5m
+    rate_1h = price.input if price.cache_write_1h is None else price.cache_write_1h
+    return (fresh * price.input + n_cache * cache_rate + n_write_5m * rate_5m + n_write_1h * rate_1h
+            + n_output * price.output) / 1e6
+
+
+def _writes(path: Path, cfg: Config, arm: Arm, usage: dict[str, tuple[int, int, int]], by_arm: bool,
+            cost: float | None) -> dict[str, tuple[int, int]]:
+    """Each model's cache writes from the trial's harness log, assigned as the
+    ledger assigns them; a model the log gives none for is absent."""
+    try:
+        st = path.stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        stamp = (-1, -1)
+    key = str(path.parent)
+    hit = _WRITES.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    entries = {m: {"n_input": u[0], "n_cache": u[1], "n_output": u[2], "primary": by_arm or _same_model(m, arm)}
+               for m, u in usage.items()}
+    log = extract.read_harness_log(path.parent)
+    extract.assign_cache_writes(entries, log.calls if log is not None else None, arm.provider, arm.model,
+                                cfg.pricing, cost=cost)
+    found = {m: pricing.cache_writes(e) for m, e in entries.items() if "n_cache_write_5m" in e}
+    if len(_WRITES) >= _WRITES_KEEP:
+        _WRITES.clear()
+    _WRITES[key] = (stamp, found)
+    return found
 
 
 def _ceiling(cfg: Config, provider: str) -> Price | None:
@@ -63,6 +101,8 @@ def _ceiling(cfg: Config, provider: str) -> Price | None:
         input=max(p.input for p in prices),
         output=max(p.output for p in prices),
         cache_read=max(p.input if p.cache_read is None else p.cache_read for p in prices),
+        cache_write_5m=max(p.input if p.cache_write_5m is None else p.cache_write_5m for p in prices),
+        cache_write_1h=max(p.input if p.cache_write_1h is None else p.cache_write_1h for p in prices),
     )
 
 
@@ -123,6 +163,7 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
         target = next(iter(usage)) if len(usage) == 1 else primary[0] if len(primary) == 1 else arm.model
         usage[target] = tuple(a + b for a, b in zip(usage.get(target, (0, 0, 0)), gap))
 
+    writes = _writes(path, cfg, arm, usage, usage_by_arm, ctx.get("cost_usd"))
     ceiling = _ceiling(cfg, arm.provider)
     computed, floor, unpriced, other_tokens = 0.0, 0.0, [], 0
     for model, (u_in, u_cache, u_out) in usage.items():
@@ -132,9 +173,9 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
         if price is None:
             unpriced.append(model)
             if ceiling is not None:
-                floor += _cost(ceiling, u_in, u_cache, u_out)
+                floor += _cost(ceiling, u_in, u_cache, u_out, *writes.get(model, (0, 0)))
         else:
-            computed += _cost(price, u_in, u_cache, u_out)
+            computed += _cost(price, u_in, u_cache, u_out, *writes.get(model, (0, 0)))
 
     reward = _reward(data)
     exc = data.get("exception_info") or {}
@@ -192,8 +233,8 @@ def cost(row: dict[str, Any]) -> float:
 
 def spend(row: dict[str, Any]) -> float:
     """For budget enforcement: the higher of our figure and the harness's.
-    The harness's figure includes what ours cannot see (Anthropic cache-write
-    premiums, Haiku's long-prompt rate, OpenRouter's billed routing). The one
+    The harness's figure includes what ours cannot see (cache writes its log
+    does not give, Haiku's long-prompt rate, OpenRouter's billed routing). The one
     exception is a harness that prices this provider's models at another
     provider's rates; when every model is in our table, ours is used there."""
     computed, reported = row["computed_cost"], row["reported_cost"]
@@ -209,7 +250,9 @@ def spend(row: dict[str, Any]) -> float:
 def load_job(job_dir: Path, cfg: Config, arm: Arm) -> list[dict[str, Any]]:
     if not job_dir.exists():
         return []
-    rows = (read_trial(p, cfg, arm) for p in sorted(job_dir.glob("*/result.json")))
+    # One Harbor job per arm, or one per task under a task race (fsutil.harbor_jobs).
+    paths = [p for job in fsutil.harbor_jobs(job_dir) for p in sorted(job.glob("*/result.json"))]
+    rows = (read_trial(p, cfg, arm) for p in paths)
     return [r for r in rows if r is not None]
 
 
@@ -267,11 +310,13 @@ def summarize(arm: Arm, rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _verdict(measured: float | None, ref: dict[str, Any] | None,
              tolerance: float = _DEFAULT_TOLERANCE) -> str | None:
+    """'lower' when the multiple is below the published band (the arm used
+    less, against the baseline, than published), 'higher' above it."""
     if measured is None or not ref:
         return None
-    if "value" in ref:
+    if ref.get("value") is not None:
         low, high = ref["value"] / tolerance, ref["value"] * tolerance
-    elif "low" in ref and "high" in ref:
+    elif ref.get("low") is not None and ref.get("high") is not None:
         low, high = ref["low"], ref["high"]
     else:
         return None
@@ -312,7 +357,8 @@ def compare(cfg: Config, summaries: list[dict[str, Any]], baseline: str) -> list
     base = by_name.get(baseline)
     if not base or not base.get("trials"):
         return []
-    reference = cfg.reference or {}
+    # Published multiples as arm / baseline, whichever way reference.yaml was written.
+    reference = stats.published_reference(cfg.reference)
     defaults = reference.get("defaults") or {}
     consensus = (reference.get("consensus") or {}).get("cost_per_trial")
     refs = reference.get("arms") or {}
@@ -325,8 +371,8 @@ def compare(cfg: Config, summaries: list[dict[str, Any]], baseline: str) -> list
         tolerance = _tolerance(ref.get("tolerance"), defaults.get("tolerance"))
         patterns = ref.get("applies_to", defaults.get("applies_to"))
         applies = _applies(patterns, s) and _applies(patterns, base)
-        tokens_x = _ratio(base.get("mean_tokens"), s.get("mean_tokens"))
-        cost_x = _ratio(base.get("mean_cost"), s.get("mean_cost"))
+        tokens_x = _ratio(s.get("mean_tokens"), base.get("mean_tokens"))
+        cost_x = _ratio(s.get("mean_cost"), base.get("mean_cost"))
         published_tokens = ref.get("tokens_per_trial")
         published_cost = ref.get("cost_per_trial") or consensus
         rows.append({

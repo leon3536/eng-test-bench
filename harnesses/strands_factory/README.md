@@ -86,6 +86,27 @@ through so every tool runs in the task container.
 - **Anything else** in `factory_kwargs` goes to `create_harness()` unchanged,
   for example `builtin_tools: {subagent: false}`.
 
+### Fireworks, OpenAI and xAI arms
+
+- **OpenAI (GPT-6.1 Terra):** `model_spec: openai/gpt-6.1-terra` with
+  `effort: medium`. strands-harness's `openai` provider builds an
+  `OpenAIResponsesModel` with `reasoning.effort`, which Terra's tools need.
+- **Fireworks and xAI:** strands-harness has neither provider, so these arms
+  leave out `model_spec` and use the model Harbor builds: a `LiteLLMModel`
+  for `fireworks_ai/...` and an `OpenAIModel` for `xai/...`. The effort goes
+  in the arm's Harbor option `model_kwargs`, as
+  `{"params": {"reasoning_effort": "high"}}` (or `medium` on Grok), which
+  the runner passes to the model's constructor.
+- Two checks guard that route, before any model call:
+  - A prebuilt model on `fireworks_ai` or `xai` without
+    `params.reasoning_effort` raises `ValueError`. DeepSeek, GLM and Kimi would
+    otherwise run at their own default, `max`.
+  - An xai `OpenAIModel` without a `base_url` gets `https://api.x.ai/v1`.
+    Harbor's runner leaves it unset, so the client would send the xAI key to
+    api.openai.com.
+- Caching and native web search are the provider's own on these routes, as
+  for the dev arms.
+
 ### Defaults kept and changed
 
 Every strands-harness default is kept, because those defaults are what S8

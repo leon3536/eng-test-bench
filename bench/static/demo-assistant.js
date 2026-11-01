@@ -214,6 +214,7 @@
           ],
           tasks: ['fix-git', 'regex-log', 'sqlite-with-gcov', 'log-summary', 'csv-to-parquet', 'build-pmars'],
           run: {attempts: 1, budget_usd: 3},
+          reuse: 'measured',
         },
       },
     });

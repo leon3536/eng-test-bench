@@ -12,6 +12,8 @@ profiles/*/queue.json
 /ledger/
 /assistant/
 /queue.json
+# The pre-bake builder's contexts, logs, build records and locks (bench/prebake).
+/prebake/
 # designs/ is tracked: small, readable records of what was run and why.
 /designs/**/*.tmp
 profiles/*/designs/**/*.tmp
@@ -29,3 +31,6 @@ config/overrides.yaml
 config/*.tmp
 __pycache__/
 *.pyc
+# Local tool state: Claude Code's scheduler lock and the headless browser driver's pid file.
+.claude/scheduled_tasks.lock
+drv.pid

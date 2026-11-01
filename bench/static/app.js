@@ -5,7 +5,8 @@
    that re-plans whenever settings change, and the launch control, which asks
    through the shared ARM confirm (or adds the setup to the queue while the
    queue runs). ANALYSIS breaks down past runs. Detailed settings live in a
-   slide-in drawer.
+   slide-in drawer, and so does IMAGES: which pre-baked harness images LAUNCH's
+   arms would find, their builds with a log per image, disk and prune.
    DESIGNS, QUEUE and REPORT live in designs.js, queue.js and report.js, and the
    assistant panel in assistant.js. Each registers itself with registerView or
    registerPanel (see Areas) and uses the helpers and shared components here.
@@ -34,7 +35,26 @@ const STATUS_LED = {
   queued: '', preflight: 'warn live', running: 'ok live', done: 'ok', done_with_errors: 'warn',
   budget_stopped: 'warn', skipped: 'warn', interrupted: 'warn', cancelled: '', failed: 'bad',
 };
-const SYS_LABEL = {Docker: 'Docker', Harbor: 'Harbor', 'Git line endings': 'Git', 'Task sample': 'Tasks', 'Dataset snapshot': 'Dataset', Assistant: 'AI'};
+const SYS_LABEL = {Docker: 'Docker', Harbor: 'Harbor', 'Git line endings': 'Git', 'Task sample': 'Tasks',
+  'Dataset snapshot': 'Dataset', 'Pre-baked images': 'Images', 'Docker disk': 'Disk', Assistant: 'AI'};
+/** Readiness rows about pre-baked images open the IMAGES panel rather than Setup. */
+const IMAGE_ROWS = new Set(['Pre-baked images', 'Docker disk']);
+/** run.prebake: how an arm's trials get their harness. */
+const PREBAKE_MODES = [['prefer', 'prefer'], ['require', 'require'], ['off', 'off']];
+/** run.schedule: task races (one task at a time, every arm on it at once) or one Harbor job per arm. */
+const SCHEDULES = [['tasks', 'tasks: a race per task'], ['arms', 'arms: one job per arm']];
+/** A task race's state (run.race.tasks[].status) as a progress cell and a tag. */
+const RACE_TASK = {
+  waiting: {cell: '', tag: ''}, building: {cell: 'building', tag: 'warn'}, racing: {cell: 'racing', tag: 'run'},
+  done: {cell: 'done', tag: 'ok'}, budget_stopped: {cell: 'stopped', tag: 'warn'}, skipped: {cell: 'void', tag: 'warn'},
+  cancelled: {cell: 'void', tag: ''}, interrupted: {cell: 'stopped', tag: 'warn'},
+};
+/** How a lane's pre-baked image stands before its race (run.race.tasks[].images[arm].status). */
+const RACE_IMAGE = {
+  waiting: ['waiting', ''], missing: ['missing', 'warn'], building: ['building', 'warn'], ready: ['ready', 'ok'],
+  built: ['built', 'ok'], failed: ['build failed', 'bad'], 'not built': ['not built', 'warn'], cancelled: ['cancelled', ''],
+  stock: ['stock setup', ''], off: ['stock setup', ''], unknown: ['not checked', 'warn'],
+};
 /** The keys row the assistant gets in profiles where no provider uses its key (provider "assistant"). */
 const ASSISTANT_KEY_LABEL = 'Assistant (Claude Opus 5.5)';
 const OUTCOME = {
@@ -48,6 +68,8 @@ const NATIVE_FETCH = window.fetch;  // app.js loads first: demo.js replaces wind
 // Billed paths (brief, Hard rule 2). In demo mode api() refuses them itself unless demo.js's fetch wrapper is in place.
 const BILLED_PATHS = [/^\/api\/runs\/?$/, /^\/api\/queue\/items\/?$/, /^\/api\/queue\/start\/?$/, /^\/api\/queue\/items\/[^/]+\/retry\/?$/,
   /^\/api\/assistant\/conversations\/[^/]+\/(messages|retry)\/?$/, /^\/api\/keys\/[^/]+\/test\/?$/];
+// Not billed, but they change Docker (builds, pulls, prunes, a measuring container): demo mode simulates them too.
+const DOCKER_PATHS = [/^\/api\/prebake\/(build|pull|prune|disk)\/?$/, /^\/api\/prebake\/builds\/[^/]+\/cancel\/?$/];
 
 const ui = {
   view: null,
@@ -68,6 +90,7 @@ const ui = {
   planRetry: '',             // the inputs whose plan failed as busy or unreachable: planned again after planRetryAt
   planRetryAt: 0,
   planSeq: 0,
+  reuse: false,              // LAUNCH: skip tasks already measured (reuse "measured"); off on every load
   launching: false,          // the LAUNCH ARM confirm (or its Add to queue path) is open
   launchDraft: null,         // {inputs, design_id, version}: the draft Add to queue saved, reused while the inputs hold
   busyNote: '',              // /api/state answered 503 (a config file or the ledger is locked); cleared by the next good poll
@@ -75,6 +98,9 @@ const ui = {
   live: null,                // telemetry for the run being watched
   analysisRun: null,
   trialFilter: {arm: '', outcome: ''},
+  // The IMAGES panel: the LAUNCH selection's images (status), the build shown, its open log, a prune dry run.
+  images: {status: null, statusFor: '', statusError: '', loading: false, buildId: null, build: null, buildError: '',
+    logItem: null, log: '', prune: null, pruneError: '', disk: null, seq: 0},
 };
 
 // Helpers ----------------------------------------------------------------
@@ -118,8 +144,22 @@ const usd = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'})
 const money = (v) => (!isNum(v) ? DASH : v > 0 && v < 0.005 ? '<$0.01' : usd.format(v));
 const count = (v) => (isNum(v) ? Math.round(v).toLocaleString('en-US') : DASH);
 const minutes = (v) => (isNum(v) ? v.toFixed(1) : DASH);
-const multiple = (v) => (isNum(v) ? v.toFixed(v >= 10 ? 1 : 2) : DASH);
+// Harness ÷ baseline: 2 decimals, 1 from 10×, and 2 significant figures under 0.1 (0.064×, not 0.06×).
+const multiple = (v) => {
+  if (!isNum(v)) return DASH;
+  return v > 0 && v < 0.1 ? String(Number(v.toPrecision(2))) : v.toFixed(v >= 10 ? 1 : 2);
+};
 const times = (v) => (isNum(v) ? `${multiple(v)}×` : DASH);
+// A multiple's baseline in a heading ("Cost vs Claude Code"): claude-code as its product name, others as they are.
+const harnessLabel = (name) => (name === 'claude-code' ? 'Claude Code' : name || 'baseline');
+// The same for a baseline model ("Cost vs Opus 5.5"): a Claude id as its product name (any provider prefix dropped
+// when it is Anthropic's), others as given.
+const modelLabel = (id) => {
+  const s = String(id || '');
+  const m = s.match(/^(?:([\w-]+):)?claude-(opus|sonnet|haiku)-(\d+)-(\d+)$/);
+  if (!m) return s || 'baseline model';
+  return `${m[1] && m[1] !== 'anthropic' ? `${m[1]}:` : ''}${titleCase(m[2])} ${m[3]}.${m[4]}`;
+};
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const statusLabel = (s) => String(s || '').replace(/_/g, ' ');
@@ -265,8 +305,9 @@ const demoGuarded = () => Boolean(window.benchDemo) && window.fetch !== NATIVE_F
 async function api(method, path, body) {
   // Demo mode promises that nothing billed is sent. If demo.js failed to load, refuse here rather than reach the server.
   const bare = new URL(path, location.href).pathname;
-  if (DEMO && method !== 'GET' && BILLED_PATHS.some((re) => re.test(bare)) && !demoGuarded()) {
-    throw new ApiError(409, 'Demo mode: the demo scripts did not load, so nothing that bills is sent.');
+  if (DEMO && method !== 'GET' && [...BILLED_PATHS, ...DOCKER_PATHS].some((re) => re.test(bare)) && !demoGuarded()) {
+    throw new ApiError(409, 'Demo mode: the demo scripts did not load, so nothing that bills or changes Docker '
+      + 'is sent.');
   }
   const init = {method, headers: {}, credentials: 'same-origin', cache: 'no-store'};
   if (method !== 'GET') init.headers['X-Bench'] = '1';
@@ -613,6 +654,37 @@ function usageValue(value, status, format = money) {
   return status === 'lower_bound' ? `≥ ${format(value)}` : format(value);
 }
 
+// Reusing measured trials. A reuse summary is plan.reuse (GET /api/plan with reuse=measured) or check.reuse (a
+// design's check): {trials_asked, trials_reused, trials_to_run, cost_avoided_usd, skipped_arms, arms: [...],
+// current, changes, notes}. Each arm says what it reuses, or in `reason` why it reuses nothing.
+const REUSE_VERSION = {pinned: 'pinned (options.version)', harbor: 'bundled with Harbor', unpinned: 'not pinned', unknown: 'unknown'};
+
+/** "18 reused from earlier runs (about $3.27 not spent)". */
+function reusedText(r) {
+  if (!r || !r.trials_reused) return 'None reused from earlier runs';
+  const cost = isNum(r.cost_avoided_usd) && r.cost_avoided_usd > 0 ? ` (about ${money(r.cost_avoided_usd)} not spent)` : '';
+  return `${count(r.trials_reused)} reused from earlier runs${cost}`;
+}
+
+/** One arm of a reuse summary in a few words: what it runs and reuses, or why it reuses nothing. */
+function reuseArmText(a) {
+  if (a.skipped) return 'Skipped: every task already measured.';
+  if (a.tasks_reused) return `Runs ${a.tasks_to_run} of ${plural(a.tasks_asked, 'task')}; ${a.tasks_reused} reused.`;
+  if (a.harness_version === 'unpinned') return 'Not reused: harness version not pinned.';
+  if (a.reason) return `Not reused: ${a.reason}.`;
+  if (!isNum(a.cell_trials)) return 'None reused.';
+  return a.cell_trials ? `None reused: ${plural(a.cell_trials, 'usable trial')} of this configuration, none on these tasks.`
+    : 'None reused: no usable trials of this configuration yet.';
+}
+
+/** reuseArmText with the arm's configuration in its tooltip. */
+function reuseArmNote(a, el) {
+  return tip(el, a.arm, [
+    [a.config_hash || DASH, 'configuration'], [REUSE_VERSION[a.harness_version] || a.harness_version || DASH, 'harness version'],
+    [count(a.cell_trials), 'usable trials of it'], a.reason,
+  ].filter(Boolean), true);
+}
+
 /** "AI" for an assistant-authored design or version, "You" for one of yours. */
 const authorBadge = (author) => (author === 'assistant'
   ? tag('AI', 'ai')
@@ -755,6 +827,8 @@ async function enqueueDesign(detail, {start = false} = {}) {
   const spec = detail.spec || {arms: [], run: {}};
   const uncapped = est ? est.uncapped_arms : plan ? plan.uncapped_arms : [];
   const worst = est ? est.worst_case_capped_usd : plan ? plan.worst_case_capped_usd : null;
+  const reused = check.reuse || null;  // a version that reuses measured trials: what it takes from the ledger
+  const skipped = reused ? reused.skipped_arms || [] : [];
   // Start now starts the whole queue: once this design is done, every waiting design runs in order. So the
   // confirm names them, their budgets and their providers too, from a fresh GET /api/queue.
   await Promise.race([refreshQueue().catch(() => null), new Promise((r) => setTimeout(r, 4000))]);
@@ -776,6 +850,8 @@ async function enqueueDesign(detail, {start = false} = {}) {
       ['Design', `${detail.title} v${detail.version}`],
       ['Spec hash', shortHash(detail.spec_hash)],
       ['Arms × trials', plan ? `${plural(plan.arms.length, 'arm')} · ${plural(plan.trials, 'trial')}` : DASH],
+      reused && ['Reused', reusedText(reused)],
+      skipped.length > 0 && ['Skipped', `${skipped.join(', ')}: every task already measured`],
       ['Budget', money(spec.run.budget_usd)],
       ['Estimate', est ? estimateText(est.total.p50, est.total.p90) : DASH],
       ['Worst case, capped', money(worst)],
@@ -784,6 +860,9 @@ async function enqueueDesign(detail, {start = false} = {}) {
     ],
     warnings: [
       ...problems.map((p) => `Problem: ${p}`),
+      // Advice: the version still runs exactly what was saved, and reuses the trials saved with it.
+      reused && reused.current === false && 'The ledger has changed since this version was saved, so saving it again would reuse '
+        + 'other trials. This version runs as saved; save a new version in DESIGNS to reuse the latest trials.',
       uncapped && uncapped.length > 0 && `No dollar cap: ${uncapped.join(', ')}. The run budget still applies after every trial.`,
       after.length > 0 && `${running ? 'The queue is running' : 'This also starts the queue'}: after this design, `
         + `${plural(after.length, 'waiting design')} ${after.length === 1 ? 'runs' : 'run in order'} (${order}), with ${after.length === 1 ? 'budget' : 'budgets'} ${money(sum(after, (i) => i.budget_usd))} `
@@ -982,8 +1061,12 @@ async function poll() {
   }
 }
 
+const imagesWatched = () => {
+  const b = ui.drawer && ui.drawer.kind === 'images' && ui.state ? stateBlock('prebake') : null;
+  return Boolean(b && (b.active || b.elsewhere));
+};
 const pollInterval = () => (ui.view === 'live' || (ui.state && ui.state.active_run) || callArea(ui.view, 'fastPoll') === true
-  ? FAST_POLL_MS : SLOW_POLL_MS);
+  || imagesWatched() ? FAST_POLL_MS : SLOW_POLL_MS);
 
 function applyState(state) {
   const previous = ui.state;
@@ -1055,16 +1138,23 @@ function renderHeader() {
   if (changed('systems', [s.readiness, keys.set, keys.needed.length, ledger])) {
     const keyLed = !keys.needed.length ? '' : keys.set === keys.needed.length ? 'ok' : 'bad';
     const failing = s.readiness.filter((c) => !c.ok);
+    const noted = s.readiness.filter((c) => c.ok && c.warn);
+    const opens = (c) => (IMAGE_ROWS.has(c.name) ? 'IMAGES' : 'Setup');
+    const names = failing.map((c) => c.name).join(', ');
+    const said = `${failing.length ? `${failing.length} not ready (${names})` : 'all ready'}`
+      + `${noted.length ? `, ${noted.length} to look at` : ''}`;
     fill($('#systems'),
       // When the header has no room for every chip (fitSystems), the readiness chips fold into this one.
       tip(h('button', {type: 'button', class: 'sys sys-sum', onclick: () => openDrawer('system'),
-        'aria-label': `Systems: ${failing.length ? `${failing.length} not ready (${failing.map((c) => c.name).join(', ')})` : 'all ready'}. Opens Setup`},
-      led(failing.length ? 'bad' : 'ok'), h('span', {class: 'lbl'}, 'SYS'),
+        'aria-label': `Systems: ${said}. Opens Setup`},
+      led(failing.length ? 'bad' : noted.length ? 'warn' : 'ok'), h('span', {class: 'lbl'}, 'SYS'),
       h('span', {class: 'n'}, `${s.readiness.length - failing.length}/${s.readiness.length}`)),
-      'Systems', s.readiness.map((c) => [`${c.ok ? '✓' : '✗'} ${c.detail || ''}`.trim(), c.name])),
-      s.readiness.map((c) => tip(h('button', {type: 'button', class: 'sys sys-ready', onclick: () => openDrawer('system'),
-        'aria-label': `${c.name}: ${c.ok ? 'ready' : 'not ready'}${c.detail ? `, ${c.detail}` : ''}`},
-      led(c.ok ? 'ok' : 'bad'), h('span', {class: 'lbl'}, (SYS_LABEL[c.name] || c.name).toUpperCase())), c.name, [c.detail])),
+      'Systems', s.readiness.map((c) => [`${readyGlyph(c)} ${c.detail || ''}`.trim(), c.name])),
+      s.readiness.map((c) => tip(h('button', {type: 'button', class: 'sys sys-ready',
+        onclick: () => openDrawer(IMAGE_ROWS.has(c.name) ? 'images' : 'system'),
+        'aria-label': `${c.name}: ${c.ok ? (c.warn ? 'needs a look' : 'ready') : 'not ready'}`
+          + `${c.detail ? `, ${c.detail}` : ''}. Opens ${opens(c)}`},
+      led(readyLed(c)), h('span', {class: 'lbl'}, (SYS_LABEL[c.name] || c.name).toUpperCase())), c.name, [c.detail])),
       tip(h('button', {type: 'button', class: 'sys', onclick: () => openDrawer('system'),
         'aria-label': `API keys: ${keys.needed.length ? `${keys.set} of ${keys.needed.length} set` : 'none needed'}`},
       led(keyLed), h('span', {class: 'lbl'}, 'KEYS'), h('span', {class: 'n'}, `${keys.set}/${keys.needed.length}`)),
@@ -1180,6 +1270,7 @@ const DRAWERS = {
   system: {code: 'SYS', title: 'Systems and keys'},
   settings: {code: 'CFG', title: 'Run settings'},
   arm: {code: 'MOD', title: 'Module'},
+  images: {code: 'IMG', title: 'Pre-baked images'},
 };
 
 const confirmDiscard = () => confirmAction({
@@ -1233,6 +1324,17 @@ function renderDrawer() {
         h('div', {class: 'scroll'}, h('table', {class: 'grid-t', id: 'd-keys'}))));
     renderReadiness();
     renderKeys();
+  } else if (kind === 'images') {
+    fill(body,
+      panel({code: 'IMG-1', title: 'For LAUNCH', meta: h('span', {id: 'img-meta'}), flush: true, bodyId: 'img-status'}),
+      panel({code: 'IMG-2', title: 'Builds', meta: h('span', {id: 'img-build-meta'}), flush: true,
+        bodyId: 'img-builds'}),
+      panel({code: 'IMG-3', title: 'Disk', bodyId: 'img-disk'}),
+      panel({code: 'IMG-4', title: 'Prune', bodyId: 'img-prune'}));
+    ui.images.prune = null;
+    ui.images.pruneError = '';
+    renderImages();
+    loadImageStatus();
   } else if (kind === 'settings') {
     const files = configFiles();
     const runForm = h('form', {id: 'run-settings', class: 'panel-body'});
@@ -1297,6 +1399,8 @@ function refreshDrawerReadOnly() {
     renderKeys();
   } else if (ui.drawer && ui.drawer.kind === 'settings') {
     renderOrphans();
+  } else if (ui.drawer && ui.drawer.kind === 'images') {
+    refreshImages();
   }
 }
 
@@ -1424,13 +1528,19 @@ function configFiles() {
 
 // Systems and keys
 
+/** A readiness row is ready (ok), ready but worth a look (ok with warn, amber) or not ready. */
+const readyLed = (c) => (!c.ok ? 'bad' : c.warn ? 'warn' : 'ok');
+const readyGlyph = (c) => (!c.ok ? '✗' : c.warn ? '!' : '✓');
+
 function renderReadiness() {
   const box = $('#d-readiness');
   if (!box || !changed('d-readiness', ui.state.readiness)) return;
   fill(box, h('ul', {class: 'checklist'}, ui.state.readiness.map((c) => h('li', null,
-    led(c.ok ? 'ok' : 'bad'),
+    led(readyLed(c)),
     h('span', {class: 'name'}, c.name),
-    h('span', {class: 'detail'}, c.ok ? '✓ ' : '✗ ', c.detail)))));
+    h('span', {class: 'detail'}, `${readyGlyph(c)} `, c.detail,
+      IMAGE_ROWS.has(c.name) && [' ', h('button', {type: 'button', class: 'link-btn',
+        onclick: () => openDrawer('images')}, 'IMAGES ›')])))));
 }
 
 function renderKeys() {
@@ -1555,7 +1665,7 @@ function renderRunSettings(form, cfg) {
       field('Parallel trials', numberInput('n_concurrent', run.n_concurrent, {min: 1, step: 1, placeholder: 'default'}),
         {dot: over.has('n_concurrent'), notes: [note('Per arm')]}),
       'parallel_arms' in run && field('Arms at once', numberInput('parallel_arms', run.parallel_arms, {min: 1, step: 1, placeholder: 'default'}),
-        {dot: over.has('parallel_arms'), notes: [note('All share the budget')]}),
+        {dot: over.has('parallel_arms'), notes: [note('Schedule arms only')]}),
       field('Run budget (USD)', numberInput('budget_usd', run.budget_usd, {min: 0, step: 'any', placeholder: 'default'}),
         {dot: over.has('budget_usd'), notes: [note('Checked after each trial')]}),
       field('Per-trial cap (USD)', numberInput('per_trial_cap_usd', run.per_trial_cap_usd, {min: 0, step: 'any', placeholder: 'none'}),
@@ -1564,16 +1674,57 @@ function renderRunSettings(form, cfg) {
         {dot: over.has('max_turns'), notes: [note('Empty = none')]}),
       field('Timeout multiplier', numberInput('timeout_multiplier', run.timeout_multiplier, {min: 0, step: 'any', placeholder: 'default'}),
         {dot: over.has('timeout_multiplier')})),
+    h('p', {class: 'muted', style: 'margin:0 0 10px;font-size:12.5px'},
+      'Schedule: tasks runs the campaign as a series of task races. For each task, every arm\'s pre-baked image is ',
+      'built, every arm races on that task at once (at most the containers below), and the task\'s images are ',
+      'removed before the next, so Docker holds one task\'s images at a time. arms runs each arm as one Harbor ',
+      'job over all its tasks, arms at once times parallel trials. Neither changes what a trial measures.'),
+    h('div', {class: 'row'},
+      field('Schedule', select('schedule', SCHEDULES, run.schedule || 'tasks'),
+        {dot: over.has('schedule'), title: 'run.schedule', notes: [note('tasks · arms')]}),
+      field('Containers at once',
+        numberInput('max_containers', run.max_containers, {min: 1, max: 16, step: 1, placeholder: 'default'}),
+        {dot: over.has('max_containers'), title: 'run.max_containers: trial containers in one task race',
+          notes: [note('Task races: one per CPU core')]})),
+    h('p', {class: 'muted', style: 'margin:0 0 10px;font-size:12.5px'},
+      'Harness setup: a trial can start from a pre-baked image, its task image with the harness already ',
+      'installed, or let Harbor install the harness inside the trial (stock), which took Claude Code 330–550 s ',
+      'under load. prefer uses an image where one is ready; require launches only when every image is ready; ',
+      'off always installs. None changes what a trial measures.'),
+    h('div', {class: 'row'},
+      field('Harness setup', select('prebake', PREBAKE_MODES, run.prebake || 'prefer'),
+        {dot: over.has('prebake'), title: 'run.prebake', notes: [note('prefer · require · off')]}),
+      field('Setup limit ×', h('input', {type: 'text', name: 'setup_timeout_multiplier', class: 'mono',
+        inputmode: 'decimal', spellcheck: 'false', autocomplete: 'off', placeholder: 'auto',
+        value: run.setup_timeout_multiplier === undefined ? 'auto' : String(run.setup_timeout_multiplier)}),
+      {dot: over.has('setup_timeout_multiplier'), title: 'run.setup_timeout_multiplier: times Harbor\'s 360 s',
+        notes: [note('auto: 720 s only where a trial may install itself')]}),
+      field('Image pull limit ×', numberInput('env_build_timeout_multiplier', run.env_build_timeout_multiplier,
+        {min: 0, max: 4, step: 'any', placeholder: 'default'}),
+      {dot: over.has('env_build_timeout_multiplier'), title: 'run.env_build_timeout_multiplier: times Harbor\'s 600 s',
+        notes: [note('For first pulls of huge task images')]})),
     formActions(resetRunSettings));
   ui.dirty.delete('run');
+}
+
+/** The setup limit field: 'auto', or a number above zero. Empty means the default (auto). */
+function readSetupLimit(input) {
+  const raw = input.value.trim().toLowerCase();
+  if (raw === '' || raw === 'auto') return 'auto';
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Setup limit × must be auto or a number above 0');
+  return n;
 }
 
 async function saveRunSettings(event) {
   event.preventDefault();
   const els = event.currentTarget.elements;
   await saveConfig(event.submitter, async () => {
-    const body = {effort: els.effort.value};
-    for (const name of ['n_concurrent', 'parallel_arms', 'budget_usd', 'timeout_multiplier']) {
+    const body = {effort: els.effort.value, prebake: els.prebake.value, schedule: els.schedule.value,
+      setup_timeout_multiplier: readSetupLimit(els.setup_timeout_multiplier)};
+    const numbers = ['n_concurrent', 'parallel_arms', 'budget_usd', 'timeout_multiplier',
+      'env_build_timeout_multiplier', 'max_containers'];
+    for (const name of numbers) {
       if (els[name]) body[name] = readNumber(els[name], '');
     }
     for (const name of ['per_trial_cap_usd', 'max_turns']) body[name] = readNumber(els[name], null);  // empty = no cap
@@ -1639,6 +1790,319 @@ async function resetAll(event) {
   if (!ok) return;
   await busy(button, async () => {
     applyConfig(await api('DELETE', '/api/config/overrides'), {force: true, message: 'All dashboard changes reset'});
+  });
+}
+
+// IMAGES (drawer): pre-baked harness images for LAUNCH's selection, builds with a log per image, disk and prune.
+
+const BUILD_TAG = {running: 'run', done: 'ok', done_with_errors: 'warn', failed: 'bad', cancelled: '',
+  interrupted: 'warn'};
+const ITEM_TAG = {queued: '', recording: 'run', building: 'run', verifying: 'run', 'awaiting equivalence': 'warn',
+  promoted: 'ok', failed: 'bad', cancelled: ''};
+const ITEM_DONE = new Set(['promoted', 'failed', 'cancelled']);
+const shortImage = (ref) => String(ref || '').replace(/^[^/]+\/[^/]+-r[0-9a-f]{10}\//, '');
+
+function imageQuery() {
+  const sel = launchSelection();
+  const query = {mode: sel.mode || '', arms: sel.arms.join(','), ...(sel.reuse ? {reuse: sel.reuse} : {})};
+  return new URLSearchParams(query).toString();
+}
+
+/** GET /api/prebake/status for LAUNCH's selection; refresh lists Docker's images again. */
+async function loadImageStatus(refresh = false) {
+  const I = ui.images;
+  const query = imageQuery();
+  const seq = ++I.seq;
+  I.loading = true;
+  renderImageStatus();
+  try {
+    const status = await api('GET', `/api/prebake/status?${query}${refresh ? '&refresh=1' : ''}`);
+    if (seq !== I.seq) return;
+    I.status = status;
+    I.statusFor = query;
+    I.statusError = '';
+    if (!I.buildId || !status.builds.some((b) => b.id === I.buildId)) {
+      I.buildId = status.active || (status.builds[0] || {}).id || null;
+    }
+  } catch (err) {
+    if (seq !== I.seq) return;
+    I.statusError = err.message;
+  } finally {
+    if (seq === I.seq) I.loading = false;
+  }
+  renderImages();
+  if (I.buildId) loadBuild();
+}
+
+/** The build shown, and its open log, read again. */
+async function loadBuild() {
+  const I = ui.images;
+  const id = I.buildId;
+  if (!id) return;
+  try {
+    const build = await api('GET', `/api/prebake/builds/${enc(id)}`);
+    if (I.buildId !== id) return;
+    I.build = build;
+    I.buildError = '';
+  } catch (err) {
+    I.buildError = err.message;
+  }
+  if (I.logItem !== null) {
+    try {
+      I.log = await api('GET', `/api/prebake/builds/${enc(id)}/log/${I.logItem}?lines=300`);
+    } catch (err) {
+      I.log = `The log could not be read: ${err.message}`;
+    }
+  }
+  renderImageBuilds();
+}
+
+/** On every poll while the panel is open: follow a running build; when one starts or ends, plan the images again. */
+function refreshImages() {
+  const I = ui.images;
+  const b = stateBlock('prebake');
+  if (!b) return;
+  if (b.active && I.buildId !== b.active.id) {
+    I.buildId = b.active.id;
+    I.logItem = null;
+  }
+  if (I.statusFor && I.statusFor !== imageQuery() && !I.loading) {
+    loadImageStatus();  // LAUNCH's mode, arms or reuse changed
+    return;
+  }
+  if (!changed('img-version', b.version) && !b.active && !b.elsewhere) return;
+  if (changed('img-version-load', b.version)) loadImageStatus();
+  else loadBuild();
+}
+
+function renderImages() {
+  renderImageStatus();
+  renderImageBuilds();
+  renderImageDisk();
+  renderImagePrune();
+}
+
+function renderImageStatus() {
+  const box = $('#img-status');
+  if (!box) return;
+  const I = ui.images;
+  const s = I.status;
+  const sel = launchSelection();
+  $('#img-meta').textContent = `${(sel.mode || '').toUpperCase()} · ${plural(sel.arms.length, 'arm')}`
+    + `${sel.reuse ? ' · reuse' : ''}`;
+  if (!s) {
+    fill(box, h('p', {class: `muted img-pad ${I.statusError ? 'bad-text' : ''}`.trim()},
+      I.statusError ? `Could not check the images: ${I.statusError}` : 'Checking which images are ready…'));
+    return;
+  }
+  const arms = Object.values(s.readiness || {});
+  const block = s.blocked || imageBlock();
+  const todo = (r) => r.missing.length + Object.keys(r.stale).length + r.unverifiable.length;
+  const harness = (r) => `${r.family} ${r.version}${r.variant && r.variant !== 'plain' ? ` · ${r.variant}` : ''}`;
+  const plan = {images: s.images, build_wall_min: s.wall_minutes, build_gb: s.need_gb, jobs: s.jobs};
+  fill(box,
+    I.statusError && h('p', {class: 'bad-text img-pad'}, `Could not refresh: ${I.statusError}`),
+    h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact img-table'},
+      thead('Arm', thNum('Ready'), 'Not ready', thNum('Build now')),
+      h('tbody', null, arms.map((r) => h('tr', null,
+        h('td', null, h('b', null, r.arm), h('span', {class: 'sub mono'}, r.supported ? harness(r) : r.family)),
+        r.supported ? [
+          tdNum(`${r.ready.length}/${r.tasks}`),
+          h('td', {class: todo(r) ? 'warn-text' : 'faint'}, r.docker_error ? 'not checked' : notReadyText(r) || DASH),
+          tdNum(r.docker_error || !todo(r) ? DASH : `~${r.build_min} min · ${r.build_gb} GB`),
+        ] : h('td', {colspan: 3, class: 'faint img-wrap'}, `stock install: ${r.reason}`)))))),
+    h('div', {class: 'img-pad img-summary'},
+      h('p', null, s.images
+        ? `${plural(s.images, 'image')} to build: ~${Math.ceil(s.wall_minutes)} min with ${s.jobs} at once, `
+          + `~${gbText(s.need_gb)} GB.`
+        : 'Every image this selection can use is ready.',
+      s.pull.length > 0 && ` ${plural(s.pull.length, 'task image')} not on this machine yet.`),
+      (s.notes || []).map((n) => h('small', {class: 'faint'}, n)),
+      arms.flatMap((r) => Object.entries(r.stale || {}).slice(0, 2)
+        .map(([task, why]) => h('small', {class: 'warn-text'}, `${r.arm} · ${task}: ${why}`))),
+      h('div', {class: 'actions'},
+        s.pull.length > 0 && h('button', {type: 'button', class: 'btn ghost small', disabled: Boolean(block),
+          title: block || null, onclick: (e) => pullImages(e.currentTarget, {pull: s.pull})},
+        `Pull ${plural(s.pull.length, 'task image')}`),
+        s.images > 0 && h('button', {type: 'button', class: 'btn small', disabled: Boolean(block), title: block || null,
+          onclick: (e) => buildImages(e.currentTarget, plan)}, `Build missing (${plural(s.images, 'image')})`),
+        h('button', {type: 'button', class: 'btn ghost small', disabled: I.loading,
+          onclick: () => loadImageStatus(true)}, I.loading ? 'Checking…' : 'Check again')),
+      block && h('small', {class: 'faint'}, block)));
+}
+
+function renderImageBuilds() {
+  const box = $('#img-builds');
+  if (!box) return;
+  const I = ui.images;
+  const list = (I.status && I.status.builds) || [];
+  const b = I.build && I.build.id === I.buildId ? I.build : null;
+  $('#img-build-meta').textContent = list.length ? plural(list.length, 'build') : '';
+  if (!list.length && !b) {
+    fill(box, h('p', {class: 'muted img-pad'}, 'No build yet. Build missing images from LAUNCH or above, or run ',
+      h('code', {class: 'nowrap'}, 'python -m bench.prebake build'), '.'));
+    return;
+  }
+  const items = b ? b.items || [] : [];
+  const finished = items.filter((i) => ITEM_DONE.has(i.status)).length;
+  const running = b && b.status === 'running';
+  const counts = b ? Object.entries(b.counts || {}).map(([k, n]) => `${n} ${k}`).join(', ') : '';
+  const pick = (e) => {
+    I.buildId = e.target.value;
+    I.build = null;
+    I.logItem = null;
+    loadBuild();
+  };
+  const closeLog = () => {
+    I.logItem = null;
+    renderImageBuilds();
+  };
+  fill(box,
+    h('div', {class: 'img-pad img-build-head'},
+      list.length > 1 && field('Build', select('img-build',
+        list.map((x) => [x.id, `${x.id} · ${statusLabel(x.status)}`]), I.buildId, {onchange: pick})),
+      b ? [
+        h('div', {class: 'img-build-line'}, tag(statusLabel(b.status), BUILD_TAG[b.status] || ''),
+          h('b', {class: 'mono'}, b.id),
+          h('span', {class: 'faint'},
+            `${b.kind === 'pull' ? 'pull' : `${b.jobs} at once`} · started ${when(b.created_at)}`)),
+        h('small', {class: 'faint'}, b.label),
+        b.kind === 'build' && [
+          gauge(items.length ? finished / items.length : 0, {tone: b.status === 'failed' ? 'bad' : ''}),
+          h('small', {class: 'mono'}, `${finished} of ${plural(items.length, 'image')} finished`,
+            counts ? ` · ${counts}` : '')],
+        b.message && h('small', {class: b.status === 'failed' ? 'bad-text' : 'faint'}, b.message),
+        h('div', {class: 'actions'},
+          h('button', {type: 'button', class: 'btn ghost small', onclick: () => showBuildLog(0)}, 'Build log'),
+          running && h('button', {type: 'button', class: 'btn danger small',
+            onclick: (e) => cancelBuild(e.currentTarget, b)}, 'Cancel build')),
+      ] : h('p', {class: I.buildError ? 'bad-text' : 'muted'}, I.buildError || 'Loading the build…')),
+    items.length > 0 && h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact img-items'},
+      thead('#', 'Image', 'Status', thNum('Time'), ''),
+      h('tbody', null, items.map((i) => h('tr', {class: I.logItem === i.n ? 'img-open' : null},
+        tdNum(String(i.n)),
+        h('td', null, h('b', null, `${i.family} ${i.version}`),
+          h('span', {class: 'sub mono img-clip', title: i.task_image}, shortImage(i.task_image)),
+          i.message && h('span', {class: `sub ${i.status === 'failed' ? 'bad-text' : 'faint'} img-clip`,
+            title: i.message}, i.message)),
+        h('td', null, tag(i.status, ITEM_TAG[i.status] || '')),
+        tdNum(isNum(i.seconds) ? `${Math.round(i.seconds)} s` : DASH),
+        h('td', null, h('button', {type: 'button', class: 'btn ghost small', 'aria-label': `Log of image ${i.n}`,
+          onclick: () => showBuildLog(i.n)}, 'Log'))))))),
+    I.logItem !== null && h('div', {class: 'img-pad'},
+      h('div', {class: 'section-head'}, eyebrow(I.logItem ? `Log · image ${I.logItem}` : 'Build log'),
+        h('button', {type: 'button', class: 'btn ghost small', onclick: closeLog}, 'Close')),
+      h('pre', {class: 'log img-log'}, I.log || 'The log is empty so far.')));
+}
+
+async function showBuildLog(n) {
+  ui.images.logItem = n;
+  ui.images.log = '';
+  renderImageBuilds();
+  await loadBuild();
+  const pre = $('#img-builds .img-log');
+  if (pre) pre.scrollTop = pre.scrollHeight;
+}
+
+async function cancelBuild(button, b) {
+  const ok = await confirmAction({code: 'CANCEL', title: 'Cancel this build?', ok: 'Cancel build', tone: 'danger',
+    body: 'Images being built now stop, and their staging tags are removed. Images already promoted keep '
+      + 'their names.'});
+  if (!ok) return;
+  await busy(button, async () => {
+    await api('POST', `/api/prebake/builds/${enc(b.id)}/cancel`);
+    toast(`Cancelling build ${b.id}`);
+    await loadBuild();
+  });
+}
+
+function renderImageDisk() {
+  const box = $('#img-disk');
+  if (!box) return;
+  const I = ui.images;
+  const d = I.disk || (I.status && I.status.disk) || null;
+  const row = ui.state ? ui.state.readiness.find((c) => c.name === 'Docker disk') : null;
+  const vmAt = d && isNum(d.vm_checked_at) ? when(new Date(d.vm_checked_at * 1000).toISOString()) : null;
+  const pair = (label, value, attrs = null) => h('div', null, h('dt', null, label), h('dd', attrs, value));
+  fill(box,
+    row && h('p', {class: row.ok ? (row.warn ? 'warn-text' : 'muted') : 'bad-text'},
+      `${readyGlyph(row)} ${row.detail}`),
+    d && h('dl', {class: 'params'},
+      pair('Disk image', d.path || 'not found', {class: 'mono img-clip', title: d.path || ''}),
+      pair('Free on its drive', isNum(d.free_gb) ? `${d.free_gb} GB (keep ${d.reserve_gb} GB)` : DASH),
+      pair('Free inside Docker', isNum(d.vm_free_gb) ? `${Math.round(d.vm_free_gb)} GB (keep ${d.vm_reserve_gb} GB)`
+        : 'not measured yet'),
+      vmAt && pair('Measured', vmAt)),
+    d && d.vm_error && h('small', {class: 'warn-text'}, d.vm_error),
+    h('div', {class: 'actions'}, h('button', {type: 'button', class: 'btn ghost small', disabled: !dockerOk(),
+      title: 'Runs df in a throwaway container of a local task image', onclick: (e) => measureDisk(e.currentTarget)},
+    'Measure Docker\'s disk')));
+}
+
+async function measureDisk(button) {
+  await busy(button, async () => {
+    ui.images.disk = await api('POST', '/api/prebake/disk');
+    renderImageDisk();
+    poll();
+  });
+}
+
+function renderImagePrune() {
+  const box = $('#img-prune');
+  if (!box) return;
+  const I = ui.images;
+  const found = I.prune;
+  const failed = found ? Object.keys(found.failed || {}).length : 0;
+  const removable = Boolean(found && found.candidates && found.candidates.length > 0 && !found.removed);
+  fill(box,
+    h('p', {class: 'muted'}, 'Removes only this builder\'s images that nothing needs: built for another Harbor, ',
+      'a recipe no enabled arm uses once past prebake.keep_days, or a staging tag a stopped build left. ',
+      'Task images and every other image stay.'),
+    I.pruneError && h('p', {class: 'bad-text'}, I.pruneError),
+    found && (found.candidates.length
+      ? h('ul', {class: 'img-prune-list'}, found.candidates.map((c) => h('li', null,
+        tag(c.kind, c.kind === 'staging' ? 'warn' : ''),
+        h('span', {class: 'mono img-clip', title: c.ref}, c.ref), h('small', {class: 'faint'}, c.reason))))
+      : h('p', {class: 'ok-text'}, 'Nothing to prune.')),
+    found && (found.notes || []).map((n) => h('small', {class: 'faint'}, n)),
+    found && found.removed && h('p', {class: 'ok-text'}, `Removed ${plural(found.removed.length, 'image')}.`,
+      failed ? h('span', {class: 'bad-text'}, ` ${failed} could not be removed.`) : ''),
+    h('div', {class: 'actions'},
+      h('button', {type: 'button', class: 'btn ghost small', onclick: (e) => dryRunPrune(e.currentTarget)},
+        found ? 'Check again' : 'Check what prune would remove'),
+      removable && h('button', {type: 'button', class: 'btn danger small', disabled: Boolean(imageBlock()),
+        title: imageBlock() || null, onclick: (e) => confirmPrune(e.currentTarget, found)},
+      `Remove ${plural(found.candidates.length, 'image')}`)));
+}
+
+async function dryRunPrune(button) {
+  await busy(button, async () => {
+    try {
+      ui.images.prune = await api('POST', '/api/prebake/prune', {});
+      ui.images.pruneError = '';
+    } catch (err) {
+      ui.images.pruneError = err.message;
+    }
+    renderImagePrune();
+  });
+}
+
+async function confirmPrune(button, found) {
+  const refs = found.candidates.map((c) => c.ref);
+  const listed = h('div', {class: 'mono', style: 'font-size:11.5px;overflow-wrap:anywhere'},
+    refs.slice(0, 8).map((r) => h('div', null, r)),
+    refs.length > 8 && h('div', null, `… and ${refs.length - 8} more`));
+  const ok = await confirmAction({code: 'PRUNE', title: `Remove ${plural(refs.length, 'image')}?`, ok: 'Remove images',
+    tone: 'danger', body: [
+      h('p', null, 'Exactly the images listed. One that stopped being a candidate since the check is left '
+        + 'alone.'), listed]});
+  if (!ok) return;
+  await busy(button, async () => {
+    const result = await api('POST', '/api/prebake/prune', {refs});
+    ui.images.prune = {...found, ...result};
+    toast(`Removed ${plural(result.removed.length, 'image')}`);
+    renderImagePrune();
+    loadImageStatus();
   });
 }
 
@@ -1909,9 +2373,10 @@ function renderModules(force = false) {
     if (!card) card = h('article', {class: 'module', 'data-arm': arm.name});
     const editing = ui.editingModel.has(arm.name) && card.contains(document.activeElement);
     const planArm = ui.plan ? ui.plan.arms.find((a) => a.name === arm.name) || null : null;
-    const signature = JSON.stringify([arm, cfg.providers, cfg.run.effort, cfg.baseline_arm, Boolean(ui.schemas.get(arm.agent)), planArm, planCurrent]);
+    const reuseArm = ui.plan && ui.plan.reuse ? ui.plan.reuse.arms.find((a) => a.arm === arm.name) || null : null;
+    const signature = JSON.stringify([arm, cfg.providers, cfg.run.effort, cfg.baseline_arm, Boolean(ui.schemas.get(arm.agent)), planArm, reuseArm, planCurrent]);
     if (!editing && (force || card.dataset.sig !== signature)) {
-      buildModule(card, arm, cfg, planArm, planCurrent);
+      buildModule(card, arm, cfg, planArm, planCurrent, reuseArm);
       card.dataset.sig = signature;
     }
     return card;
@@ -1923,7 +2388,7 @@ function renderModules(force = false) {
   $('#loadout-meta').textContent = `${armed} OF ${cfg.arms.length} ARMED`;
 }
 
-function buildModule(card, arm, cfg, planArm, planCurrent) {
+function buildModule(card, arm, cfg, planArm, planCurrent, reuseArm = null) {
   const schema = ui.schemas.get(arm.agent);
   const provider = cfg.providers.find((p) => p.name === arm.provider);
   const optionCount = Object.keys(arm.options || {}).length;
@@ -1968,11 +2433,73 @@ function buildModule(card, arm, cfg, planArm, planCurrent) {
           else if (model !== arm.model) quickSave(arm.name, {model});
         },
       })),
-      h('div', {class: 'module-plan', style: planCurrent ? null : 'opacity:.5'}, modulePlan(arm, planArm))),
+      arm.enabled && h('div', {class: 'module-setup', style: planCurrent ? null : 'opacity:.5'}, setupCell(planArm)),
+      h('div', {class: 'module-plan', style: planCurrent ? null : 'opacity:.5'}, modulePlan(arm, planArm, reuseArm))),
     h('div', {class: 'module-foot'},
       h('span', {class: 'note mono'}, `${provider ? provider.model_prefix : ''}${arm.model}`),
       h('button', {type: 'button', class: 'btn ghost small', onclick: () => openDrawer('arm', arm.name)},
         'Configure ', h('span', {class: 'arrow'}, '›'))));
+}
+
+/** The setup limit a plan's prebake block gives the arm: Harbor's 360 s, times its multiplier. */
+const setupLimit = (pb) => `setup limit ${Math.round(360 * (isNum(pb.setup_timeout_multiplier)
+  ? pb.setup_timeout_multiplier : 1))} s`;
+
+/** What is not ready, counted: "10 missing · 2 stale · 1 not local". */
+function notReadyText(im) {
+  const unknown = Object.keys(im.unknown || {}).length;
+  const stale = Object.keys(im.stale || {}).length;
+  return [im.missing.length && `${im.missing.length} missing`, stale && `${stale} stale`,
+    im.unverifiable.length && `${im.unverifiable.length} task image not local`,
+    unknown && `${unknown} without an image`].filter(Boolean).join(' · ');
+}
+
+/**
+ * LAUNCH: how an arm's trials get their harness, from its plan entry's prebake block. A pre-baked image per task (its
+ * task image with the harness installed), or Harbor's own install inside every trial (stock setup).
+ */
+function setupCell(planArm) {
+  const label = h('span', {class: 'su-label'}, 'Setup');
+  const pb = planArm && planArm.prebake;
+  if (!pb) return [label, h('span', {class: 'su-text faint'}, planArm ? 'not planned' : 'awaiting preflight…')];
+  if (pb.mode === 'off') {
+    return [label, tip(h('span', {class: 'su-text'}, 'stock install'), 'Harness setup',
+      ['run.prebake is off: Harbor installs the harness inside every trial, as it always has', setupLimit(pb)], true)];
+  }
+  if (!pb.supported) {
+    return [label, tip(h('span', {class: `su-text ${pb.mode === 'require' ? 'bad-text' : ''}`.trim()}, 'stock install'),
+      'Not pre-baked', [pb.reason, 'Each trial installs the harness itself', setupLimit(pb)], true),
+    h('span', {class: 'su-sub faint'}, pb.reason)];
+  }
+  const im = pb.images;
+  const version = `${pb.family} ${pb.version}${pb.variant && pb.variant !== 'plain' ? ` (${pb.variant})` : ''}`;
+  if (!im || im.error) {
+    return [label, tip(h('span', {class: 'su-text warn-text'}, 'images not checked'), 'Pre-baked images',
+      [im && im.error ? im.error : 'Docker was not asked', version, setupLimit(pb)], true)];
+  }
+  const ready = im.ready.length;
+  const rest = im.tasks - ready;
+  const tone = !rest ? 'ok' : pb.mode === 'require' ? 'bad' : 'warn';
+  const stale = Object.entries(im.stale || {}).slice(0, 3).map(([task, why]) => [why, task]);
+  const rows = [
+    [version, 'harness'], pb.recipe && [pb.recipe.slice(0, 10), 'recipe'],
+    [`${ready} of ${im.tasks}`, 'ready'],
+    im.noop.length > 0 && [`${im.noop.length}`, 'label-only (Harbor installs nothing there)'],
+    rest > 0 && [notReadyText(im), 'not ready'],
+    im.missing.length > 0 && [im.missing.slice(0, 6).join(', ') + (im.missing.length > 6 ? ' …' : ''), 'missing'],
+    ...stale,
+    im.oldest_baked_at && [when(im.oldest_baked_at), 'oldest bake'],
+    im.over_age.length > 0 && `${plural(im.over_age.length, 'image')} older than the rebake age`,
+    rest > 0 && (pb.mode === 'require' ? 'require: the launch waits until they are built'
+      : 'prefer: those trials install the harness themselves'),
+    setupLimit(pb),
+  ].filter(Boolean);
+  return [label,
+    tip(h('span', {class: `su-text ${tone}-text`}, `${ready}/${im.tasks} pre-baked`), 'Pre-baked images', rows, true),
+    h('span', {class: `su-meter ${tone}`, role: 'img', 'aria-label': `${ready} of ${im.tasks} images ready`},
+      h('i', {style: `width:${im.tasks ? Math.round((ready / im.tasks) * 100) : 0}%`})),
+    h('span', {class: 'su-sub faint'},
+      rest ? notReadyText(im) : im.noop.length ? `${im.noop.length} label-only` : 'every task ready')];
 }
 
 function quickEffort(arm, schema, run) {
@@ -1990,15 +2517,20 @@ function quickEffort(arm, schema, run) {
   return select('effort', [...fixed, ...schema.effort_levels.map((l) => [l, l])], arm.effort, {onchange});
 }
 
-function modulePlan(arm, planArm) {
+function modulePlan(arm, planArm, reuseArm = null) {
   if (!arm.enabled) return h('span', {class: 'note mono faint', style: 'font-size:11px'}, 'Safe: not in the next run.');
+  // An arm whose every task is reused is in the plan's skipped_arms, not its arms.
+  if (reuseArm && reuseArm.skipped) return reuseArmNote(reuseArm, h('div', {class: 'issue ok-text'}, reuseArmText(reuseArm)));
   if (!planArm) return h('span', {class: 'mono faint', style: 'font-size:11px'}, 'Awaiting preflight…');
   const chip = (k) => tip(h('span', {class: 'chip'}, `${k.name}=${shown(k.value)}`, h('span', {class: 'src'}, k.source)),
     k.name, [[JSON.stringify(k.value), 'value'], [k.source, 'source']]);
   return [
     planArm.kwargs.length ? h('div', {class: 'chips'}, planArm.kwargs.map(chip)) : h('span', {class: 'mono faint', style: 'font-size:11px'}, 'No options passed'),
+    reuseArm && reuseArmNote(reuseArm, h('div', {class: reuseArm.tasks_reused ? 'issue ok-text' : 'issue muted'}, reuseArmText(reuseArm))),
     planArm.problems.map((p) => h('div', {class: 'issue bad-text'}, `✗ ${p}`)),
-    planArm.warnings.map((w) => h('div', {class: 'issue warn-text'}, `! ${w}`)),
+    // The setup warnings are the Setup cell's (its tooltip); the preflight lists them once more.
+    planArm.warnings.filter((w) => !(planArm.setup_warnings || []).includes(w))
+      .map((w) => h('div', {class: 'issue warn-text'}, `! ${w}`)),
   ];
 }
 
@@ -2053,7 +2585,17 @@ function renderMission(force = false) {
           schedulePreflight(0);
           renderPreflight();
         },
-      }, h('b', null, name.toUpperCase()), h('span', null, `${plural(m.n_tasks, 'task')} × ${m.n_attempts}`)))));
+      }, h('b', null, name.toUpperCase()), h('span', null, `${plural(m.n_tasks, 'task')} × ${m.n_attempts}`)))),
+    // Off by default: on, each arm skips the tasks the ledger already measured for its exact configuration, and the
+    // plan, the ARM confirm and the run (POST /api/runs with the plan's spec_hash) all carry the reduced task lists.
+    h('label', {class: 'reuse-toggle'},
+      h('input', {type: 'checkbox', id: 'launch-reuse', checked: ui.reuse, onchange: (e) => {
+        ui.reuse = e.target.checked;
+        schedulePreflight(0);
+        renderPreflight();
+      }}),
+      h('span', null, h('b', null, 'Reuse measured trials'),
+        h('small', null, 'Skip tasks the ledger already has for this exact configuration.'))));
   const param = (label, value, key) => h('div', {title: over.has(key) ? 'Changed in the dashboard' : null},
     h('dt', null, label), h('dd', {class: over.has(key) ? 'changed' : null}, value));
   fill($('#params-section'),
@@ -2066,17 +2608,33 @@ function renderMission(force = false) {
       param('Max turns', isNum(run.max_turns) ? String(run.max_turns) : 'none', 'max_turns'),
       param('Parallel trials', String(run.n_concurrent), 'n_concurrent'),
       'parallel_arms' in run ? param('Arms at once', String(run.parallel_arms), 'parallel_arms')
-        : param('Timeout', `×${run.timeout_multiplier}`, 'timeout_multiplier')),
+        : param('Timeout', `×${run.timeout_multiplier}`, 'timeout_multiplier'),
+      param('Schedule', run.schedule === 'arms' ? 'arms' : `tasks · ≤${run.max_containers || 6} at once`,
+        'schedule'),
+      param('Harness setup', run.prebake || 'prefer', 'prebake'),
+      param('Setup limit', run.setup_timeout_multiplier === 'auto' || run.setup_timeout_multiplier === undefined
+        ? 'auto' : `×${run.setup_timeout_multiplier}`, 'setup_timeout_multiplier')),
     (orphans.arms.length > 0 || orphans.modes.length > 0) && h('p', {class: 'orphan-note warn-text'},
       h('span', null, '! '),
       `Changes are kept for ${listText([...orphans.arms.map((a) => `arm ${a}`), ...orphans.modes.map((m) => `mode ${m}`)])}, which the config no longer has. `,
       h('button', {type: 'button', class: 'btn ghost small', onclick: () => openDrawer('settings')}, 'Review ', h('span', {class: 'arrow'}, '›'))));
 }
 
-/** What a plan depends on. A plan built from anything else is out of date. */
-function planInputs() {
+/** What a launch is made of: the mode, the arms, the config, the keys and the reuse setting. */
+function launchInputs() {
   const s = ui.state;
-  return JSON.stringify([ui.mode, armedNames(), s.config, s.keys.map((k) => [k.env_key, k.set])]);
+  return JSON.stringify([ui.mode, armedNames(), s.config, s.keys.map((k) => [k.env_key, k.set]), ui.reuse]);
+}
+
+/** What a plan depends on. A plan built from anything else is out of date. With reuse on, new trials in the
+    ledger can change what is reused, so the plan follows the ledger too. */
+function planInputs() {
+  // With reuse, what the plan reuses changes with new trials, outcomes and exclusions (the ledger's version).
+  const ledger = ui.reuse ? stateBlock('ledger') : null;
+  // Which pre-baked images are ready changes when a build starts or ends.
+  const images = stateBlock('prebake');
+  const base = images ? [launchInputs(), images.version] : [launchInputs()];
+  return JSON.stringify(ledger ? [...base, ledger.trials, ledger.last_ingest_at, ledger.version] : base);
 }
 
 let preflightTimer = 0;
@@ -2103,8 +2661,11 @@ async function runPreflight() {
   } else {
     renderPreflight();
     try {
-      const plan = await api('GET', `/api/plan?${new URLSearchParams({mode: ui.mode, arms: arms.join(',')})}`);
+      const query = {mode: ui.mode, arms: arms.join(','), ...(ui.reuse ? {reuse: 'measured'} : {})};
+      const plan = await api('GET', `/api/plan?${new URLSearchParams(query)}`);
       if (seq !== ui.planSeq) return;
+      // A bench started before reuse existed ignores the parameter: its full plan must never pass for a reduced one.
+      if (query.reuse && !plan.reuse) throw new Error('This bench cannot reuse measured trials yet: restart it to load the update, or turn reuse off.');
       ui.plan = plan;
       ui.planError = '';
     } catch (err) {
@@ -2186,19 +2747,37 @@ function renderPreflight() {
 
   const capped = p ? p.arms.length - p.uncapped_arms.length : 0;
   const reserve = p ? groupByArm(p.arms.filter((a) => a.reserve_note).map((a) => [a.name, a.reserve_note])) : [];
+  const r = p ? p.reuse || null : null;  // with reuse on: what each arm takes from the ledger instead of running
+  const skipped = p ? p.skipped_arms || [] : [];
+  const avoided = r && isNum(r.cost_avoided_usd) && r.cost_avoided_usd > 0 ? ` · about ${money(r.cost_avoided_usd)} not spent` : '';
   box.classList.toggle('stale', checking && Boolean(p));
   fill(box,
     h('div', {class: 'section-head'}, eyebrow('Preflight'), h('div', {class: 'preflight-status'}, status)),
     p && h('ul', {class: 'preflight-lines'},
-      h('li', null, h('span', null, 'Trials'), h('span', null, `${p.trials} = ${plural(p.arms.length, 'arm')} × ${p.tasks.length} × ${p.n_attempts}`)),
+      // Arms that reuse some tasks run fewer than the others, so the product no longer adds up.
+      h('li', null, h('span', null, 'Trials'), h('span', null, r && r.trials_reused ? `${p.trials} to run of ${r.trials_asked}`
+        : `${p.trials} = ${plural(p.arms.length, 'arm')} × ${p.tasks.length} × ${p.n_attempts}`)),
+      r && h('li', null, h('span', null, 'Reused'), h('span', null, r.trials_reused ? `${plural(r.trials_reused, 'trial')}${avoided}` : 'none')),
+      skipped.length > 0 && h('li', null, h('span', null, 'Skipped arms'), h('span', null, skipped.join(', '))),
       h('li', null, h('span', null, 'Run budget'), h('span', null, `${money(p.budget_usd)} hard stop`)),
       h('li', null, h('span', null, 'Worst case, capped arms'), h('span', null, capped ? money(p.worst_case_capped_usd) : DASH)),
       p.uncapped_arms.length > 0 && h('li', null, h('span', null, 'No dollar cap'), h('span', {class: 'warn-text'}, p.uncapped_arms.join(', '))),
-      isNum(p.peak_containers) && h('li', null, h('span', null, 'Docker'), h('span', null, `Peak ${plural(p.peak_containers, 'container')}`))),
+      p.race && h('li', null, h('span', null, 'Schedule'), h('span', null,
+        `${plural(p.race.tasks, 'task race')} × ${plural(p.race.arms, 'arm')}`
+        + ` · ≤ ${p.race.max_containers} at once`)),
+      p.race && p.prebake && p.prebake.mode !== 'off' && h('li', null, h('span', null, 'Images per task'),
+        h('span', null, raceImagesLine(p.race))),
+      isNum(p.peak_containers) && h('li', null, h('span', null, 'Docker'), h('span', null, `Peak ${plural(p.peak_containers, 'container')}`)),
+      p.prebake && h('li', null, h('span', null, 'Harness setup'), h('span', null, setupLine(p)))),
     p && p.uncapped_arms.length > 0 && h('p', {class: 'mono faint', style: 'font-size:11px;margin:8px 0 0'},
       'The run budget still applies to uncapped arms and is checked after each trial.'),
     issues.length > 0 && h('ul', {class: 'issues'}, issues.map(([kind, text]) => h('li', {class: kind === 'bad' ? 'bad-text' : 'warn-text'},
       h('span', null, kind === 'bad' ? '✗' : '!'), h('span', null, text)))),
+    p && p.prebake && imageActions(p),
+    r && h('div', {class: 'reserve-notes reuse-notes'},
+      h('div', {class: 'eyebrow'}, 'Reused from earlier runs'),
+      r.arms.map((a) => reuseArmNote(a, h('small', {class: a.tasks_reused ? 'ok-text' : null}, `${a.arm}: ${reuseArmText(a)}`))),
+      (r.notes || []).map((text) => h('small', null, text))),
     reserve.length > 0 && h('div', {class: 'reserve-notes'},
       h('div', {class: 'eyebrow'}, 'Held back while trials run'),
       reserve.map((text) => h('small', null, text))),
@@ -2219,17 +2798,124 @@ function renderPreflight() {
   button.disabled = Boolean(block) || ui.launching;
   button.classList.toggle('queue-mode', queued);
   button.querySelector('.launch-label').textContent = queued ? '▶ ADD TO QUEUE' : '▶ LAUNCH';
+  const trials = p ? `${plural(p.trials, 'trial')}${r && r.trials_reused ? ` · ${r.trials_reused} reused` : ''}` : '';
   button.querySelector('small').textContent = !p ? 'no plan yet'
-    : queued ? `${plural(p.trials, 'trial')} · runs when the queue reaches it` : `${plural(p.trials, 'trial')} · stops at ${money(p.budget_usd)}`;
+    : queued ? `${trials} · runs when the queue reaches it` : `${trials} · stops at ${money(p.budget_usd)}`;
   $('#launch-section .launch-note').textContent = block
     || (DEMO ? 'Demo mode: the confirm opens, but nothing is sent.'
       : queued ? 'The queue is running, so a direct run is refused. This saves the setup as a design and adds it to the queue.'
         : 'Ready. Launch asks once more, then bills your provider accounts.');
 }
 
+/** A task race's images: how many to build, the longest task's build and the peak disk (one task's images). */
+function raceImagesLine(race) {
+  const longest = race.build_wall_min_max;
+  const build = isNum(longest) && longest > 0 ? ` · ≤ ~${Math.ceil(longest)} min build per task` : '';
+  const disk = isNum(race.peak_disk_gb) ? ` · peak ~${gbText(race.peak_disk_gb)} GB` : '';
+  const keep = race.keep_images ? ' · kept after (prebake.keep_images)' : ' · removed after each race';
+  return `${race.images_to_build || 0} to build${build}${disk}${keep}`;
+}
+
+/** The preflight's harness setup line: the mode and how many of the arms' tasks have a ready pre-baked image. */
+function setupLine(p) {
+  const blocks = p.arms.map((a) => a.prebake).filter(Boolean);
+  if (p.prebake.mode === 'off') return 'off · stock install in every trial';
+  const checked = blocks.filter((b) => b.supported && b.images && !b.images.error);
+  const ready = sum(checked, (b) => b.images.ready.length);
+  const total = sum(checked, (b) => b.images.tasks);
+  const stock = blocks.filter((b) => !b.supported).length;
+  const parts = [p.prebake.mode, total ? `${ready}/${total} pre-baked ready` : null,
+    stock ? `${stock} arm${stock === 1 ? '' : 's'} stock` : null];
+  return parts.filter(Boolean).join(' · ');
+}
+
+/** Gigabytes for a build estimate: one decimal below 10. */
+const gbText = (gb) => (isNum(gb) && gb < 10 ? gb.toFixed(1) : String(Math.ceil(gb || 0)));
+
+/** What LAUNCH would build or pull for: its mode, armed modules and reuse setting, as /api/prebake takes them. */
+const launchSelection = () => ({mode: ui.mode, arms: ui.state ? armedNames() : [],
+  ...(ui.reuse ? {reuse: 'measured'} : {})});
+
+/** Why no build or pull may start now, or '' (the server checks again). */
+function imageBlock() {
+  if (!ui.state) return 'Connecting to the bench…';
+  const b = stateBlock('prebake');
+  const q = stateBlock('queue');
+  if (ui.state.active_run) return 'A run is in progress; images are built between runs.';
+  if (q && (q.state === 'running' || q.active_item)) return 'The queue is active; pause it to build or pull here.';
+  if (b && (b.active || b.elsewhere)) return 'A build is running: see IMAGES.';
+  if (!dockerOk()) return 'Docker is not running.';
+  return '';
+}
+
+/** LAUNCH: Pull and Build missing for the plan's arms, and the way to the IMAGES panel. */
+function imageActions(p) {
+  const t = p.prebake;
+  const b = stateBlock('prebake');
+  const building = b && b.active;
+  if (!t.images && !t.pull.length && !building) return null;
+  // A task race builds each task's images just before its race and removes them after: building them all now
+  // is what filled Docker's disk, so LAUNCH offers no Build missing then.
+  const race = Boolean(p.race);
+  const block = imageBlock();
+  const counts = building && building.counts ? building.counts : {};
+  const done = sum(['promoted', 'failed', 'cancelled'], (k) => counts[k]);
+  return h('div', {class: 'img-actions'},
+    h('div', {class: 'section-head'}, eyebrow('Pre-baked images'),
+      h('button', {type: 'button', class: 'btn ghost small', onclick: () => openDrawer('images')},
+        'IMAGES ', h('span', {class: 'arrow'}, '›'))),
+    building && h('p', {class: 'img-note warn-text'}, building.kind === 'pull' ? `Pulling task images (${building.id})`
+      : `Building: ${done} of ${building.items} finished (${building.id})`),
+    h('div', {class: 'actions'},
+      t.pull.length > 0 && h('button', {type: 'button', class: 'btn ghost small', disabled: Boolean(block),
+        title: block || `docker pull ${t.pull.join(', ')}`, onclick: (e) => pullImages(e.currentTarget, t)},
+      `Pull ${plural(t.pull.length, 'task image')}`),
+      t.images > 0 && !race && h('button', {type: 'button', class: 'btn small', disabled: Boolean(block),
+        title: block || null,
+        onclick: (e) => buildImages(e.currentTarget, t)},
+      `Build missing (${plural(t.images, 'image')}, ~${Math.ceil(t.build_wall_min)} min, ~${gbText(t.build_gb)} GB)`)),
+    race && t.images > 0 && h('small', {class: 'faint'},
+      `The run builds these ${plural(t.images, 'image')} task by task, each just before its race, `
+      + 'and removes them after it.'),
+    block && !building && !race && h('small', {class: 'faint'}, block));
+}
+
+async function buildImages(button, t) {
+  const ok = await confirmAction({
+    code: 'BUILD', title: `Build ${plural(t.images, 'pre-baked image')}?`, ok: 'Build images',
+    body: [
+      h('p', null, `About ${Math.ceil(t.build_wall_min)} minutes with ${t.jobs} at once, and about `,
+        `${gbText(t.build_gb)} GB of disk. Each image is its task image with the harness installed exactly as `,
+        'Harbor installs it, then checked before it gets its name.'),
+      h('p', null, 'No model is called and nothing is billed. Runs cannot start while it builds; cancel it from '
+        + 'IMAGES.'),
+    ],
+  });
+  if (!ok) return;
+  await busy(button, async () => {
+    const build = await api('POST', '/api/prebake/build', launchSelection());
+    toast(`Build ${build.id} started`);
+    ui.images.buildId = build.id;
+    await poll();
+    openDrawer('images');
+  });
+}
+
+async function pullImages(button, t) {
+  await busy(button, async () => {
+    const build = await api('POST', '/api/prebake/pull', launchSelection());
+    toast(`Pulling ${plural(t.pull.length, 'task image')} (${build.id})`);
+    ui.images.buildId = build.id;
+    await poll();
+  });
+}
+
 /**
  * LAUNCH, step one: the ARM confirm shows the plan's budget, worst case under caps and the uncapped arms; its
  * confirm button is step two and sends POST /api/runs {mode, arms}. While the queue runs, Add to queue instead.
+ * With reuse on, the plan is the reduced one (what each arm reuses, the skipped arms), and the run is sent with
+ * that plan's spec_hash. The server resolves it again and refuses with 409 if the ledger now reuses something
+ * else; then this plans again and asks again with the new plan.
  */
 async function launch() {
   if (ui.launching || launchBlock()) return;
@@ -2237,47 +2923,71 @@ async function launch() {
     await addLaunchToQueue();
     return;
   }
-  const plan = ui.plan;
   const mode = ui.mode;
   const arms = armedNames();
-  const inputs = planInputs();
-  const capped = plan.arms.length - plan.uncapped_arms.length;
+  const inputs = launchInputs();
   const queueProblem = stateError('queue');
   ui.launching = true;
   renderPreflight();
   try {
     // The global cap as GET /api/queue has it: state.queue cannot tell "no cap" from "a cap whose spend is unknown".
     await Promise.race([refreshQueue().catch(() => null), new Promise((r) => setTimeout(r, 3000))]);
-    const run = await armConfirm({
-      title: 'Launch this run?',
-      summary: `Start ${plural(plan.trials, 'trial')}? The run stops at ${money(plan.budget_usd)}.`,
-      rows: [
-        ['Mode', (mode || '').toUpperCase()],
-        ['Arms', arms.join(', ')],
-        ['Trials', `${plural(plan.arms.length, 'arm')} · ${plural(plan.trials, 'trial')}`],
-        ['Budget', money(plan.budget_usd)],
-        ['Worst case, capped', capped ? money(plan.worst_case_capped_usd) : DASH],
-        isNum(plan.peak_containers) && ['Peak containers', String(plan.peak_containers)],
-        ['Global cap', queueProblem ? 'unknown' : capLeftText(queueView() || stateBlock('queue'))],
-      ],
-      warnings: [
-        plan.uncapped_arms.length > 0 && `No dollar cap: ${plan.uncapped_arms.join(', ')}. The run budget still applies after every trial.`,
-        ...(plan.warnings || []),
-        queueProblem && `Queue status unavailable (${queueProblem}). The server still checks the global cap.`,
-      ],
-      bills: [...new Set(plan.arms.map((a) => a.provider).filter(Boolean))],
-      ok: '▶ Launch run',
-      send: async () => {
-        // The dialog may have stayed open while settings, keys or the bench changed.
-        if (planInputs() !== inputs) throw new Error('Settings changed since this opened. Cancel and launch again.');
-        const block = launchMode() === 'queue' ? 'The queue started meanwhile. Cancel, then add this run to the queue.' : launchBlock();
-        if (block) throw new Error(block);
-        return api('POST', '/api/runs', {mode, arms});
-      },
-    });
-    if (run) {
-      toast(`Run ${run.id} launched`);
-      await poll();
+    for (let replanned = 0; ; replanned++) {
+      const plan = ui.plan;
+      const r = plan.reuse || null;
+      const skipped = plan.skipped_arms || [];
+      const capped = plan.arms.length - plan.uncapped_arms.length;
+      const avoided = r && isNum(r.cost_avoided_usd) && r.cost_avoided_usd > 0 ? r.cost_avoided_usd : null;
+      const run = await armConfirm({
+        title: 'Launch this run?',
+        summary: r ? `Runs ${plural(plan.trials, 'trial')}. ${reusedText(r)}. The run stops at ${money(plan.budget_usd)}.`
+          : `Start ${plural(plan.trials, 'trial')}? The run stops at ${money(plan.budget_usd)}.`,
+        rows: [
+          ['Mode', (mode || '').toUpperCase()],
+          ['Arms', arms.filter((a) => !skipped.includes(a)).join(', ') || DASH],
+          skipped.length > 0 && ['Skipped', `${skipped.join(', ')}: every task already measured`],
+          ['Trials', `${plural(plan.arms.length, 'arm')} · ${plural(plan.trials, 'trial')}`],
+          r && ['Reused', r.trials_reused ? `${plural(r.trials_reused, 'trial')} of ${r.trials_asked}` : 'none'],
+          avoided !== null && ['Not spent', `about ${money(avoided)}`],
+          r && ['Spec hash', shortHash(plan.spec_hash)],
+          ['Budget', money(plan.budget_usd)],
+          ['Worst case, capped', capped ? money(plan.worst_case_capped_usd) : DASH],
+          isNum(plan.peak_containers) && ['Peak containers', String(plan.peak_containers)],
+          ['Global cap', queueProblem ? 'unknown' : capLeftText(queueView() || stateBlock('queue'))],
+        ],
+        warnings: [
+          replanned > 0 && 'The ledger changed since the last plan, so this is a new one. Check what it reuses.',
+          plan.uncapped_arms.length > 0 && `No dollar cap: ${plan.uncapped_arms.join(', ')}. The run budget still applies after every trial.`,
+          ...(plan.warnings || []),
+          queueProblem && `Queue status unavailable (${queueProblem}). The server still checks the global cap.`,
+        ],
+        lines: r ? [...groupByArm(r.arms.filter((a) => !a.skipped).map((a) => [a.arm, reuseArmText(a)])), ...(r.notes || [])] : [],
+        bills: [...new Set(plan.arms.map((a) => a.provider).filter(Boolean))],
+        ok: '▶ Launch run',
+        send: async () => {
+          // The dialog may have stayed open while settings, keys or the bench changed.
+          if (launchInputs() !== inputs) throw new Error('Settings changed since this opened. Cancel and launch again.');
+          const block = launchMode() === 'queue' ? 'The queue started meanwhile. Cancel, then add this run to the queue.' : launchBlock();
+          if (block) throw new Error(block);
+          if (!r) return api('POST', '/api/runs', {mode, arms});
+          try {
+            return await api('POST', '/api/runs', {mode, arms, reuse: 'measured', spec_hash: plan.spec_hash});
+          } catch (err) {
+            if (err.status === 409 && /ledger changed/i.test(err.message)) return {replan: true};
+            throw err;
+          }
+        },
+      });
+      if (run && run.replan) {
+        await runPreflight();
+        const block = replanned < 2 ? launchBlock() : 'The ledger keeps changing.';
+        if (!block) continue;
+        toast(`The ledger changed since that plan was made, so nothing was launched. ${block}`, true);
+      } else if (run) {
+        toast(`Run ${run.id} launched`);
+        await poll();
+      }
+      break;
     }
   } finally {
     ui.launching = false;
@@ -2335,7 +3045,8 @@ async function launchDraft(inputs) {
   const mode = ui.mode;
   const arms = armedNames();
   const title = `${titleCase(mode)} from LAUNCH: ${arms.join(', ')}`.slice(0, 80);
-  const detail = await api('POST', '/api/designs/from-config', {mode, arms, title});
+  // With reuse, the server resolves the trials to reuse into the saved version, which is exactly what is queued.
+  const detail = await api('POST', '/api/designs/from-config', {mode, arms, title, ...(ui.reuse ? {reuse: 'measured'} : {})});
   ui.launchDraft = {inputs, design_id: detail.design_id, version: detail.version};
   refreshDesigns();
   return detail;
@@ -2411,6 +3122,10 @@ function armFlags(a) {
       && h('span', {class: 'chip warn-text'}, `${a.trials_unmeasured} without usage (spend not counted)`),
     a.cleanup_pending === true && tip(tag('! containers may remain', 'warn'), 'Cleanup pending',
       ['Some of this arm\'s containers may still exist. The next start retries the cleanup.']),
+    isNum(a.setup_fallbacks) && a.setup_fallbacks > 0
+      && tip(h('span', {class: 'chip warn-text'}, `${a.setup_fallbacks} without a pre-baked image`), 'Harness setup',
+        [a.setup_note || '', 'From each trial\'s prebake.json. Under prefer such a trial installs its harness '
+          + 'itself.'], true),
   ].filter(Boolean);
   return flags.length ? h('div', {class: 'lane-flags'}, flags) : null;
 }
@@ -2527,6 +3242,8 @@ function buildMonitor(root, run) {
       h('div', null, eyebrow('Started'), h('span', {class: 'rs-value', id: 'm-started'})),
       h('div', {class: 'rs-end'}, h('button', {type: 'button', class: 'btn danger', id: 'abort', onclick: abortRun}, '■ Abort run'))),
     h('div', {class: 'kpis', id: 'm-kpis'}),
+    isRace(run) && panel({code: 'M-00', title: 'Task race', meta: h('span', {id: 'm-race-meta'}), cls: 'p-race',
+      bodyId: 'm-race'}),
     h('div', {class: 'grid live-grid'},
       panel({code: 'M-01', title: 'Arm lanes', meta: legend, cls: 'p-lanes hot', flush: true, bodyId: 'm-lanes'}),
       panel({code: 'M-02', title: 'Spend telemetry', meta: h('span', {id: 'm-tele-meta'}), cls: 'p-tele', bodyId: 'm-tele'}),
@@ -2593,6 +3310,9 @@ function updateMonitor(run, force) {
     m.inflight, m.reserve])) {
     renderKpis(m);
   }
+  if (isRace(run) && $('#m-race') && (force || changed('m-race', [run.race, L.results && L.results.trials.length]))) {
+    renderRace(run, L);
+  }
   if (force || changed('m-lanes', [run.arms, L.results && L.results.trials.length, m.nConc])) renderLanes(run, m);
   if (force || changed('m-tele', [L.samples.length, m.spend, m.projected, m.eta && Math.round(m.eta)])) renderTelemetry(run, m);
   if (force || changed('m-feed', [L.events.length, L.events[0] && L.events[0].t])) renderFeed();
@@ -2640,6 +3360,71 @@ function renderKpis(m) {
     scored ? `pass rate ${pct(m.counts.pass / scored)} of ${scored} scored` : 'no scored trials yet'),
     kpi('ETA', isNum(m.eta) ? (m.eta === 0 ? 'now' : `≈ ${duration(m.eta)}`) : DASH,
       finishAt ? `finishes ≈ ${finishAt.slice(0, 5)}` : 'needs a finished trial'));
+}
+
+/** A run of task races (run.schedule tasks) with its per-task record. */
+const isRace = (run) => Boolean(run && run.schedule === 'tasks' && run.race && Array.isArray(run.race.tasks)
+  && run.race.tasks.length);
+
+/** The task race panel: overall progress by task, then the current task's race, one lane per arm. */
+function renderRace(run, L) {
+  const race = run.race;
+  const tasks = race.tasks;
+  const finished = tasks.filter((t) => t.finished_at).length;
+  const current = tasks.find((t) => t.task === race.current)
+    || tasks.find((t) => t.status === 'building' || t.status === 'racing')
+    || [...tasks].reverse().find((t) => t.finished_at) || null;
+  const width = race.max_containers || 6;
+  $('#m-race-meta').textContent = `${finished}/${plural(tasks.length, 'task')} · ≤ ${width} containers`;
+  const trials = (L.results && L.results.trials) || [];
+  fill($('#m-race'),
+    h('div', {class: 'race-progress', role: 'list', 'aria-label': 'Tasks'}, tasks.map((t, i) => {
+      const kind = (RACE_TASK[t.status] || RACE_TASK.waiting).cell;
+      return tip(h('span', {role: 'listitem', class: `race-cell ${kind} ${t === current ? 'current' : ''}`.trim()}),
+        `${i + 1}. ${t.task}`, [[statusLabel(t.status), 'status'], [plural((t.arms || []).length, 'arm'), 'racing'],
+          t.removed && t.removed.length ? [plural(t.removed.length, 'image'), 'removed after'] : null].filter(Boolean));
+    })),
+    current ? h('div', {class: 'race-now'},
+      h('div', {class: 'race-head'},
+        eyebrow(current.finished_at && current.task !== race.current ? 'Last task' : 'Now'),
+        h('b', {class: 'mono'}, current.task),
+        tag(statusLabel(current.status), (RACE_TASK[current.status] || RACE_TASK.waiting).tag),
+        h('small', {class: 'muted'}, raceBuildText(current))),
+      h('div', {class: 'race-lanes'}, (current.arms || []).map((name) => raceLane(name, current, trials))))
+      : h('p', {class: 'muted', style: 'margin:0'}, 'Waiting for the first task.'));
+}
+
+function raceBuildText(entry) {
+  const b = entry.build || {};
+  if (b.status === 'off') return 'stock setup (prebake off)';
+  if (b.status === 'ready') return 'every image ready';
+  if (!b.id && b.status === 'refused') return `build not started: ${(b.message || '').slice(0, 90)}`;
+  if (!b.id) return entry.status === 'waiting' ? '' : 'checking images';
+  const c = b.cache || {};
+  const left = isNum(c.left) && c.left > 0 ? `, ${c.left} left` : '';
+  const pruned = isNum(c.pruned) ? ` · ${c.pruned} cache records pruned${left}` : '';
+  return `build ${b.id}: ${statusLabel(b.status)} · ${plural(b.images || 0, 'image')}${pruned}`;
+}
+
+function raceLane(name, entry, trials) {
+  const lane = (entry.lanes || {})[name] || {};
+  const image = (entry.images || {})[name] || {};
+  const [imageText, imageTone] = RACE_IMAGE[image.status] || [statusLabel(image.status) || 'waiting', ''];
+  const building = entry.status === 'building';
+  const phase = building ? (image.status === 'building' ? tag('building', 'warn') : tag('waiting', ''))
+    : statusTag(lane.status);
+  const mine = trials.filter((t) => t.arm === name && t.task === entry.task);
+  return h('div', {class: OPEN_ARM.has(lane.status) && lane.status !== 'queued' ? 'race-lane active' : 'race-lane'},
+    h('div', {class: 'lane-name'}, led(building && image.status === 'building' ? 'warn live' : STATUS_LED[lane.status] || ''), name),
+    h('div', null, phase),
+    tip(h('span', {class: `chip ${imageTone ? `${imageTone}-text` : ''}`.trim()}, imageText), 'Pre-baked image',
+      [image.image || 'none', image.message || null].filter(Boolean)),
+    h('div', {class: 'cells'}, mine.length ? mine.map((t) => tip(cell(outcomeOf(t)), t.task, [[OUTCOME[outcomeOf(t)].label, 'outcome'],
+      [usageValue(trialCost(t), t.usage_status), 'cost']]))
+      : Array.from({length: Math.max(1, lane.trials_total || 1)}, () => cell(lane.status === 'running' ? 'run' : ''))),
+    h('span', {class: 'mono muted race-spend'},
+      isNum(lane.spend_usd) && lane.spend_usd > 0 ? money(lane.spend_usd) : DASH),
+    h('small', {class: 'muted race-msg', title: lane.message || null}, (lane.message || '').slice(0, 70)));
 }
 
 function renderLanes(run, m) {
@@ -3005,6 +3790,9 @@ function renderAnalysisDetail(run, data) {
   const errors = sum(armsWithData, (a) => a.errors);
   const live = run && run.id === ui.state.active_run;
   const minutesTaken = run && run.finished_at ? (Date.parse(run.finished_at) - Date.parse(run.created_at)) / 60000 : null;
+  // A run that reused measured trials (spec.reused) ran only the rest: an arm whose every task was reused is not here.
+  const reused = run && run.spec && run.spec.reused ? Object.values(run.spec.reused).flat() : [];
+  const skippedArms = reused.length ? run.spec.arms.filter((a) => Array.isArray(a.tasks) && !a.tasks.length).map((a) => a.name) : [];
 
   fill(box,
     h('div', {class: 'detail-head'},
@@ -3037,12 +3825,17 @@ function renderAnalysisDetail(run, data) {
         measured < finished ? `mean of ${measured} measured` : 'input + output'),
       kpi('Errors', String(errors), errors ? 'harness or infrastructure' : 'none', {cls: errors ? 'alert' : ''})),
     h('div', {class: 'note-strip'}, tag('note', 'warn'), "Ten tasks can't separate pass rates; compare the token and cost multiples."),
+    reused.length > 0 && h('div', {class: 'note-strip'}, tag('reuse', 'ok'),
+      `This run reused ${plural(sum(reused, (e) => (e.trials || []).length), 'trial')} from earlier runs instead of running them`
+      + `${skippedArms.length ? `, so ${listText(skippedArms)} did not run` : ''}. They are not in these figures; REPORT pools them with this run's.`),
     unmeasured > 0 && h('div', {class: 'note-strip'}, tag('usage', 'warn'),
       `${plural(unmeasured, 'trial')} ran without recording usage, so ${unmeasured === 1 ? 'its' : 'their'} spend is not counted `
       + 'and the costs here are lower bounds.'),
     h('div', {class: 'two-up'},
-      panel({code: 'A-01', title: 'Tokens vs baseline', meta: `${data.baseline} ÷ arm`}, multiplesChart(data, 'tokens')),
-      panel({code: 'A-02', title: 'Cost vs baseline', meta: `${data.baseline} ÷ arm`}, multiplesChart(data, 'cost'))),
+      panel({code: 'A-01', title: `Tokens vs ${harnessLabel(data.baseline)}`,
+        meta: `arm ÷ ${data.baseline}; under 1× is fewer`}, multiplesChart(data, 'tokens')),
+      panel({code: 'A-02', title: `Cost vs ${harnessLabel(data.baseline)}`,
+        meta: `arm ÷ ${data.baseline}; under 1× is cheaper`}, multiplesChart(data, 'cost'))),
     h('div', {class: 'stack'},
       panel({code: 'A-03', title: 'Task matrix', meta: h('div', {class: 'legend'},
         h('span', null, cell('pass'), 'pass'), h('span', null, cell('fail'), 'fail'), h('span', null, cell('error'), 'error'),
@@ -3073,6 +3866,13 @@ function askAboutRun(runId) {
     + 'what should I make of its errors and left-out trials, and what would be worth running next?'});
 }
 
+// results.compare's verdicts on a multiple (arm ÷ baseline): [chip text, what it means], worded as REPORT's chips.
+const RUN_VERDICTS = {
+  'in line': ['✓ within published range', 'Inside the published range.'],
+  lower: ['▼ below published range', 'This arm used less, relative to the baseline, than the published figure says.'],
+  higher: ['▲ above published range', 'This arm used more, relative to the baseline, than the published figure says.'],
+};
+
 function multiplesChart(data, kind) {
   const rows = data.comparison.map((c) => ({
     arm: c.arm, value: c[`${kind}_multiple`], pub: c[`published_${kind}`], verdict: c[`${kind}_verdict`], note: c.note,
@@ -3098,6 +3898,7 @@ function multiplesChart(data, kind) {
     rows.map((r) => {
       const b = band(r.pub);
       const verdictCls = r.verdict === 'in line' ? 'ok' : r.verdict ? 'warn' : '';
+      const verdict = RUN_VERDICTS[r.verdict] || null;
       const published = !r.pub ? 'none published' : isNum(r.pub.value) ? `${times(r.pub.value)} published` : `${multiple(r.pub.low)}–${times(r.pub.high)} published`;
       return h('div', {class: 'mrow'},
         h('div', {class: 'who', title: r.note || null}, r.arm),
@@ -3106,11 +3907,13 @@ function multiplesChart(data, kind) {
           h('div', {class: 'parity', style: `left:${x(1)}`}),
           isNum(r.value) && h('div', {class: 'mbar', style: `width:${x(r.value)}`}),
           b && isNum(b[2]) && h('div', {class: 'pub', style: `left:${x(b[2])}`})),
-        r.arm, [[times(r.value), 'measured'], [published.replace(' published', ''), 'published'],
-          [r.verdict || (r.why ? 'none' : DASH), 'verdict'], r.why, r.pub && r.pub.source ? r.pub.source : null, r.note, ...r.left].filter(Boolean), true),
+        r.arm, [[times(r.value), `measured, ÷ ${data.baseline}`], [published.replace(' published', ''), 'published'],
+          [verdict ? verdict[0] : r.verdict || (r.why ? 'none' : DASH), 'verdict'], verdict && verdict[1], r.why,
+          r.pub && r.pub.source ? r.pub.source : null, r.note, ...r.left].filter(Boolean), true),
         h('div', {class: 'verdict', style: 'text-align:right'},
           h('div', {class: 'mono', style: 'font-size:13px;font-weight:600'}, times(r.value)),
-          r.verdict ? tag(r.verdict, verdictCls)
+          r.verdict ? tip(tag(verdict ? verdict[0] : r.verdict, verdictCls), 'Verdict',
+            [verdict && verdict[1]].filter(Boolean), true)
             : r.why ? tip(tag('– no verdict'), 'No verdict', [r.why], true)
               : h('span', {class: 'mono faint', style: 'font-size:10.5px'}, 'no ref')));
     }),
@@ -3418,7 +4221,8 @@ registerView('launch', {render: (state, force) => renderLaunch(force)});
 registerView('analysis', {render: (state, force) => renderAnalysis(force)});
 
 /** Area scripts loaded only in demo mode, after demo.js, each registering its fake API on window.benchDemo. */
-const DEMO_SCRIPTS = ['demo.js', 'demo-report.js', 'demo-designs.js', 'demo-queue.js', 'demo-assistant.js'];
+const DEMO_SCRIPTS = ['demo.js', 'demo-report.js', 'demo-designs.js', 'demo-queue.js', 'demo-assistant.js',
+  'demo-images.js'];
 
 function init() {
   for (const button of document.querySelectorAll('.views button')) {

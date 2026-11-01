@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "id": "d-five-models-27-tasks-x-8-7e23",
+  "title": "Five models: 27 tasks x 8 harnesses (DeepSeek, GLM, Kimi, Terra, Grok)",
+  "created_at": "2026-11-01T00:32:01+00:00",
+  "updated_at": "2026-11-01T02:40:13+00:00",
+  "latest_version": 3,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-01T00:32:01+00:00",
+      "spec_hash": "sha256:203978f2f0c5b892f0d638160b55a4c844c729d14232ea99cd3dfed3c00c15a7",
+      "change_note": "",
+      "approved_at": "2026-11-01T00:33:16+00:00",
+      "runs": [
+        "20261031-173407-five-models-27-t-v1"
+      ]
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-01T01:18:20+00:00",
+      "spec_hash": "sha256:243fd724ef1cac6c13c2e0b124a66335f77d3acbc32c0a286594b96dfe3fcd25",
+      "change_note": "Restart after fixing the disk check (count free space inside Docker's disk file) and Harbor's 10 s Docker check (60 s, 2 retries).",
+      "approved_at": "2026-11-01T01:18:39+00:00",
+      "runs": [
+        "20261031-181842-five-models-27-t-v2"
+      ]
+    },
+    "3": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-01T02:39:54+00:00",
+      "spec_hash": "sha256:6642c41622425014ae900f3ccf292604257dce277632e8737eab10e892cec6a9",
+      "change_note": "Budget $900; resume after the cost check. Reuse keeps finished trials.",
+      "approved_at": "2026-11-01T02:40:10+00:00",
+      "runs": [
+        "20261031-194013-five-models-27-t-v3"
+      ]
+    }
+  }
+}

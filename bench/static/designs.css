@@ -204,6 +204,33 @@
 #view-designs .dz-reserve { display: block; margin-top: 4px; font: 10.5px/1.4 var(--font-mono); color: var(--faint); }
 #view-designs .dz-assume { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12.5px; color: var(--text-2); }
 
+#view-designs .dz-est div.dz-wide { grid-column: 1 / -1; }
+
+/* Reused trials: per arm what it takes from the ledger (trials and the runs they came from) and what it still runs. */
+#view-designs .dz-reuse { display: grid; gap: 8px; }
+#view-designs .dz-reuse .section-head { margin: 0; }
+#view-designs .dz-reuse-total { font: 11px var(--font-mono); color: var(--text-2); text-align: right; }
+#view-designs .dz-reuse .dz-banner { display: flex; gap: 8px; }
+#view-designs .dz-reuse-arms { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#view-designs .dz-reuse-arm { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line-2); background: var(--panel); min-width: 0; }
+#view-designs .dz-reuse-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+#view-designs .dz-reuse-head b { font-size: 12.5px; color: var(--text); }
+#view-designs .dz-reuse-head .tag { padding: 2px 5px; }
+#view-designs .dz-reuse-head .dz-hash { margin-left: auto; font-size: 10.5px; }
+#view-designs .dz-reuse-arm details > summary { padding: 2px 0; font-size: 10px; }
+#view-designs .dz-reused { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+#view-designs .dz-reused li { display: grid; gap: 3px; padding-left: 8px; border-left: 1px solid var(--kelly-lo); min-width: 0; }
+#view-designs .dz-reused-task { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; }
+#view-designs .dz-reused-task .mono:first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text-2); }
+#view-designs .dz-reused-from { display: flex; flex-wrap: wrap; gap: 3px; }
+#view-designs .dz-reused-from .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+#view-designs .dz-run-ref { cursor: pointer; color: var(--kelly-hi); }
+#view-designs .dz-run-ref:hover { border-color: var(--kelly-lo); color: var(--text); }
+#view-designs .dz-run-ref:focus-visible { outline: 1px solid var(--kelly); outline-offset: 1px; }
+#view-designs .dz-reuse-run { margin: 4px 0 0; font-size: 11px; color: var(--text-2); overflow-wrap: anywhere; }
+#view-designs .dz-arm-reuse:empty { display: none; }
+#view-designs .field small.dz-arm-reuse.ok-text { color: var(--kelly); }
+
 #view-designs .dz-queue-summary:empty { display: none; }
 
 /* Dialogs this tab opens (built by formDialog outside the view). */

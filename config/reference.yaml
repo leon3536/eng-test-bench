@@ -1,13 +1,17 @@
 # Published figures the sample is compared against.
 #
-# Every value is a multiple: "Claude Code uses N times as much as this harness",
-# so 2.0 means the other harness costs half as much. Source IDs refer to
-# "Agent harness evidence, ranked" (28 Oct 2026).
+# Every value is a multiple: this harness / Claude Code on the same tasks and
+# model, "this harness uses N times what Claude Code uses", so 0.5 means the
+# harness costs half as much and 1.0 is parity. The sources state theirs the
+# other way round ("Claude Code uses N times as much"), so each is restated as
+# a fraction: 1/3.1 is a published 3.1x. Source IDs refer to "Agent harness
+# evidence, ranked" (28 Oct 2026).
 
 # How the report reads the figures below. Each arms.<family> entry may
 # override estimator, tolerance and applies_to.
 defaults:
-  direction: baseline_over_harness   # a multiple is baseline (Claude Code) / harness
+  direction: harness_over_baseline   # a multiple is harness / baseline (Claude Code); a file written
+                                     # baseline_over_harness is still read, each figure inverted
   estimator: ratio_of_means          # verdicts use mean cost over mean cost, like the published
                                      # per-task averages; the headline also shows the geometric
                                      # mean of per-task ratios
@@ -16,9 +20,9 @@ defaults:
                                      # get a position but no verdict
 
 consensus:
-  cost_per_trial:
-    low: 2.0
-    high: 3.0
+  cost_per_trial:                    # published 2x to 3x: the harness costs 0.333 to 0.5 of Claude Code
+    low: 1/3
+    high: 1/2
     source: "S1-S5: changing harness moves cost 2x to 3x"
   pass_rate_delta_pp:                # harness pass rate minus baseline, in percentage points
     low: -5
@@ -28,11 +32,11 @@ consensus:
 arms:
   pi:
     tokens_per_trial:
-      value: 3.1
+      value: 1/3.1                   # published 3.1x: 0.323, read as 0.215-0.484
       source: "S10 via S9: 742k vs 236k tokens per task, same model (secondhand)"
   strands:
     cost_per_trial:
-      value: 2.1
+      value: 1/2.1                   # published 2.1x: 0.476, read as 0.317-0.714
       source: "S8: $0.74 to $1.57 per trial on Anthropic models, Claude Code highest (estimated, vendor study)"
     note: >-
       S8 measured strands-harness through Harbor's Strands adapter on Terminal-Bench 2.1

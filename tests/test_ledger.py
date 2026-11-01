@@ -64,7 +64,7 @@ class LedgerCase(BenchTestCase):
 
 
 class Opening(LedgerCase):
-    def test_new_file_gets_schema_version_1(self) -> None:
+    def test_new_file_gets_the_current_schema(self) -> None:
         self.open_ledger()
         conn = sqlite3.connect(self.db)
         try:
@@ -226,6 +226,215 @@ class Ingestion(LedgerCase):
         before = [tuple(r[c] for c in keep) for r in self.raw_rows()]
         self.assertEqual(led.rederive(force=True), 16)
         self.assertEqual([tuple(r[c] for c in keep) for r in self.raw_rows()], before)
+
+
+PREBAKED_ENVIRONMENT = {"import_path": extract.PREBAKED_ENV,
+                        "kwargs": {"prebake_harness": "pi", "prebake_version": "1.4.0", "prebake_recipe": "a" * 64}}
+BAKED = "benchbake/pi-1.4.0-raaaaaaaaaa/alexgshaw/fix-git:20251031"
+
+
+def prebake_record(used: bool) -> dict:
+    return {"bake_format": 1, "status": "ready" if used else "missing", "used": used,
+            "reason": "pre-baked image verified" if used else f"no pre-baked image {BAKED}", "image": BAKED,
+            "image_id": "sha256:" + "b" * 64 if used else None, "baked_at": "2026-10-29T22:42:35Z" if used else None,
+            "recipe": "a" * 64 if used else None, "wanted_recipe": "a" * 64, "required": False, "skipped_execs": []}
+
+
+class SetupProvenance(LedgerCase):
+    """Schema 2: how each trial's harness got installed. Provenance only."""
+
+    def v1_copy(self) -> Path:
+        """The pilots as the bench wrote them before schema 2: the schema 1
+        tables, parser version 4, no setup columns."""
+        led = self.open_ledger(roots=lf.fixture_roots())
+        led.rescan()
+        led.close()
+        old = self.tmp / "v1" / "bench.sqlite"
+        old.parent.mkdir()
+        conn = sqlite3.connect(old, isolation_level=None)
+        try:
+            ledger._migrate_v1(conn)
+            conn.execute("PRAGMA user_version=1")
+            conn.execute("ATTACH DATABASE ? AS new", (str(self.db),))
+            columns = ", ".join(r[1] for r in conn.execute("PRAGMA main.table_info(trials)"))
+            for table in ("meta", "runs", "exclusions"):
+                conn.execute(f"INSERT INTO main.{table} SELECT * FROM new.{table}")
+            conn.execute(f"INSERT INTO main.trials ({columns}) SELECT {columns} FROM new.trials")
+            conn.execute("UPDATE main.trials SET parser_version = 4")
+            conn.execute("DETACH DATABASE new")
+        finally:
+            conn.close()
+        return old
+
+    def test_schema_1_migrates_and_rederives_to_stock(self) -> None:
+        old = self.v1_copy()
+        conn = sqlite3.connect(old)
+        try:
+            before = {r[0]: r[1:] for r in conn.execute(
+                "SELECT trial_key, config_hash, task_digest, outcome, n_input, cost_at_ingest_usd FROM trials")}
+            self.assertNotIn("setup_mode", [r[1] for r in conn.execute("PRAGMA table_info(trials)")])
+        finally:
+            conn.close()
+        self.assertEqual(len(before), 16)
+        led = self.open_ledger(path=old)  # migrates, then re-derives the stale rows
+        conn = sqlite3.connect(old)
+        conn.row_factory = sqlite3.Row
+        try:
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], ledger.SCHEMA_VERSION)
+            rows = conn.execute("SELECT * FROM trials").fetchall()
+            view = [r[1] for r in conn.execute("PRAGMA table_info(trials_v)")]
+        finally:
+            conn.close()
+        self.assertIn("setup_mode", view)
+        self.assertEqual({r["trial_key"]: (r["config_hash"], r["task_digest"], r["outcome"], r["n_input"],
+                                           r["cost_at_ingest_usd"]) for r in rows}, before)
+        self.assertEqual({(r["setup_mode"], r["agent_setup_limit_sec"], r["parser_version"]) for r in rows},
+                         {("stock", 360.0, extract.PARSER_VERSION)})  # the killed pilot-1 trial from its lock
+        self.assertEqual({r["prebake_json"] for r in rows}, {None})
+        self.assertEqual(led.facets([])["setup_modes"], [{"value": "stock", "trials": 16}])
+        self.assertEqual(led.rederive(), 0)
+
+    def test_a_pre_baked_trial_from_ingest_to_export(self) -> None:
+        data, run = self.bench_job(status="cancelled")
+        job = data / "jobs" / "r1" / "pi-glm"
+        lf.make_trial(job / "baked", environment=PREBAKED_ENVIRONMENT, prebake=prebake_record(True), setup_sec=12)
+        lf.make_trial(job / "fell-back", environment=PREBAKED_ENVIRONMENT, prebake=prebake_record(False),
+                      task="task-b", lock_digest="sha256:" + "e" * 64)
+        lf.make_trial(job / "stock", task="task-c", lock_digest="sha256:" + "f" * 64)
+        lf.make_trial(job / "killed-early", environment=PREBAKED_ENVIRONMENT, finished=False)
+        led = self.open_ledger(roots=[ScanRoot(data / "jobs", "dev", data / "runs")])
+        self.assertEqual(led.rescan()["incomplete"], 1)
+        rows = {r["trial_name"]: r for r in self.rows(led)}
+        self.assertEqual({n: r["setup"]["mode"] for n, r in rows.items()},
+                         {"baked": "prebaked", "fell-back": "fallback", "stock": "stock", "killed-early": None})
+        self.assertEqual(rows["baked"]["setup"], {"mode": "prebaked", "limit_sec": 360.0, "image": BAKED,
+                                                  "image_id": "sha256:" + "b" * 64, "recipe": "a" * 64,
+                                                  "baked_at": "2026-10-29T22:42:35.000000Z",
+                                                  "reason": "pre-baked image verified"})
+        self.assertEqual(rows["baked"]["phases"]["agent_setup_sec"], 12.0)
+        self.assertEqual(rows["fell-back"]["setup"]["reason"], f"no pre-baked image {BAKED}")
+        # Identity is untouched: the four trials of the arm are one configuration.
+        self.assertEqual(len({r["config_hash"] for r in rows.values()}), 1)
+        self.assertEqual(led.trial(rows["baked"]["id"])["prebake"], prebake_record(True))
+        # Only the trial folder holds prebake.json, so a re-derive keeps the stored copy.
+        for trial in ("baked", "fell-back"):
+            (job / trial / "prebake.json").unlink()
+        self.assertEqual(led.rederive(force=True), 4)
+        self.assertEqual({r["trial_name"]: r["setup"]["mode"] for r in self.rows(led)},
+                         {"baked": "prebaked", "fell-back": "fallback", "stock": "stock", "killed-early": None})
+        count = lambda modes: led.query(Filters(setup_modes=modes))[0]  # noqa: E731
+        self.assertEqual((count(("prebaked",)), count(("stock", "fallback")), count((None,)), count(())),
+                         (1, 2, 1, 4))
+        self.assertEqual(led.facets([])["setup_modes"], [{"value": "fallback", "trials": 1},
+                                                         {"value": "prebaked", "trials": 1},
+                                                         {"value": "stock", "trials": 1},
+                                                         {"value": None, "trials": 1}])
+        exported = [json.loads(line) for line in led.export_rows(Filters(setup_modes=("prebaked",)), "jsonl")]
+        self.assertEqual([e["setup"]["mode"] for e in exported], ["prebaked"])
+        header = next(iter(led.export_rows(Filters(), "csv")))
+        self.assertIn("setup", next(csv.reader(io.StringIO(header.lstrip("﻿")))))
+
+    def test_setup_mode_filters_are_checked(self) -> None:
+        self.assertEqual(ledger.parse_filters({"setup_modes": ["prebaked", None]}).setup_modes, ("prebaked", None))
+        for bad in ({"setup_modes": ["baked"]}, {"setup_modes": "stock"}, {"setup_modes": [1]}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                ledger.parse_filters(bad)
+
+
+class CacheWrites(LedgerCase):
+    """Cache writes and the log's flags live only in the trial folder: a
+    re-derive re-reads it, re-prices the cost at ingest when the usage
+    changes, and keeps the stored figures once the folder is gone."""
+
+    CALLS = ((2, 0, 3000, 0, 400), (3, 2900, 500, 100, 250))
+    ARM = {"name": "cc", "agent": "claude-code", "provider": "anthropic", "model": "claude-opus-5-5"}
+
+    def setUp(self) -> None:
+        super().setUp()
+        prices = self.tmp / "pricing.yaml"
+        prices.write_text(lf.OPUS_PRICING_YAML, encoding="utf-8", newline="\n")
+        patcher = mock.patch.object(settings, "PRICING", prices)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def ingest(self) -> tuple[Ledger, Path, float]:
+        data, run = self.bench_job(arms=[self.ARM])
+        trial = data / "jobs" / "r1" / "cc" / "t1"
+        lf.make_cache_trial(trial, "claude-code", self.CALLS, reported=0.5)
+        led = self.open_ledger()
+        led.ingest_job(trial.parent, self.ctx(run, "cc"), final=True, via="rescan")
+        return led, trial, sum(lf.call_cost(c) for c in self.CALLS)
+
+    def make_stale(self, usage: dict, cost: float) -> None:
+        """The row as parser 5 left it: no write counts, no flags, a cost with writes priced as input."""
+        conn = sqlite3.connect(self.db)
+        try:
+            conn.execute("UPDATE trials SET usage_json = ?, cost_at_ingest_usd = ?, flags_json = '{}', "
+                         "parser_version = 5", (json.dumps(usage, sort_keys=True, separators=(",", ":")), cost))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_rederive_reads_writes_from_the_folder_and_reprices_the_cost_at_ingest(self) -> None:
+        led, _trial, exact = self.ingest()
+        (row,) = self.rows(led)
+        self.assertAlmostEqual(row["cost_at_ingest_usd"], exact, places=12)
+        self.assertAlmostEqual(row["cost_usd"], exact, places=12)
+        self.assertEqual(sorted(row["flags"]), ["reported_cost_mismatch"])  # Claude Code said $0.50
+        usage = {k: {f: v for f, v in u.items() if not f.startswith("n_cache_write")} for k, u in row["usage"].items()}
+        self.make_stale(usage, 0.01)
+        self.assertEqual(led.rederive(), 1)
+        (row,) = self.rows(led)
+        self.assertEqual(row["usage"]["claude-opus-5-5"]["n_cache_write_5m"], 3500)
+        self.assertAlmostEqual(row["cost_at_ingest_usd"], exact, places=12)  # the usage changed, so re-priced
+        self.assertEqual(sorted(row["flags"]), ["reported_cost_mismatch"])
+        self.assertEqual(led.status()["last_rederive"]["folders_missing"], 0)
+        # Usage that did not change keeps the cost at ingest it had.
+        conn = sqlite3.connect(self.db)
+        try:
+            conn.execute("UPDATE trials SET cost_at_ingest_usd = 0.25")
+            conn.commit()
+        finally:
+            conn.close()
+        self.assertEqual(led.rederive(force=True), 1)
+        self.assertEqual(self.rows(led)[0]["cost_at_ingest_usd"], 0.25)
+
+    def test_a_trial_folder_gone_keeps_the_stored_writes_and_says_so(self) -> None:
+        led, trial, exact = self.ingest()
+        shutil.rmtree(trial)
+        self.assertEqual(led.rederive(force=True), 1)
+        (row,) = self.rows(led)
+        self.assertEqual((row["usage"]["claude-opus-5-5"]["n_cache_write_5m"],
+                          row["usage"]["claude-opus-5-5"]["n_cache_write_1h"]), (3500, 100))
+        self.assertAlmostEqual(row["cost_usd"], exact, places=12)
+        self.assertTrue(row["flags"]["trial_folder_missing"])
+        self.assertIn("reported_cost_mismatch", row["flags"])  # re-checked from what is stored
+        status = led.status()["last_rederive"]
+        self.assertEqual((status["folders_missing"], status["missing"]), (1, [row["trial_key"]]))
+        # Stored before writes were read, a row whose folder is gone stays priced as input, and says why.
+        usage = {k: {f: v for f, v in u.items() if not f.startswith("n_cache_write")} for k, u in row["usage"].items()}
+        self.make_stale(usage, 0.01)
+        self.assertEqual(led.rederive(), 1)
+        (row,) = self.rows(led)
+        self.assertNotIn("n_cache_write_5m", row["usage"]["claude-opus-5-5"])
+        self.assertEqual(row["flags"]["cache_writes_unknown"]["reason"], "trial folder gone")
+        self.assertEqual(row["cost_at_ingest_usd"], 0.01)  # nothing new to price it from
+
+    def test_an_incomplete_trial_is_recovered_again_on_rederive(self) -> None:
+        data, run = self.bench_job(arms=[self.ARM], status="cancelled")
+        trial = data / "jobs" / "r1" / "cc" / "t1"
+        lf.make_trial(trial, family="claude-code", model_name="anthropic/claude-opus-5-5", finished=False)
+        lf.write_cache_log(trial, "claude-code", self.CALLS)
+        led = self.open_ledger()
+        led.ingest_job(trial.parent, self.ctx(run, "cc"), final=True, via="rescan")
+        (row,) = self.rows(led)
+        self.assertEqual(row["outcome"], "incomplete")
+        usage = {k: {f: v for f, v in u.items() if not f.startswith("n_cache_write")} for k, u in row["usage"].items()}
+        self.make_stale(usage, 0.01)
+        self.assertEqual(led.rederive(), 1)
+        (row,) = self.rows(led)
+        self.assertEqual(row["usage"]["claude-opus-5-5"]["n_cache_write_5m"], 3500)
+        self.assertAlmostEqual(row["cost_at_ingest_usd"], sum(lf.call_cost(c) for c in self.CALLS), places=12)
 
 
 class UnrecordedUsage(LedgerCase):
@@ -554,8 +763,13 @@ class Snapshots(LedgerCase):
                                                                              "trials_used": 12,
                                                                              "pricing_sha": "p", "stats_version": 1}})
         self.assertRegex(saved["id"], r"^rs-\d{8}-\d{6}-[0-9a-f]{4}$")
-        self.assertEqual(led.snapshots(), [{k: saved[k] for k in ("id", "name", "created_at", "fingerprint",
-                                                                  "trials_used")}])
+        # direction: how its multiples read; none recorded before multiples were harness / baseline.
+        self.assertEqual(led.snapshots(), [{**{k: saved[k] for k in ("id", "name", "created_at", "fingerprint",
+                                                                     "trials_used")}, "direction": None}])
+        newer = led.save_snapshot("week 2", {"filters": {}}, {"provenance": {"fingerprint": "sha256:def",
+                                                                             "direction": "harness_over_baseline"}})
+        self.assertEqual({s["id"]: s["direction"] for s in led.snapshots()},
+                         {saved["id"]: None, newer["id"]: "harness_over_baseline"})
         self.assertEqual(led.snapshot(saved["id"])["response"]["provenance"]["trials_used"], 12)
         with self.assertRaises(KeyError):
             led.snapshot("rs-nope")
@@ -784,7 +998,7 @@ class Backups(LedgerCase):
         self.assertNotIn("bench-20260101.sqlite", kept)
         conn = sqlite3.connect(today)
         try:
-            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], ledger.SCHEMA_VERSION)
         finally:
             conn.close()
 

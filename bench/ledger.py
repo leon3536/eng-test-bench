@@ -44,7 +44,7 @@ from typing import IO, Any
 from . import classify, extract, pricing, settings
 from .extract import RunContext, ScanRoot, TrialFacts
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 BUSY_TIMEOUT_MS = 15000
 # A live ingest runs inside the run manager's 3-second refresh, which also
 # enforces budgets and cancels, so it gives up quickly; the next refresh or
@@ -77,6 +77,11 @@ def _now() -> str:
 
 
 # Schema ----------------------------------------------------------------------
+
+_TRIALS_V = """CREATE VIEW trials_v AS
+        SELECT t.*, ROW_NUMBER() OVER (PARTITION BY t.run_key, t.arm, COALESCE(t.task_digest, t.task)
+                                       ORDER BY t.started_at, t.trial_name) AS attempt
+        FROM trials t"""
 
 _SCHEMA_V1 = (
     """CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)""",
@@ -147,10 +152,7 @@ _SCHEMA_V1 = (
     "CREATE INDEX trials_run ON trials(run_key, arm)",
     "CREATE INDEX trials_time ON trials(started_at)",
     "CREATE INDEX trials_dir ON trials(trial_dir)",
-    """CREATE VIEW trials_v AS
-        SELECT t.*, ROW_NUMBER() OVER (PARTITION BY t.run_key, t.arm, COALESCE(t.task_digest, t.task)
-                                       ORDER BY t.started_at, t.trial_name) AS attempt
-        FROM trials t""",
+    _TRIALS_V,
     """CREATE TABLE exclusions (
         id INTEGER PRIMARY KEY,
         target_type TEXT NOT NULL CHECK (target_type IN ('trial','run')),
@@ -171,23 +173,58 @@ def _migrate_v1(conn: sqlite3.Connection) -> None:
         conn.execute(statement)
 
 
+# Setup provenance (extract.setup_provenance): how each trial's harness got
+# installed, and from which pre-baked image. Never part of a trial's identity.
+_SETUP_COLUMNS = (
+    "setup_mode TEXT CHECK (setup_mode IN ('stock','prebaked','fallback'))",
+    "agent_setup_limit_sec REAL",
+    "prebake_image TEXT", "prebake_image_id TEXT", "prebake_recipe TEXT", "prebake_baked_at TEXT",
+    "prebake_reason TEXT",
+    "prebake_json TEXT",    # prebake.json as the trial wrote it, redacted: only the trial folder has it
+)
+
+
+def _migrate_v2(conn: sqlite3.Connection) -> None:
+    """Adds the setup columns. Rows keep NULL until the parser bump that came
+    with them re-derives them ('stock' for every trial before pre-baking)."""
+    for column in _SETUP_COLUMNS:
+        conn.execute(f"ALTER TABLE trials ADD COLUMN {column}")
+    # Recreated so its t.* names the new columns wherever SQLite expanded it when created.
+    conn.execute("DROP VIEW trials_v")
+    conn.execute(_TRIALS_V)
+
+
+def _migrate_v3(conn: sqlite3.Connection) -> None:
+    """Adds flags_json (extract.trial_flags): what only a harness's log or the
+    prices could check. Rows keep '{}' until the parser bump that came with
+    it re-derives them from their trial folders."""
+    conn.execute("ALTER TABLE trials ADD COLUMN flags_json TEXT NOT NULL DEFAULT '{}'")
+    conn.execute("DROP VIEW trials_v")
+    conn.execute(_TRIALS_V)
+
+
 # Ordered and additive only: MIGRATIONS[n] takes user_version n to n + 1.
-MIGRATIONS = [_migrate_v1]
+MIGRATIONS = [_migrate_v1, _migrate_v2, _migrate_v3]
 
 _FACT_COLUMNS = [f.name for f in dataclasses.fields(TrialFacts)]
 _INSERT_COLUMNS = _FACT_COLUMNS + ["outcome", "outcome_reason", "classifier_version",
                                    "ingest_via", "ingested_at", "updated_at"]
 # What rederive() never touches: identity, provenance, the raw facts, and the
-# figures that only the job folder or the moment of ingest knew.
+# figures that only the job folder or the moment of ingest knew. The cost at
+# ingest is the exception: it is re-priced when the usage it priced changes.
 _KEEP_ON_REDERIVE = frozenset({"trial_key", "job_id", "trial_name", "run_key", "profile", "run_id", "source",
                                "arm", "trial_dir", "ingest_via", "ingested_at", "raw_result_z", "raw_lock_z",
-                               "harbor_version", "n_concurrent", "cost_at_ingest_usd", "pricing_sha_at_ingest"})
+                               "harbor_version", "n_concurrent", "cost_at_ingest_usd", "pricing_sha_at_ingest",
+                               "prebake_json"})
+# What a killed trial's setup provenance is re-derived into, from its stored lock and prebake.json.
+_SETUP_FACTS = ("setup_mode", "agent_setup_limit_sec", "prebake_image", "prebake_image_id", "prebake_recipe",
+                "prebake_baked_at", "prebake_reason")
 _ROW_COLUMNS = ["id"] + [c for c in _FACT_COLUMNS if c not in ("raw_result_z", "raw_lock_z")] + [
     "outcome", "outcome_reason", "classifier_version", "ingest_via", "ingested_at", "updated_at", "attempt"]
 # A killed trial's usage comes from its folder (the harness's own log), not a
 # stored blob, so a rescan refreshes these when the folder says more.
 _RECOVERED_COLUMNS = ("n_input", "n_cache", "n_output", "usage_json", "primary_share", "reported_cost_usd",
-                      "cost_at_ingest_usd", "pricing_sha_at_ingest", "agent_started", "parser_version")
+                      "cost_at_ingest_usd", "pricing_sha_at_ingest", "flags_json", "agent_started", "parser_version")
 
 # TrialRow, in export order. Objects are written as JSON text in CSV.
 EXPORT_COLUMNS = (
@@ -196,8 +233,8 @@ EXPORT_COLUMNS = (
     "config_hash", "config_label", "options", "cautions", "dataset", "dataset_snapshot", "task",
     "task_digest_short", "outcome", "outcome_reason", "harbor_cause", "exception_type", "exception_head",
     "reward", "passed", "n_input", "n_cache", "n_output", "usage_status", "tokens_total", "cost_usd",
-    "cost_at_ingest_usd", "reported_cost_usd", "unpriced_models", "primary_share", "started_at", "finished_at",
-    "phases", "total_sec", "usage", "exclusion", "log_url",
+    "cost_at_ingest_usd", "reported_cost_usd", "unpriced_models", "primary_share", "flags", "started_at",
+    "finished_at", "phases", "total_sec", "setup", "usage", "exclusion", "log_url",
 )
 
 # None: sorted in Python, nulls last, because the value depends on today's
@@ -228,11 +265,13 @@ class Filters:
     tasks: tuple[str, ...] = ()
     runs: tuple[str, ...] = ()
     exclude_runs: tuple[str, ...] = ()
+    setup_modes: tuple[str | None, ...] = ()    # extract.SETUP_MODES; None matches trials with none recorded
     include_cautioned: bool = False
 
 
 _LIST_FILTERS = tuple(f.name for f in dataclasses.fields(Filters)
                       if f.name not in ("date_from", "date_to", "include_cautioned"))
+_NULLABLE_FILTERS = ("efforts", "setup_modes")
 _MAX_ITEMS = 500
 _MAX_ITEM_CHARS = 300
 
@@ -282,7 +321,7 @@ def parse_filters(body: Mapping | None) -> Filters:
             raise ValueError(f"{key} has more than {_MAX_ITEMS} items")
         items = []
         for item in value:
-            if item is None and key == "efforts":
+            if item is None and key in _NULLABLE_FILTERS:
                 items.append(None)
                 continue
             if not isinstance(item, str):
@@ -291,6 +330,8 @@ def parse_filters(body: Mapping | None) -> Filters:
                 raise ValueError(f"{key} has an item longer than {_MAX_ITEM_CHARS} characters")
             if key == "sources" and item not in ("bench", "external"):
                 raise ValueError("sources items must be bench or external")
+            if key == "setup_modes" and item not in extract.SETUP_MODES:
+                raise ValueError(f"setup_modes items must be {', '.join(extract.SETUP_MODES)} or null")
             if key == "models" and ":" not in item:
                 raise ValueError("models items look like provider:model, e.g. openrouter:z-ai/glm-5.3")
             items.append(item)
@@ -310,6 +351,18 @@ def _where(f: Filters, outcomes: Sequence[str] | None) -> tuple[str, list[Any]]:
         if values:
             clauses.append(f"{column} {'NOT IN' if negate else 'IN'} ({','.join('?' * len(values))})")
             params.extend(values)
+
+    def among_or_null(column: str, values: Sequence[Any]) -> None:
+        if not values:
+            return
+        named = [v for v in values if v is not None]
+        parts = []
+        if named:
+            parts.append(f"{column} IN ({','.join('?' * len(named))})")
+            params.extend(named)
+        if any(v is None for v in values):
+            parts.append(f"{column} IS NULL")
+        clauses.append("(" + " OR ".join(parts) + ")")
 
     # A killed trial has no start time of its own; its run's start places it.
     when = "COALESCE(started_at, (SELECT r.created_at FROM runs r WHERE r.run_key = trials_v.run_key))"
@@ -332,15 +385,8 @@ def _where(f: Filters, outcomes: Sequence[str] | None) -> tuple[str, list[Any]]:
     among("config_hash", f.exclude_configs, negate=True)
     among("harness_version", f.harness_versions)
     among("harbor_version", f.harbor_versions)
-    if f.efforts:
-        named = [e for e in f.efforts if e is not None]
-        parts = []
-        if named:
-            parts.append(f"effort IN ({','.join('?' * len(named))})")
-            params.extend(named)
-        if any(e is None for e in f.efforts):
-            parts.append("effort IS NULL")
-        clauses.append("(" + " OR ".join(parts) + ")")
+    among_or_null("effort", f.efforts)
+    among_or_null("setup_mode", f.setup_modes)
     among("dataset", f.datasets)
     among("dataset_snapshot", f.snapshots)
     among("task", f.tasks)
@@ -706,7 +752,8 @@ class Ledger:
                              {**row, "row_id": existing["id"]})
                 status = "upgraded"
             elif existing["outcome"] == "incomplete" and any(
-                    existing[c] != row[c] for c in ("n_input", "n_cache", "n_output", "usage_json", "agent_started")):
+                    existing[c] != row[c] for c in ("n_input", "n_cache", "n_output", "usage_json", "flags_json",
+                                                    "agent_started")):
                 columns = [*_RECOVERED_COLUMNS, "outcome", "outcome_reason", "classifier_version", "updated_at"]
                 conn.execute(f"UPDATE trials SET {', '.join(f'{c} = :{c}' for c in columns)} WHERE id = :row_id",
                              {**{c: row[c] for c in columns}, "row_id": existing["id"]})
@@ -879,14 +926,18 @@ class Ledger:
 
     def rederive(self, *, force: bool = False) -> int:
         """Recompute derived columns from the stored raw JSON for rows written
-        by an older parser or classifier. The raw blobs never change."""
+        by an older parser or classifier. The raw blobs never change. What
+        result.json does not hold (cache writes, the harness log's flags) is
+        re-read from the trial folder; where the folder is gone the stored
+        figures are kept, the row's flags say so (trial_folder_missing), and
+        so does the 'last_rederive' meta entry that status() shows."""
         self._require()
         with self._conn() as conn:
             ids = [r[0] for r in conn.execute(
                 "SELECT id FROM trials WHERE ? OR parser_version < ? OR classifier_version < ? ORDER BY id",
                 (int(force), extract.PARSER_VERSION, classify.CLASSIFIER_VERSION))]
         prefixes = self._prefixes()
-        done = 0
+        done, missing = 0, []
         for row_id in ids:
             with self._write() as conn:
                 row = conn.execute("SELECT * FROM trials WHERE id = ?", (row_id,)).fetchone()
@@ -896,33 +947,63 @@ class Ledger:
                 columns = sorted(values)
                 conn.execute(f"UPDATE trials SET {', '.join(f'{c} = :{c}' for c in columns)} WHERE id = :row_id",
                              {**values, "row_id": row_id})
+            if "trial_folder_missing" in (_loads(values.get("flags_json"), {}) or {}):
+                missing.append(row["trial_key"])
             done += 1
+        if done:
+            with self._write() as conn:
+                self._set_meta(conn, "last_rederive", json.dumps(
+                    {"at": _now(), "rows": done, "folders_missing": len(missing), "missing": missing[:50]}))
         return done
+
+    def _trial_folder(self, trial_dir: str) -> Path:
+        path = Path(trial_dir)
+        return path if path.is_absolute() else self.root / path
 
     def _rederived(self, row: dict[str, Any], prefixes: Mapping[str, str]) -> dict[str, Any]:
         merged = dict(row)
+        hm, model = row["harbor_model"] or "", row["model"] or ""
+        bench = row["source"] == "bench"
+        # The run supplied these at ingest; the raw JSON cannot recreate them.
+        ctx = RunContext(
+            run_key=row["run_key"], profile=row["profile"], run_id=row["run_id"], source=row["source"],
+            arm=row["arm"], provider=row["provider"] if bench else None,
+            model_prefix=hm[: len(hm) - len(model)] if bench and model and hm.endswith(model) else None,
+            effort_label=row["effort_label"], dataset=row["dataset"] if bench else None,
+            local_snapshot=row["dataset_snapshot"] if (row["dataset_snapshot"] or "").startswith("local:")
+            else None,
+            family=row["family"] if bench else None)
+        job_lock = {"harbor": {"version": row["harbor_version"]}, "n_concurrent_trials": row["n_concurrent"]}
+        # Cache writes and the log's flags are in the trial folder only; once it is gone, keep what is stored.
+        folder = self._trial_folder(row["trial_dir"])
         if row["raw_result_z"] is not None:
-            hm, model = row["harbor_model"] or "", row["model"] or ""
-            bench = row["source"] == "bench"
-            # The run supplied these at ingest; the raw JSON cannot recreate them.
-            ctx = RunContext(
-                run_key=row["run_key"], profile=row["profile"], run_id=row["run_id"], source=row["source"],
-                arm=row["arm"], provider=row["provider"] if bench else None,
-                model_prefix=hm[: len(hm) - len(model)] if bench and model and hm.endswith(model) else None,
-                effort_label=row["effort_label"], dataset=row["dataset"] if bench else None,
-                local_snapshot=row["dataset_snapshot"] if (row["dataset_snapshot"] or "").startswith("local:")
-                else None,
-                family=row["family"] if bench else None)
-            job_lock = {"harbor": {"version": row["harbor_version"]}, "n_concurrent_trials": row["n_concurrent"]}
+            log = extract.read_harness_log(folder)
+            stored = None if folder.is_dir() else {"usage": _loads(row["usage_json"], {}) or {},
+                                                   "flags": _loads(row.get("flags_json"), {}) or {}}
             facts = extract.facts_from_result(extract.inflate(row["raw_result_z"]),
                                               extract.inflate(row["raw_lock_z"]), job_lock,
-                                              trial_dir=row["trial_dir"], ctx=ctx, prefixes=prefixes)
+                                              trial_dir=row["trial_dir"], ctx=ctx, prefixes=prefixes,
+                                              prebake=_loads(row.get("prebake_json")), log=log, stored=stored)
             fresh = {c: getattr(facts, c) for c in _FACT_COLUMNS if c not in _KEEP_ON_REDERIVE}
+            if fresh["usage_json"] != row["usage_json"]:
+                # Priced again, or 'as ingested' reports and run spend would keep the old usage's figure.
+                fresh.update(cost_at_ingest_usd=facts.cost_at_ingest_usd,
+                             pricing_sha_at_ingest=facts.pricing_sha_at_ingest)
             merged.update(fresh)
             values = dict(fresh)
         else:
-            # Incomplete: no stored JSON to re-parse; the next rescan re-reads its folder.
+            # Incomplete: no stored result to re-parse, so its usage is recovered from its folder's harness
+            # log again while the folder exists (as a rescan would). Its trial lock holds the environment and
+            # setup limits it was started with, so its setup is re-derived.
             values = {"parser_version": extract.PARSER_VERSION}
+            facts = (extract.parse_incomplete(folder, ctx, prefixes, root=self.root, job_lock=job_lock)
+                     if folder.is_dir() else None)
+            if facts is not None:
+                values.update({c: getattr(facts, c) for c in _RECOVERED_COLUMNS})
+            lock = extract.inflate(row["raw_lock_z"])
+            if isinstance(lock, Mapping):
+                setup = extract.setup_provenance(lock, _loads(row.get("prebake_json")))
+                values.update({c: setup[c] for c in _SETUP_FACTS})
             merged.update(values)
         outcome, reason = classify.classify(merged)
         values.update(outcome=outcome, outcome_reason=reason, classifier_version=classify.CLASSIFIER_VERSION,
@@ -970,9 +1051,16 @@ class Ledger:
             "cost_usd": cost, "cost_at_ingest_usd": None if status == "unmeasured" else r["cost_at_ingest_usd"],
             "reported_cost_usd": r["reported_cost_usd"], "unpriced_models": unpriced,
             "primary_share": r["primary_share"], "started_at": r["started_at"], "finished_at": r["finished_at"],
+            # What only the harness's log or the prices could check (extract.trial_flags); {} for none.
+            "flags": _loads(r["flags_json"], {}) or {},
             "phases": {"env_setup_sec": r["env_setup_sec"], "agent_setup_sec": r["agent_setup_sec"],
                        "agent_exec_sec": r["agent_exec_sec"], "verifier_sec": r["verifier_sec"]},
             "total_sec": r["total_sec"],
+            # How the harness got installed: stock, prebaked, fallback (stock after a pre-baked image was
+            # not usable) or None (killed before its environment started); provenance, never identity.
+            "setup": {"mode": r["setup_mode"], "limit_sec": r["agent_setup_limit_sec"], "image": r["prebake_image"],
+                      "image_id": r["prebake_image_id"], "recipe": r["prebake_recipe"],
+                      "baked_at": r["prebake_baked_at"], "reason": r["prebake_reason"]},
             "exclusion": ({"target_type": excl["target_type"], "action": excl["action"], "reason": excl["reason"],
                            "created_at": excl["created_at"]} if excl else None),
             "log_url": f"/api/runs/{r['run_id']}/log/{r['arm']}" if bench_here else None,
@@ -981,6 +1069,7 @@ class Ledger:
             "tokens_uncached": (max((n_input or 0) - (n_cache or 0), 0) + (n_output or 0)) if measured else None,
             "harbor_model": r["harbor_model"], "harness_version_pinned": r["harness_version_pinned"],
             "n_concurrent": r["n_concurrent"], "cap_marker": r["cap_marker"], "setup_marker": r["setup_marker"],
+            "setup_mode": r["setup_mode"],
             "agent_started": bool(r["agent_started"]), "rewards": _loads(r["rewards_json"]),
             "trial_uid": r["trial_uid"], "trial_dir": r["trial_dir"], "ingest_via": r["ingest_via"],
             "ingested_at": r["ingested_at"], "updated_at": r["updated_at"],
@@ -1050,7 +1139,7 @@ class Ledger:
         out.update(
             config=_loads(row["config_json"], {}),
             exception_message=extract.exception_message(raw) if isinstance(raw, Mapping) else None,
-            raw=raw, lock=extract.inflate(row["raw_lock_z"]),
+            raw=raw, lock=extract.inflate(row["raw_lock_z"]), prebake=_loads(row["prebake_json"]),
             trial_dir=row["trial_dir"], trial_dir_exists=absolute.exists(),
         )
         return out
@@ -1102,7 +1191,7 @@ class Ledger:
             rows = conn.execute(
                 "SELECT profile, source, provider, model, family, implementation, harness_version, harbor_version, "
                 "effort, dataset, dataset_snapshot, task, task_digest, run_key, outcome, config_hash, config_label, "
-                "options_json, cautions_json, started_at FROM trials").fetchall()
+                "options_json, cautions_json, started_at, setup_mode FROM trials").fetchall()
             runs = {r["run_key"]: dict(r) for r in conn.execute(
                 "SELECT run_key, profile, run_id, source, created_at, status FROM runs")}
 
@@ -1155,6 +1244,7 @@ class Ledger:
                                  for (fam, v), n in sorted(harness_versions.items())],
             "harbor_versions": counted([r["harbor_version"] for r in rows if r["harbor_version"]]),
             "efforts": counted([r["effort"] for r in rows]),
+            "setup_modes": counted([r["setup_mode"] for r in rows]),
             "datasets": [{"value": ds, "snapshots": [{"id": s, "trials": n} for s, n in
                                                      sorted(snaps.items(), key=lambda kv: str(kv[0]))]}
                          for ds, snaps in sorted(datasets.items(), key=lambda kv: (kv[0] is None, str(kv[0])))],
@@ -1251,8 +1341,10 @@ class Ledger:
     def snapshots(self) -> list[dict]:
         self._require()
         with self._conn() as conn:
+            # direction: how its multiples read; null for one saved before it was recorded (baseline / harness).
             rows = conn.execute("SELECT id, name, created_at, fingerprint, "
-                                "json_extract(response_json, '$.provenance.trials_used') AS trials_used "
+                                "json_extract(response_json, '$.provenance.trials_used') AS trials_used, "
+                                "json_extract(response_json, '$.provenance.direction') AS direction "
                                 "FROM report_snapshots ORDER BY created_at DESC, id DESC").fetchall()
         return [dict(r) for r in rows]
 
@@ -1282,7 +1374,7 @@ class Ledger:
             "classifier_version": classify.CLASSIFIER_VERSION, "stats_version": _stats_version(),
             "trials": 0, "runs": 0, "by_profile": {}, "by_outcome": {}, "last_ingest_at": None,
             "rescan": {"running": self.rescan_running, "last": None}, "last_error": self._last_error,
-            "last_backup": None, "pricing_sha": pricing.table_sha(), "seeded_exclusions": [],
+            "last_backup": None, "last_rederive": None, "pricing_sha": pricing.table_sha(), "seeded_exclusions": [],
             "journal_mode": self.journal_mode, "warnings": list(self.warnings),
         }
         if not self._available:
@@ -1304,6 +1396,7 @@ class Ledger:
         out["rescan"]["last"] = _loads(meta.get("last_rescan"))
         out["last_error"] = self._last_error or _loads(meta.get("last_error"))
         out["last_backup"] = meta.get("last_backup")
+        out["last_rederive"] = _loads(meta.get("last_rederive"))
         out["seeded_exclusions"] = [
             {"target_type": t, "target_id": i, "reason": reason,
              "effective_action": (latest.get((t, i)) or {}).get("action")}
@@ -1357,31 +1450,34 @@ class Ledger:
                 old.unlink()
         return target
 
-    def export_rows(self, f: Filters, fmt: str = "csv") -> Iterator[str]:
+    def export_rows(self, f: Filters, fmt: str = "csv", filters: str | None = None) -> Iterator[str]:
         """TrialRows as CSV (UTF-8 BOM, CRLF, objects as JSON text) or JSON
-        lines. Raw JSON is never exported. Validation and the query run on
-        the call, not on the first iteration, so a bad format or a busy
-        ledger fails before a streamed response has sent its headers."""
+        lines. Raw JSON is never exported. filters (the filters used, as
+        text) adds a last column or field of that name to every row.
+        Validation and the query run on the call, not on the first
+        iteration, so a bad format or a busy ledger fails before a streamed
+        response has sent its headers."""
         if fmt not in ("csv", "jsonl"):
             raise ValueError("format must be csv or jsonl")
         self._require()
         _, rows = self.query(f, order="started_at ASC")
-        return self._export_chunks(rows, fmt)
+        return self._export_chunks(rows, fmt, filters)
 
     @staticmethod
-    def _export_chunks(rows: list[dict], fmt: str) -> Iterator[str]:
+    def _export_chunks(rows: list[dict], fmt: str, filters: str | None = None) -> Iterator[str]:
+        extra = {} if filters is None else {"filters": filters}
         if fmt == "jsonl":
             for r in rows:
-                yield json.dumps({k: r[k] for k in EXPORT_COLUMNS}, ensure_ascii=False) + "\n"
+                yield json.dumps({**{k: r[k] for k in EXPORT_COLUMNS}, **extra}, ensure_ascii=False) + "\n"
             return
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(EXPORT_COLUMNS)
+        writer.writerow([*EXPORT_COLUMNS, *extra])
         yield "\ufeff" + buf.getvalue()  # the BOM makes Excel read UTF-8
         for r in rows:
             buf.seek(0)
             buf.truncate()
-            writer.writerow([_csv_value(r[k]) for k in EXPORT_COLUMNS])
+            writer.writerow([*(_csv_value(r[k]) for k in EXPORT_COLUMNS), *extra.values()])
             yield buf.getvalue()
 
 

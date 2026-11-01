@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> None:
 
     import uvicorn
 
-    from . import keys, procs, schemas, settings
+    from . import keys, prebake, procs, schemas, settings
     from .server import State, create_app
 
     settings.prepare_process_env()
@@ -47,6 +47,9 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"Config error ({settings.BASE_CONFIG.name} + {settings.OVERRIDES.name}): {exc}") from None
     procs.install_console_close_handler(state.manager.emergency_stop)
     threading.Thread(target=schemas.warm, args=(state.cfg,), name="schemas", daemon=True).start()
+    # Records each arm's install once (Harbor's agent code takes 5-13 s to load), so LAUNCH's first plan and the
+    # 'Pre-baked images' readiness row do not wait for it.
+    threading.Thread(target=prebake.warm, args=(state.cfg,), name="prebake", daemon=True).start()
     state.ledger.start_rescan_thread()
     state.queue.start_worker()  # the queue always loads paused; nothing starts until a person presses Start
 

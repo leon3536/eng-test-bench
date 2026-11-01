@@ -1,7 +1,7 @@
 /* Demo mode: simulated runs, so the live monitor and the analysis views can be
    previewed without spending anything. Loaded only when the page URL has ?demo,
    before app.js starts, followed by demo-report.js, demo-designs.js,
-   demo-queue.js and demo-assistant.js (DEMO_SCRIPTS in app.js).
+   demo-queue.js, demo-assistant.js and demo-images.js (DEMO_SCRIPTS in app.js).
 
    It wraps fetch. /api/state gets simulated runs added to the real state; a
    simulated run's results, log and cancel are answered here. Everything else,
@@ -14,11 +14,16 @@
    on a non-Claude model, so its comparisons carry verdict notes); and the
    addendum's usage_status per trial with measured/excluded/unmeasured/
    lower_bound per arm. "Run again as design" on a simulated run is refused.
+   The live simulated run is a series of task races (run.schedule tasks): per
+   task its images build, every arm races on it within max_containers, and the
+   images are removed; its record carries run.race as runs.RunManager writes it.
 
    Billed paths are never sent: POST /api/runs, /api/queue/items, /api/queue/start,
    /api/queue/items/{id}/retry, /api/assistant/conversations/{cid}/messages and
    /retry, and /api/keys/{ENV_KEY}/test. A demo file may answer one in the
-   browser; if none does, it is refused here with a 409. */
+   browser; if none does, it is refused here with a 409. Image builds, pulls,
+   prunes and the disk measurement (POST /api/prebake/...) bill nothing but
+   change Docker, so they are held to the same rule. */
 
 (() => {
   'use strict';
@@ -44,11 +49,13 @@
   const DOLLAR_CAPPED = new Set(['claude-code', 'mini-swe-agent']);  // harnesses whose per-trial dollar cap the plan counts
   const KEY_PROBLEM = /\b[A-Z][A-Z0-9_]*_API_KEY is not set\b/;  // a plan problem the demo treats as solved
   const TRIAL_CAP = 15;
+  // config/reference.yaml as the server reads it: multiples as harness ÷ Claude Code (a published 2x is 1/2).
   const REFERENCE = {
-    consensus: {low: 2.0, high: 3.0, source: 'S1-S5: changing harness moves cost 2x to 3x'},
+    consensus: {low: 1 / 3, high: 1 / 2, source: 'S1-S5: changing harness moves cost 2x to 3x'},
     arms: {
-      pi: {tokens: {value: 3.1, source: 'S10 via S9: 742k vs 236k tokens per task, same model (secondhand)'}},
-      strands: {cost: {value: 2.1, source: 'S8: $0.74 to $1.57 per trial on Anthropic models (estimated, vendor study)'}},
+      pi: {tokens: {value: 1 / 3.1, source: 'S10 via S9: 742k vs 236k tokens per task, same model (secondhand)'}},
+      strands: {cost: {value: 1 / 2.1,
+        source: 'S8: $0.74 to $1.57 per trial on Anthropic models (estimated, vendor study)'}},
       'mini-swe-agent': {note: 'S2: 829 vs 16,581 tokens of preamble per step (20x); no per-task total published'},
       'terminus-2': {note: "S3: no cost figures; on Opus 4.6 it scored 63.8% against Claude Code's 70.1%"},
     },
@@ -77,6 +84,75 @@
     };
   }
 
+  /** One trial's simulated outcome and record. */
+  function drawTrial(r, arm, p, task, difficulty, priceScale) {
+    const minutes = p.min[0] + r() * (p.min[1] - p.min[0]) * difficulty;
+    const errored = r() < p.err;
+    const passed = errored ? null : r() < Math.min(0.95, p.pass / difficulty * 0.85);
+    const err = errored ? ERRORS[Math.floor(r() * ERRORS.length)] : null;
+    const cause = err ? err[2] : null;
+    const usage = cause === 'setup_failure' ? 'none' : cause === 'agent_limit' ? (r() < 0.5 ? 'unmeasured' : 'lower_bound') : 'full';
+    const recorded = usage === 'full' || usage === 'lower_bound';
+    const size = recorded ? p.tokens * (0.55 + r() * 1.05) * difficulty * (errored ? 0.4 : 1) : 0;
+    const nOutput = Math.round(size * p.out);
+    const nInput = Math.round(size - nOutput);
+    const nCache = Math.round(nInput * Math.min(0.97, p.cache * (0.9 + r() * 0.15)));
+    const cost = (((nInput - nCache) * PRICE.input + nCache * PRICE.cache + nOutput * PRICE.output) / 1e6) * (priceScale || 1);
+    const id = Math.floor(r() * 2 ** 31).toString(36).slice(0, 7);
+    return {minutes, row: {
+      arm: arm.name, family: arm.family || arm.agent, task, trial: `${task}__${id}`,
+      reward: passed === null ? null : passed ? 1.0 : 0.0, reward_valid: passed !== null, passed,
+      error: err ? err[0] : null, failure_cause: cause, error_message: err ? err[1] : '',
+      n_input: nInput, n_cache: nCache, n_output: nOutput,
+      computed_cost: cost, reported_cost: p.reports && recorded ? cost * (1.03 + r() * 0.06) : null,
+      cost_partial: false, unpriced_floor_cost: 0, reported_mispriced: false,
+      unpriced_models: [], models: !recorded ? [] : p.helper ? ['claude-haiku-5-5', arm.model] : [arm.model],
+      other_model_tokens: p.helper && recorded ? Math.round(size * p.helper) : 0,
+      minutes,
+      usage_status: usage === 'none' ? 'full' : usage,  // a trial that never reached the model recorded all it spent: nothing
+    }};
+  }
+
+  /** A run of task races laid out up front: per task a build (pre-baked images), then every arm's lane on that
+      task, at most maxContainers at once, in arm order; the next task starts when the last lane ends. */
+  function simulateRace(spec) {
+    const r = rng(spec.seed);
+    const difficulty = spec.tasks.map(() => 0.45 + r() * 0.9);
+    const arms = spec.arms.map((arm) => ({...arm, trials: [], lanes: {}, start: null, preflightEnd: null, end: 0, fail: false}));
+    const races = [];
+    let t = 0;
+    spec.tasks.forEach((task, ti) => {
+      const build = t + 0.6 + r() * 0.8;   // the images of this task, built at once
+      const slots = Array(Math.max(1, spec.maxContainers)).fill(build);
+      const lanes = {};
+      for (const arm of arms) {
+        const slot = slots.indexOf(Math.min(...slots));
+        const begin = slots[slot];
+        const preflight = begin + 0.3;
+        const trials = [];
+        let end = preflight;
+        for (let attempt = 0; attempt < spec.attempts; attempt++) {
+          const drawn = drawTrial(r, arm, PROFILES[arm.agent] || FALLBACK, task, difficulty[ti], spec.priceScale);
+          trials.push({begin: end, end: end + drawn.minutes, row: drawn.row});
+          end += drawn.minutes;
+        }
+        lanes[arm.name] = {begin, preflight, end, trials};
+        arm.trials.push(...trials);
+        arm.lanes[task] = lanes[arm.name];
+        if (arm.start === null) {
+          arm.start = begin;
+          arm.preflightEnd = preflight;
+        }
+        arm.end = Math.max(arm.end, end + 0.1);
+        slots[slot] = end;
+      }
+      const end = Math.max(...Object.values(lanes).map((l) => l.end)) + 0.2;
+      races.push({task, start: t, build, end, lanes});
+      t = end;
+    });
+    return {arms, races};
+  }
+
   /** Lays out a whole run up front: when each arm and trial starts and ends, and how each trial turns out. */
   function simulate(spec) {
     const r = rng(spec.seed);
@@ -84,7 +160,8 @@
     const tasks = spec.tasks;
     const difficulty = tasks.map(() => 0.45 + r() * 0.9);
     const slots = Array(spec.parallelArms).fill(0);
-    const arms = spec.arms.map((arm) => {
+    const raced = spec.schedule === 'tasks' ? simulateRace(spec) : null;
+    const arms = raced ? raced.arms : spec.arms.map((arm) => {
       const p = PROFILES[arm.agent] || FALLBACK;
       const slot = slots.indexOf(Math.min(...slots));
       const start = slots[slot];
@@ -147,7 +224,64 @@
       }
     }
     const end = Math.max(...arms.map((a) => a.end));
-    return {...spec, arms, budgetStop, endMin: budgetStop !== null ? budgetStop + 0.1 : end, cancelAt: null, ms};
+    return {...spec, arms, races: raced ? raced.races : null, budgetStop,
+      endMin: budgetStop !== null ? budgetStop + 0.1 : end, cancelAt: null, ms};
+  }
+
+  /** run.race at time nowMin, as runs.RunManager records it (tasks, lanes, images, build, removed). */
+  function raceRecord(run, nowMin, stopMin, stopReason, at, spendOf) {
+    if (!run.races) return {};
+    const prefix = 'benchbake';
+    let current = null;
+    const tasks = run.races.map((race, ti) => {
+      const stopped = stopMin !== null && stopMin <= nowMin;
+      const cut = stopped && race.start >= stopMin;
+      const over = nowMin >= race.end || (stopped && race.end > stopMin && !cut);
+      let status = nowMin < race.start ? 'waiting' : nowMin < race.build ? 'building'
+        : nowMin < race.end ? 'racing' : 'done';
+      if (cut) status = stopReason === 'cancelled' ? 'cancelled' : 'skipped';
+      else if (stopped && race.end > stopMin) status = stopReason === 'cancelled' ? 'cancelled' : 'budget_stopped';
+      if (status === 'building' || status === 'racing') current = race.task;
+      const lanes = {};
+      const images = {};
+      for (const arm of run.arms) {
+        const lane = race.lanes[arm.name];
+        const done = lane.trials.filter((t) => t.end <= nowMin && (!stopped || t.end <= stopMin));
+        const live = status === 'racing' && nowMin >= lane.begin && nowMin < lane.end;
+        const laneStatus = cut ? status : status === 'budget_stopped' || status === 'cancelled'
+          ? (lane.end > stopMin ? status : 'done')
+          : nowMin < lane.begin || status === 'building' || status === 'waiting' ? 'queued'
+            : nowMin < lane.preflight ? 'preflight' : live ? 'running' : 'done';
+        lanes[arm.name] = {
+          name: arm.name, family: arm.family || arm.agent, status: laneStatus, message: '',
+          trials_total: lane.trials.length, trials_done: done.length,
+          spend_usd: Math.round(sum(done, spendOf) * 1e4) / 1e4,
+          started_at: nowMin >= lane.begin && !cut ? iso(at(lane.begin)) : null,
+          finished_at: laneStatus === 'done' ? iso(at(lane.end)) : null, returncode: laneStatus === 'done' ? 0 : null,
+          trials_running: laneStatus === 'running' ? lane.trials.filter((t) => t.begin <= nowMin && t.end > nowMin).length : 0,
+          reserve_usd: 0, trials_killed: 0, trials_unmeasured: 0, cleanup_pending: laneStatus === 'running', pid: null,
+          setup_fallbacks: 0, setup_note: '',
+        };
+        const stock = arm.agent === 'pi' && !(arm.model || '').includes('/');  // the demo's unpinned harness
+        const image = stock ? null : `${prefix}/${arm.family || arm.agent}-demo-r0a1b2c3d4e/example/${race.task}:1`;
+        images[arm.name] = {status: stock ? 'stock' : status === 'waiting' ? 'waiting'
+          : status === 'building' ? (ti % 4 === 1 ? 'ready' : 'building') : ti % 4 === 1 ? 'ready' : 'built',
+        image, message: stock ? 'no pinned version, so Harbor installs the latest in every trial' : ''};
+      }
+      const built = Object.values(images).filter((i) => i.image && (ti % 4 !== 1)).length;
+      return {
+        task: race.task, status, arms: run.arms.map((a) => a.name), lanes, images,
+        build: status === 'waiting' || cut ? {id: null, status: null, images: 0, message: '', cache: {}}
+          : built ? {id: `b-demo-${ti + 1}`, status: status === 'building' ? 'running' : 'done', images: built, message: '',
+            cache: status === 'building' ? {before: 120}
+              : {before: 120, source: 'buildx', created: built * 9, pruned: built * 9, left: 0, failed: 0}}
+            : {id: null, status: 'ready', images: 0, message: '', cache: {}},
+        removed: over ? Object.values(images).filter((i) => i.image).map((i) => i.image) : [], kept: {},
+        started_at: nowMin >= race.start && !cut ? iso(at(race.start)) : null,
+        finished_at: over && !cut ? iso(at(Math.min(race.end, stopped ? stopMin : race.end))) : null,
+      };
+    });
+    return {current, max_containers: run.maxContainers, done: tasks.filter((t) => t.finished_at).length, tasks};
   }
 
   /** The run record /api/state would hold for a simulation at time now. */
@@ -157,16 +291,27 @@
     const stopReason = run.cancelAt !== null ? 'cancelled' : run.budgetStop !== null ? 'budget_stopped' : null;
     const nowMin = (now - run.start) / run.ms;
     const spendOf = (t) => Math.max(t.row.computed_cost, t.row.reported_cost || 0);
+    const race = raceRecord(run, nowMin, stopMin, stopReason, at, spendOf);
+    // A task race's trials without a pre-baked image: the finished ones on tasks whose image is stock or failed.
+    const raceFallbacks = (name) => (race.tasks || []).reduce((n, e) => {
+      const image = (e.images || {})[name] || {};
+      return n + (['stock', 'failed'].includes(image.status) ? ((e.lanes || {})[name] || {}).trials_done || 0 : 0);
+    }, 0);
     const arms = run.arms.map((a, index) => {
       const total = run.tasks.length * run.attempts;
       const finished = a.trials.filter((t) => t.end <= nowMin && (stopMin === null || t.end <= stopMin));
       const unmeasured = finished.filter((t) => t.row.usage_status === 'unmeasured').length;
+      // Trials that found no pre-baked image (their prebake.json): under arms, the second arm's first finished
+      // trial; in a task race, what its lanes' images say.
+      const fallbacks = run.races ? raceFallbacks(a.name) : index === 1 && finished.length ? 1 : 0;
       const out = {
         name: a.name, family: a.family || a.agent, status: 'queued', message: '', trials_total: total, trials_done: finished.length,
         spend_usd: Math.round(sum(finished, spendOf) * 1e4) / 1e4,
         started_at: null, finished_at: null, returncode: null,
         // v2 counters, as runs.ArmRun reports them.
         trials_running: 0, reserve_usd: 0, trials_killed: 0, trials_unmeasured: unmeasured, cleanup_pending: false, pid: null,
+        setup_fallbacks: fallbacks,
+        setup_note: fallbacks ? `${fallbacks} trial${fallbacks === 1 ? '' : 's'} ran stock setup (no pre-baked image)` : '',
       };
       const lowerBound = unmeasured
         ? ` ${unmeasured} finished trial(s) ran but recorded no usage; their spend is unknown, so this arm's recorded spend is a lower bound.` : '';
@@ -226,8 +371,11 @@
       n_attempts: run.attempts,
       worst_case_capped_usd: 0,
       uncapped_arms: [],
-      peak_containers: Math.min(run.parallelArms, run.arms.length) * run.nConc,
+      peak_containers: run.schedule === 'tasks' ? Math.min(run.maxContainers, run.arms.length)
+        : Math.min(run.parallelArms, run.arms.length) * run.nConc,
+      schedule: run.schedule === 'tasks' ? 'tasks' : 'arms',
       warnings: [],
+      skipped_arms: [],  // arms whose every task was reused from the ledger; a simulated run reuses nothing
       arms: run.arms.map((a) => ({
         name: a.name, agent: a.agent, family: a.family || a.agent, kind: a.kind || 'name', provider: a.provider || 'anthropic',
         model: `${a.provider || 'anthropic'}/${a.model}`, effort: a.agent === 'strands' ? 'harness default' : 'medium',
@@ -243,7 +391,10 @@
       budget_usd: run.budget, spend_usd: Math.round(sum(arms, (a) => a.spend_usd) * 1e4) / 1e4,
       reserve_usd: Math.round(sum(arms, (a) => a.reserve_usd) * 1e4) / 1e4,
       tasks: run.tasks, status, message: '', arms, plan,
-      config: {baseline_arm: run.baseline, run: {n_concurrent: run.nConc, parallel_arms: run.parallelArms}},
+      schedule: run.schedule === 'tasks' ? 'tasks' : 'arms',
+      race,
+      config: {baseline_arm: run.baseline, run: {n_concurrent: run.nConc, parallel_arms: run.parallelArms,
+        schedule: run.schedule === 'tasks' ? 'tasks' : 'arms', max_containers: run.maxContainers}},
       profile: demoConfig ? demoConfig.profile : 'default', source: 'config', design_ref: null, spec_hash: '', harbor_version: '0.25.0',
       // runs.Run.to_dict always sends these three; nothing in the page reads them yet.
       dataset: {name: 'terminal-bench@2.0'}, spec: {}, resolved_arms: [],
@@ -296,8 +447,8 @@
     const claude = (s) => /^claude-/.test(String(s.model || '').split('/').pop());
     return summaries.filter((s) => s.arm !== baseline && s.trials).map((s) => {
       const ref = REFERENCE.arms[s.family] || REFERENCE.arms[s.agent] || {};
-      const tokensX = ratio(base.mean_tokens, s.mean_tokens);
-      const costX = ratio(base.mean_cost, s.mean_cost);
+      const tokensX = ratio(s.mean_tokens, base.mean_tokens);  // arm ÷ baseline, as results.compare
+      const costX = ratio(s.mean_cost, base.mean_cost);
       const publishedCost = ref.cost || REFERENCE.consensus;
       const applies = claude(s) && claude(base);
       return {
@@ -388,7 +539,9 @@
       design_ref: {design_id: 'd-sample-on-deepseek-3f2a', version: 2, author: 'assistant', conversation_id: 'c-20261027-101500-ab12', queue_item: 'q-0002'},
     };
     runs = [
-      make(100e3, {mode: 'sample', tasks: tasks.slice(0, 10), seed: 7, msPerMinute: 1100}),
+      // The live run: task races, every arm on one task at a time, at most 6 containers (one per CPU core).
+      make(100e3, {mode: 'sample', tasks: tasks.slice(0, 10), seed: 7, msPerMinute: 1100, schedule: 'tasks',
+        maxContainers: 6}),
       make(2 * day, {mode: 'design', slug: 'sample-on-deepse-v2', tasks: tasks.slice(0, 10), seed: 42, arms: deepseek, priceScale: 0.08,
         budget: 20, extra: designRun}),
       make(3 * day + 5 * 3600e3, {mode: 'pilot', tasks: tasks.slice(0, 1), seed: 3, failArms: [arms[1] && arms[1].name]}),
@@ -408,6 +561,9 @@
     ['POST', /^\/api\/queue\/items\/[^/]+\/retry$/, 'retrying a queue item is simulated only'],
     ['POST', /^\/api\/assistant\/conversations\/[^/]+\/(messages|retry)$/, 'the assistant model is never called'],
     ['POST', /^\/api\/keys\/[^/]+\/test$/, 'key tests call the provider, so they are off'],
+    // Not billed, but they change Docker: demo-images.js simulates them.
+    ['POST', /^\/api\/prebake\/(build|pull|prune|disk)$/, 'building, pulling and pruning images is simulated only'],
+    ['POST', /^\/api\/prebake\/builds\/[^/]+\/cancel$/, 'image builds are simulated only'],
   ];
 
   function billed(method, path) {
@@ -435,6 +591,7 @@
 
   const handlers = [];    // {method, pattern, handle}, tried in registration order
   const stateHooks = [];
+  const planHooks = [];
 
   /** The first registered handler's answer, or null when none answered. */
   async function answer(input, init) {
@@ -476,6 +633,11 @@
     /** fn(state) edits each /api/state answer in place (its own block, e.g. state.queue), after the simulated runs are in. */
     onState(fn) {
       stateHooks.push(fn);
+    },
+    /** fn(plan) edits each GET /api/plan answer (LAUNCH's real plan) in place, e.g. images a simulated build
+        made ready. */
+    onPlan(fn) {
+      planHooks.push(fn);
     },
     json,
     /** An error answer the page shows as it would the server's: {"detail": ...}. */
@@ -530,7 +692,8 @@
       return refuse(`run ${decodeURIComponent(again[1])} is simulated, so the bench has no spec to run again`);
     }
     // LAUNCH: the real plan, with "X_API_KEY is not set" taken out (as demo-designs.js does for checks), so the
-    // demo can show LAUNCH's two-step confirm. The confirm's second press is still refused below.
+    // demo can show LAUNCH's two-step confirm. The confirm's second press is still refused below. With
+    // reuse=measured the real server resolves it, so the trials it reuses are the real ledger's.
     if (path === '/api/plan' && method === 'GET') {
       const res = await server(input, init);
       if (!res.ok) return res;
@@ -540,6 +703,13 @@
       plan.problems = keep(plan.problems);
       for (const a of plan.arms || []) a.problems = keep(a.problems);
       if (plan.problems.length < before) plan.warnings = [...(plan.warnings || []), 'Demo: provider keys count as set here, so missing keys are not listed.'];
+      for (const hook of planHooks) {
+        try {
+          hook(plan);
+        } catch (err) {
+          console.error('A demo plan hook failed:', err);
+        }
+      }
       return json(plan);
     }
     if (path === '/api/state' && method === 'GET') {

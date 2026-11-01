@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import datasets, designs, extract, harnesses, pricing, report, stats
-from .settings import Config, Price, RunSettings
-from .spec import ArmSpec, spec_from_design
+from .settings import SCHEDULE_TASKS, Config, Price, RunSettings
+from .spec import ArmSpec, race_lane_slots, race_peak, spec_from_design
 
 REPLICATES = 2000
 # The estimate runs inside tool calls, queue adds and the live design check,
@@ -48,14 +48,23 @@ HIGH_CONFIDENCE_TASKS = 8
 MIN_POOL = 3                # fewer values than this get an extra spread
 INFRA_NOTE_RATE = 0.3
 DEFAULT_TIMEOUT_SEC = 900.0
-CONSENSUS_MIDPOINT = 2.5    # the middle of the published 2x-3x
+CONSENSUS_MIDPOINT = 1 / 2.5    # harness / baseline: the middle of the published 2x-3x, as Claude Code / harness
 MATCHES = ("cell", "family")
 BASES = ("measured", "measured_any_options", "borrowed", "prior")
+# How an arm's trials get their harness: Harbor's install in each trial
+# (stock; a pre-baked arm's fallback is one too) or a pre-baked image.
+SETUP_MODES = ("stock", "prebaked")
+# Agent setup on a pre-baked image, in seconds, until the ledger has measured
+# some: Harbor's own Trial (install_only) on the prototype images, 5-6 at once.
+PREBAKE_SETUP_PRIOR_SEC = {"claude-code": 1.0, "terminus-2": 3.0, "mini-swe-agent": 4.0, "pi": 20.0,
+                           "strands": 2.0}
+SETUP_TIMEOUT = "AgentSetupTimeoutError"
 
 _MANUAL_PREFIXES = ("excluded by hand", "run excluded by hand")
 
 ASSUMPTIONS = (
-    "Harbor does not report cache writes; trial cache writes are priced at the input rate.",
+    "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in "
+    "each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
     "Infrastructure failures are not discounted from spend.",
     "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same "
     "difficulty, then from the whole cell.",
@@ -65,8 +74,15 @@ ASSUMPTIONS = (
     "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials "
     "pair by the report's rule (report.match_on, report.same_run_only).",
     "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design "
-    "order on parallel_arms slots.",
+    "order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing "
+    "pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on "
+    "n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+    "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when "
+    "every trial should get one) in place of the setup each measured trial had: the ledger's median for that "
+    "setup, else a prior for pre-baked images.",
 )
+REUSE_ASSUMPTION = ("Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean "
+                    "measured trial cost x attempts, and its trials count as pairs already in hand.")
 
 
 # Rows ------------------------------------------------------------------------------------------
@@ -254,7 +270,10 @@ def _cell_summary(cfg: Config, key: tuple[str, ...], rows: list[Mapping[str, Any
         "minutes_per_trial": {
             "agent": _minute_summary([r.get("agent_minutes") for r in measured + _unrecorded(used)]),
             "total": _minute_summary([r.get("total_minutes") for r in measured + _unrecorded(used)]),
+            # Without the harness's setup, which a pre-baked image cuts from minutes to seconds.
+            "ex_setup": _minute_summary([r.get("minutes_ex_setup") for r in measured + _unrecorded(used)]),
         },
+        "setup_modes": dict(sorted(Counter(r.get("setup_mode") or "unknown" for r in used).items())),
         "pass_rate": pass_rate(used, cfg.stats.confidence),
         "infra_failures": {"rate": round(len(infra) / len(finished), 4) if finished else None,
                            "trials": len(infra), "finished": len(finished)},
@@ -322,6 +341,11 @@ class CellModel:
     config_hash: str | None = None
     unpriced: bool = False
     notes: list[str] = field(default_factory=list)
+    setup: dict[str, Any] | None = None    # setup_figure the minutes were planned with; None: each trial's own
+
+    @property
+    def setup_sec(self) -> float | None:
+        return (self.setup or {}).get("seconds")
 
 
 def baseline_family(cfg: Config) -> str:
@@ -334,9 +358,10 @@ def baseline_family(cfg: Config) -> str:
 
 
 def reference_multiple(reference: Mapping[str, Any] | None, family: str) -> tuple[float, str]:
-    """The published baseline/harness multiple for a family, and where it
-    came from: its tokens figure, else its cost figure, else the consensus."""
-    reference = reference if isinstance(reference, Mapping) else {}
+    """The published harness / baseline multiple for a family, and where it
+    came from: its tokens figure, else its cost figure, else the consensus.
+    Read the same whichever way reference.yaml was written."""
+    reference = stats.published_reference(reference)
     entry = (reference.get("arms") or {}).get(family) if isinstance(reference.get("arms"), Mapping) else None
     entry = entry if isinstance(entry, Mapping) else {}
     for name in ("tokens_per_trial", "cost_per_trial"):
@@ -347,20 +372,24 @@ def reference_multiple(reference: Mapping[str, Any] | None, family: str) -> tupl
     value = _figure(consensus.get("cost_per_trial"))
     if value is not None:
         return value, "reference consensus cost_per_trial"
-    return CONSENSUS_MIDPOINT, "the published 2x-3x midpoint"
+    return CONSENSUS_MIDPOINT, "the published 0.33x-0.5x, midpoint 0.4x"
 
 
 def _figure(published: Any) -> float | None:
+    """One multiple for a published figure: its value, or the middle of its
+    range. The middle is the harmonic one, 1 / (mean of 1/low and 1/high):
+    ranges were published as Claude Code / harness, and that keeps 2x-3x
+    (0.333-0.5 here) at 1/2.5, as it was planned with before."""
     if not isinstance(published, Mapping):
         return None
     try:
         if published.get("value") is not None:
             value = float(published["value"])
         elif published.get("low") is not None and published.get("high") is not None:
-            value = (float(published["low"]) + float(published["high"])) / 2.0
+            value = 1.0 / ((1.0 / float(published["low"]) + 1.0 / float(published["high"])) / 2.0)
         else:
             return None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, ZeroDivisionError):
         return None
     return value if math.isfinite(value) and value > 0 else None
 
@@ -418,28 +447,97 @@ def _by_difficulty(per_task: Mapping[str, list[float]], meta: Mapping[str, Mappi
     return {k: out[k] for k in sorted(out)}
 
 
-def _infra_rate(rows: Sequence[Mapping[str, Any]]) -> tuple[float, int]:
+# Setup --------------------------------------------------------------------------------------------------
+#
+# Stock setup installs the harness in every trial (Claude Code: 334-550 s,
+# past Harbor's 360 s limit under load); a pre-baked image cuts it to seconds.
+# Minutes measured one way would mislead a plan for the other, so a trial's
+# minutes are planned as its minutes without its own setup plus the setup its
+# arm will have, and a pre-baked arm's infrastructure rate leaves out the
+# setup timeouts of trials that installed the harness themselves.
+
+def setup_mode_of(row: Mapping[str, Any]) -> str | None:
+    """How a trial got its harness, as plans count it: 'prebaked', 'stock'
+    (a fallback ran Harbor's install too), or None when not recorded."""
+    mode = row.get("setup_mode")
+    if mode == "prebaked":
+        return "prebaked"
+    return "stock" if mode in ("stock", "fallback") else None
+
+
+def expected_setup_mode(prebake: Mapping[str, Any] | None) -> str:
+    """The setup an arm's trials are planned with, from its plan entry's
+    prebake block (runs.prebake_entry): 'prebaked' when the arm can use
+    pre-baked images and no trial is expected to fall back (require mode,
+    where a missing image fails fast, or expect_stock false once every task's
+    image is ready), else 'stock'."""
+    if not isinstance(prebake, Mapping) or not prebake.get("supported"):
+        return "stock"
+    if prebake.get("mode") == "require" or prebake.get("expect_stock") is False:
+        return "prebaked"
+    return "stock"
+
+
+def setup_figure(rows: Sequence[Mapping[str, Any]], family: str, mode: str) -> dict[str, Any]:
+    """{mode, seconds, basis, trials}: the agent setup a trial of family is
+    planned with under mode. basis 'measured' is the ledger's median over the
+    family's trials set up that way that got past setup; 'prior' is
+    PREBAKE_SETUP_PRIOR_SEC for a pre-baked image; None (seconds None) leaves
+    each trial its own setup, as for a stock install never measured."""
+    if mode not in SETUP_MODES:
+        raise ValueError(f"setup mode must be one of {', '.join(SETUP_MODES)}")
+    values = sorted(60.0 * float(r["setup_minutes"]) for r in rows
+                    if r.get("family") == family and setup_mode_of(r) == mode and r.get("setup_minutes") is not None
+                    and r.get("outcome") != "incomplete" and not is_infra(r))
+    if values:
+        return {"mode": mode, "seconds": round(float(statistics.median(values)), 2), "basis": "measured",
+                "trials": len(values)}
+    if mode == "prebaked" and family in PREBAKE_SETUP_PRIOR_SEC:
+        return {"mode": mode, "seconds": PREBAKE_SETUP_PRIOR_SEC[family], "basis": "prior", "trials": 0}
+    return {"mode": mode, "seconds": None, "basis": None, "trials": 0}
+
+
+def planned_setup_sec(rows: Sequence[Mapping[str, Any]], family: str, mode: str) -> float | None:
+    """setup_figure's seconds."""
+    return setup_figure(rows, family, mode)["seconds"]
+
+
+def _infra_rate(rows: Sequence[Mapping[str, Any]], mode: str | None = None) -> tuple[float, int]:
+    """(share of finished trials that failed before using the model, finished
+    trials). Planning a pre-baked arm leaves out the setup timeouts of trials
+    that installed the harness themselves: the image is what removes them."""
     finished = _finished(rows)
+    if mode == "prebaked":
+        finished = [r for r in finished if not (r.get("exception_type") == SETUP_TIMEOUT
+                                                and setup_mode_of(r) != "prebaked")]
     if not finished:
         return 0.0, 0
     return sum(1 for r in finished if is_infra(r)) / len(finished), len(finished)
 
 
-def _minutes(row: Mapping[str, Any]) -> float | None:
+def _minutes(row: Mapping[str, Any], setup_sec: float | None = None) -> float | None:
+    """A trial's minutes; with setup_sec, those without its own agent setup
+    plus setup_sec (total_sec - agent_setup_sec + the planned setup)."""
     value = row.get("total_minutes")
-    return float(value) if value is not None and value > 0 else None
+    if value is None or value <= 0:
+        return None
+    if setup_sec is not None and row.get("minutes_ex_setup") is not None:
+        value = float(row["minutes_ex_setup"]) + setup_sec / 60.0
+    return float(value) if value > 0 else None
 
 
 def _model(basis: str, detail: str, rows: Sequence[Mapping[str, Any]], per_task: dict[str, list[float]],
            meta: Mapping[str, Mapping[str, Any]], p_infra: tuple[float, int], *, pool: list[float] | None = None,
            minute_rows: Sequence[Mapping[str, Any]] | None = None, config_hash: str | None = None,
-           unrecorded: Sequence[Mapping[str, Any]] = ()) -> CellModel:
+           unrecorded: Sequence[Mapping[str, Any]] = (), setup: dict[str, Any] | None = None) -> CellModel:
     """unrecorded: counted trials of these measured ones' cell that ran but
     recorded no usage. Each is drawn at the cell's most expensive measured
     trial rather than left out, which would price the tasks a harness timed
-    out on like its typical ones; the confidence still counts measured tasks."""
+    out on like its typical ones; the confidence still counts measured tasks.
+    setup: the setup_figure each trial's minutes are planned with."""
     minute_rows = rows if minute_rows is None else minute_rows
-    minutes = _values_by_task(minute_rows, _minutes)
+    setup_sec = (setup or {}).get("seconds")
+    minutes = _values_by_task(minute_rows, lambda r: _minutes(r, setup_sec))
     n_tasks = len(per_task)
     notes = []
     top = max((v for vs in per_task.values() for v in vs), default=None)
@@ -464,13 +562,13 @@ def _model(basis: str, detail: str, rows: Sequence[Mapping[str, Any]], per_task:
         by_difficulty=_by_difficulty(per_task, meta), minutes_per_task=minutes,
         minutes_pool=[v for task in sorted(minutes) for v in minutes[task]], p_infra=p_infra[0],
         n_trials=len(rows), n_tasks=n_tasks, runs=sorted({str(r.get("run_key")) for r in rows}),
-        infra_finished=p_infra[1], config_hash=config_hash, notes=notes,
+        infra_finished=p_infra[1], config_hash=config_hash, notes=notes, setup=setup,
     )
 
 
 def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, config_hash: str | None = None,
                meta: Mapping[str, Mapping[str, Any]] | None = None, family_only: bool = False,
-               guess: bool = True) -> CellModel:
+               guess: bool = True, setup_mode: str | None = None) -> CellModel:
     """The first basis that applies, in order: measured (this configuration,
     at least 3 tasks), measured_any_options (the family on this model),
     borrowed (the family's tokens on another model, repriced here), prior.
@@ -478,7 +576,10 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
     Without config_hash, guess=True guesses it from the planner's kwargs for
     the profile's run settings; a caller that already tried passes
     guess=False, so a failed lookup is not repeated. family_only skips the
-    configuration level (coverage gaps)."""
+    configuration level (coverage gaps). setup_mode ('stock' or 'prebaked',
+    see expected_setup_mode) plans every trial's minutes with that setup and
+    leaves stock setup timeouts out of a pre-baked arm's infrastructure rate;
+    None keeps each measured trial's own setup."""
     meta = task_meta(cfg) if meta is None else meta
     rows = usable(rows)
     family = arm.family or arm.agent
@@ -488,7 +589,8 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
     if config_hash is None and guess and not family_only:
         config_hash = guess_config_hash(cfg, arm)
     cell_rows = [r for r in on_model if config_hash and r.get("config_hash") == config_hash]
-    infra = _infra_rate(cell_rows) if _finished(cell_rows) else _infra_rate(on_model)
+    infra = _infra_rate(cell_rows, setup_mode) if _finished(cell_rows) else _infra_rate(on_model, setup_mode)
+    setup = setup_figure(rows, family, setup_mode) if setup_mode else None
     where = f"{provider}:{model}"
 
     valid = [r for r in cell_rows if cost_of(r) is not None]
@@ -496,7 +598,7 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
     if not family_only and len(per_task) >= MEASURED_MIN_TASKS:
         return _model("measured", f"{len(valid)} trials on {len(per_task)} tasks of this configuration on {where}",
                       valid, per_task, meta, infra, minute_rows=valid + _unrecorded(cell_rows),
-                      config_hash=config_hash, unrecorded=_unrecorded(cell_rows))
+                      config_hash=config_hash, setup=setup, unrecorded=_unrecorded(cell_rows))
 
     valid = [r for r in on_model if cost_of(r) is not None]
     per_task = _values_by_task(valid, cost_of)
@@ -504,7 +606,7 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
         return _model("measured_any_options",
                       f"{len(valid)} trials on {len(per_task)} tasks of {family} on {where}, any options",
                       valid, per_task, meta, infra, minute_rows=valid + _unrecorded(on_model), config_hash=config_hash,
-                      unrecorded=_unrecorded(on_model))
+                      unrecorded=_unrecorded(on_model), setup=setup)
 
     price = cfg.price(provider, model)
     others = [r for r in rows if r.get("family") == family and (r.get("provider"), r.get("model")) != (provider, model)
@@ -520,7 +622,7 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
         if per_task:
             sources = sorted({f"{r.get('provider')}:{r.get('model')}" for r in borrowed})
             return _model("borrowed", f"{len(borrowed)} trials of {family} on {', '.join(sources)}, repriced at "
-                          f"{where} prices", borrowed, per_task, meta, infra, config_hash=config_hash)
+                          f"{where} prices", borrowed, per_task, meta, infra, config_hash=config_hash, setup=setup)
 
     base_family = baseline_family(cfg)
     if family != base_family:
@@ -528,23 +630,20 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
                 and r.get("model") == model and cost_of(r) is not None]
         if base:
             multiple, source = reference_multiple(cfg.reference, family)
-            directions = (cfg.reference or {}).get("defaults") if isinstance(cfg.reference, Mapping) else None
-            harness_over = isinstance(directions, Mapping) and directions.get("direction") == "harness_over_baseline"
-            scale = multiple if harness_over else 1.0 / multiple
 
-            def scaled(r: Mapping[str, Any], k: float = scale) -> float | None:
+            def scaled(r: Mapping[str, Any], k: float = multiple) -> float | None:
                 c = cost_of(r)
                 return None if c is None else c * k
             per_task = _values_by_task(base, scaled)
-            return _model("prior", f"{base_family} on {where} {'x' if harness_over else '÷'} {multiple:g} "
-                          f"({source})", base, per_task, meta, infra, config_hash=config_hash)
+            return _model("prior", f"{base_family} on {where} x {multiple:.3g} ({source})", base, per_task, meta,
+                          infra, config_hash=config_hash, setup=setup)
 
     others = [r for r in rows if r.get("family") != family and r.get("provider") == provider
               and r.get("model") == model and cost_of(r) is not None]
     if others:
         median = statistics.median(sorted(cost_of(r) for r in others))  # type: ignore[type-var]
         return _model("prior", f"median trial cost of other families on {where} ({len(others)} trials)", [], {},
-                      meta, infra, pool=[float(median)], minute_rows=others, config_hash=config_hash)
+                      meta, infra, pool=[float(median)], minute_rows=others, config_hash=config_hash, setup=setup)
 
     tokens = cfg.stats.default_trial_tokens
     n_input = int(tokens["input"])
@@ -553,12 +652,12 @@ def cell_model(cfg: Config, rows: Sequence[Mapping[str, Any]], arm: ArmSpec, *, 
     detail = (f"default trial tokens ({n_input} in, {float(tokens['cache_share']):.0%} cached, "
               f"{n_output} out) at {where} prices")
     if price is None:
-        out = _model("prior", detail, [], {}, meta, infra, pool=[], config_hash=config_hash)
+        out = _model("prior", detail, [], {}, meta, infra, pool=[], config_hash=config_hash, setup=setup)
         out.unpriced = True
         out.notes.append(f"No price for {model} under {provider} in config/pricing.yaml; its cost is unknown.")
         return out
     return _model("prior", detail, [], {}, meta, infra, pool=[pricing.unit_cost(price, n_input, n_cache, n_output)],
-                  config_hash=config_hash)
+                  config_hash=config_hash, setup=setup)
 
 
 def family_trial_cost(cfg: Config, rows: Sequence[Mapping[str, Any]], family: str, provider: str, model: str,
@@ -618,6 +717,7 @@ class _ArmSim:
     # fallback minutes).
     trials: list[tuple[list[float], int, bool, list[float], int, bool, float]]
     level_noise: bool
+    tasks: list[str] = field(default_factory=list)              # the task of each entry of trials
     costs: list[float] = field(default_factory=list)            # first TRIAL_DRAW_REPLICATES replicates
     totals: list[float] = field(default_factory=list)           # every replicate
     trial_minutes: list[float] = field(default_factory=list)    # first TRIAL_DRAW_REPLICATES replicates
@@ -656,17 +756,20 @@ def _fallback_minutes(task: str, meta: Mapping[str, Mapping[str, Any]], multipli
 def _sim(arm: ArmSpec, model: CellModel, cap: float | None, attempts: int, meta: Mapping[str, Mapping[str, Any]],
          multiplier: float) -> _ArmSim:
     trials = []
+    tasks: list[str] = []
     minutes_by_difficulty = _by_difficulty(model.minutes_per_task, meta)
+    setup = (model.setup_sec or 0.0) / 60.0    # unmeasured minutes are the agent's alone: add the planned setup
     for task in arm.tasks:
         costs = _choices(task, model.per_task, model.by_difficulty, model.pool, meta)
         minutes = _choices(task, model.minutes_per_task, minutes_by_difficulty, model.minutes_pool, meta)
-        fallback = _fallback_minutes(task, meta, multiplier)
+        fallback = _fallback_minutes(task, meta, multiplier) + setup
         # Resampling one or two values has no spread of its own, though a
         # repeat of the same task costs differently, so those draws get one.
         trials += [(costs, len(costs), len(costs) < MIN_POOL, minutes, len(minutes), len(minutes) < MIN_POOL,
                     fallback)] * attempts
+        tasks += [task] * attempts
     return _ArmSim(arm=arm, model=model, cap=cap, trials=trials,
-                   level_noise=model.basis in ("borrowed", "prior") or len(model.pool) < MIN_POOL)
+                   level_noise=model.basis in ("borrowed", "prior") or len(model.pool) < MIN_POOL, tasks=tasks)
 
 
 def effective_replicates(requested: int, trials: int) -> int:
@@ -676,8 +779,35 @@ def effective_replicates(requested: int, trials: int) -> int:
     return min(requested, max(MIN_REPLICATES, MAX_DRAWS // max(1, trials)))
 
 
-def _simulate(sims: list[_ArmSim], run: RunSettings, replicates: int, rng: random.Random, sigma: float
-              ) -> tuple[list[float], list[float]]:
+def _race_wall(sims: list[_ArmSim], minutes_by_sim: list[list[float]], run: RunSettings, attempts: int,
+               order: list[str], build_min: Mapping[str, float]) -> tuple[float, list[float]]:
+    """One replicate's wall time under schedule tasks, and each arm's busy minutes."""
+    lanes_at_once = max(1, int(run.max_containers) // race_lane_slots(run.n_concurrent, attempts))
+    per_task: dict[str, list[tuple[int, list[float]]]] = defaultdict(list)
+    for i, (sim, minutes) in enumerate(zip(sims, minutes_by_sim)):
+        by_task: dict[str, list[float]] = defaultdict(list)
+        for task, m in zip(sim.tasks, minutes):
+            by_task[task].append(m)
+        for task, values in by_task.items():
+            per_task[task].append((i, values))
+    wall = 0.0
+    busy = [0.0] * len(sims)
+    for task in order:
+        lanes = per_task.get(task)
+        if not lanes:
+            continue
+        durations = []
+        for i, values in lanes:
+            d = PREFLIGHT_MINUTES + stats.lpt_makespan(values, run.n_concurrent)
+            busy[i] += d
+            durations.append(d)
+        wall += float(build_min.get(task, 0.0)) + stats.list_schedule(durations, lanes_at_once)
+    return wall, busy
+
+
+def _simulate(sims: list[_ArmSim], run: RunSettings, replicates: int, rng: random.Random, sigma: float,
+              race: tuple[int, list[str], Mapping[str, float]] | None = None) -> tuple[list[float], list[float]]:
+    """race: (attempts, task order, build minutes per task) under schedule tasks."""
     totals, walls = [], []
     # Indexing by random() and skipping one-value draws keeps this loop cheap; it stays seeded.
     rnd, gauss, exp = rng.random, rng.gauss, math.exp
@@ -686,6 +816,7 @@ def _simulate(sims: list[_ArmSim], run: RunSettings, replicates: int, rng: rando
         keep = b < TRIAL_DRAW_REPLICATES
         run_total = 0.0
         durations = []
+        all_minutes = []
         for sim in sims:
             priced = sim.priced
             level = exp(sigma * gauss(0.0, 1.0) - shift) if sim.level_noise and priced else 1.0
@@ -712,15 +843,30 @@ def _simulate(sims: list[_ArmSim], run: RunSettings, replicates: int, rng: rando
                 minutes.append(m)
             if keep:
                 sim.trial_minutes.extend(minutes)
-            duration = PREFLIGHT_MINUTES + stats.lpt_makespan(minutes, run.n_concurrent)
-            sim.arm_minutes.append(duration)
-            durations.append(duration)
+            if race is None:
+                duration = PREFLIGHT_MINUTES + stats.lpt_makespan(minutes, run.n_concurrent)
+                sim.arm_minutes.append(duration)
+                durations.append(duration)
+            else:
+                all_minutes.append(minutes)
             if sim.priced:
                 sim.totals.append(total)
                 run_total += total
         totals.append(run_total)
-        walls.append(stats.list_schedule(durations, run.parallel_arms))
+        if race is None:
+            walls.append(stats.list_schedule(durations, run.parallel_arms))
+        else:
+            wall, busy = _race_wall(sims, all_minutes, run, race[0], race[1], race[2])
+            for sim, minutes in zip(sims, busy):
+                sim.arm_minutes.append(minutes)
+            walls.append(wall)
     return totals, walls
+
+
+def _race_plan(plan: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The plan's task-race block (runs.plan_spec 'race'), or {}."""
+    race = plan.get("race") if isinstance(plan, Mapping) else None
+    return dict(race) if isinstance(race, Mapping) else {}
 
 
 def suggested_budget(p90_total: float | None) -> float | None:
@@ -736,9 +882,16 @@ def inflight_allowance(spec: Mapping[str, Any], plan: Mapping[str, Any] | None, 
     the containers that can be busy (at most the run's trials) times the
     worst single trial, an enforced cap x 1.1 or twice an uncapped arm's p90."""
     run = spec["run"]
-    trials = sum(len(spec["tasks"] if a.get("tasks") is None else a["tasks"]) for a in spec["arms"]) * spec["attempts"]
+    # An arm whose every task is reused runs nothing.
+    arms = [a for a in spec["arms"] if a.get("tasks") is None or a["tasks"]]
+    trials = sum(len(spec["tasks"] if a.get("tasks") is None else a["tasks"]) for a in arms) * spec["attempts"]
     # The planner's peak: parallel_arms beyond the number of arms never run.
-    busy = min(min(int(run["parallel_arms"]), len(spec["arms"])) * int(run["n_concurrent"]), trials)
+    if run.get("schedule", RunSettings.schedule) == SCHEDULE_TASKS:
+        busy = min(race_peak(int(run["n_concurrent"]), int(run.get("max_containers", RunSettings.max_containers)),
+                             int(spec["attempts"]),
+                             [list(spec["tasks"] if a.get("tasks") is None else a["tasks"]) for a in arms]), trials)
+    else:
+        busy = min(min(int(run["parallel_arms"]), len(arms)) * int(run["n_concurrent"]), trials)
     worst = 0.0
     for arm in est.get("arms") or []:
         cap = arm.get("cap_usd")
@@ -778,7 +931,7 @@ def _spreads(rows: Sequence[Mapping[str, Any]], base_family: str, metric: str, o
                            and r.get("model") == model} - {base_family})
         for family in families:
             arm = _task_means(rows, family, provider, model, metric, o)
-            logs = [math.log(base[k]) - math.log(arm[k]) for k in sorted(set(base) & set(arm))]
+            logs = [math.log(arm[k]) - math.log(base[k]) for k in sorted(set(base) & set(arm))]
             if len(logs) >= report.MIN_SD_PAIRS:
                 out.append((provider, model, family, statistics.stdev(logs), len(logs)))
     return out
@@ -791,11 +944,20 @@ def _ci_factor(level: float, n: int, sd: float | None) -> float | None:
 
 
 def _pairing(cfg: Config, spec: Any, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Pairs now and after this design on the profile's task scope (cfg.tasks),
+    the tasks the REPORT compares by default, so the two quote the same
+    multiple: trials and design tasks outside it never count."""
     level = cfg.stats.confidence
     prior = cfg.stats.prior_sd_log
     o = pair_options(cfg)
     ledger_base = baseline_family(cfg)
-    arms = list(spec.arms)
+    scope = frozenset(cfg.tasks or ())
+    if scope:
+        rows = [r for r in rows if str(r.get("task")) in scope]
+    scope_note = {"tasks": len(scope), "tasks_file": report.tasks_file(cfg)} if scope else None
+    # Arms skipped because every task is reused still pair: their trials are in rows already.
+    order = {a["name"]: i for i, a in enumerate(spec.spec["arms"])}
+    arms = sorted((*spec.arms, *spec.skipped_arms), key=lambda a: order.get(a.name, len(order)))
     named = {a.name: a for a in arms}
     task_of: dict[tuple[str, ...], str] = {}
     for r in rows:
@@ -840,8 +1002,8 @@ def _pairing(cfg: Config, spec: Any, rows: Sequence[Mapping[str, Any]]) -> list[
             sd, sd_source = pooled, source
         else:
             sd, sd_source = prior, "prior"
-        arm_new = set(arm.tasks)
-        base_new = set(base_arm.tasks) if base_arm is not None else set()
+        arm_new = {t for t in arm.tasks if not scope or t in scope}
+        base_new = {t for t in base_arm.tasks if not scope or t in scope} if base_arm is not None else set()
         if o.same_run_only:
             # Earlier runs never pair with this one: only tasks it runs on both sides add pairs.
             n_after = n_now + len(arm_new & base_new)
@@ -862,22 +1024,29 @@ def _pairing(cfg: Config, spec: Any, rows: Sequence[Mapping[str, Any]]) -> list[
             "metric": metric, "pairs_now": n_now, "pairs_after": n_after, "multiple_now": multiple,
             "ci_factor_now": _ci_factor(level, n_now, sd), "ci_factor_after": _ci_factor(level, n_after, sd),
             "sd_log": None if sd is None else round(sd, 4), "sd_source": sd_source,
+            # None: no scope, every task in the ledger. outside: this arm's tasks that never count.
+            "scope": None if scope_note is None else {**scope_note, "outside": len(set(arm.tasks) - scope)},
         })
     return out
 
 
 def estimate(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, Any]],
-             plan: Mapping[str, Any] | None, replicates: int | None = None) -> dict[str, Any]:
+             plan: Mapping[str, Any] | None, replicates: int | None = None,
+             setup_modes: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Cost, time and pairing estimate for a NormalizedSpec. plan is the
     validation plan (per-arm kwargs give each arm's configuration and its
-    enforced dollar cap); without one, kwargs are guessed from the profile,
-    for allowed harnesses only. replicates is cut for large designs (see
-    MAX_DRAWS); the result reports the number run.
+    enforced dollar cap, its prebake block the setup its trials will have);
+    without one, kwargs are guessed from the profile, for allowed harnesses
+    only, and each measured trial keeps its own setup. setup_modes ({arm:
+    'stock' | 'prebaked'}) overrides the plan's setup, e.g. once an image
+    inventory is known. replicates is cut for large designs (see MAX_DRAWS);
+    the result reports the number run.
     Raises ConfigError for a spec that is not structurally valid."""
     run_spec = spec_from_design(spec, None)
     run = run_spec.run
     meta = task_meta(cfg, run_spec.dataset)
     fingerprint = report.ledger_fingerprint(rows)  # over every row given, as ReadOnlyLedger.fingerprint()
+    reused = reused_figures(spec, rows)
     rows = usable(rows)
     seed = int(hashlib.sha256((run_spec.spec_hash + fingerprint).encode("utf-8")).hexdigest()[:12], 16)
     rng = random.Random(seed)
@@ -893,14 +1062,24 @@ def estimate(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, A
             chash: str | None = config_hash_for(arm, kwargs, run.timeout_multiplier)
         else:
             chash = guess_config_hash(cfg, arm, run)
+        mode = (setup_modes or {}).get(arm.name)
+        if mode is None and "prebake" in entry:
+            mode = expected_setup_mode(entry.get("prebake"))
         # guess=False: when the guess above failed, a second one would fail the same way.
-        model = cell_model(cfg, rows, arm, config_hash=chash, meta=meta, guess=False)
+        model = cell_model(cfg, rows, arm, config_hash=chash, meta=meta, guess=False, setup_mode=mode)
         cap, cap_notes = enforced_cap(arm, kwargs or {})
         sims.append(_sim(arm, model, cap, run_spec.n_attempts, meta, run.timeout_multiplier))
         meta_out.append({"entry": entry, "config_hash": chash, "notes": cap_notes})
 
     replicates = effective_replicates(replicates or REPLICATES, sum(len(sim.trials) for sim in sims))
-    totals, walls = _simulate(sims, run, replicates, rng, sigma)
+    race_plan = _race_plan(plan)
+    race = None
+    if run.schedule == SCHEDULE_TASKS:
+        order = list(dict.fromkeys([*run_spec.tasks, *(t for a in run_spec.arms for t in a.tasks)]))
+        build_min = {t["task"]: float(t.get("build_wall_min") or 0.0) for t in race_plan.get("per_task") or []
+                     if isinstance(t, Mapping) and isinstance(t.get("task"), str)}
+        race = (run_spec.n_attempts, order, build_min)
+    totals, walls = _simulate(sims, run, replicates, rng, sigma, race)
 
     warnings: list[str] = []
     arms_out = []
@@ -944,6 +1123,8 @@ def estimate(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, A
                                   "p90": _mins(_quantile(trial_minutes, 0.9))},
             "arm_minutes": {"p50": _mins(_quantile(arm_minutes, 0.5)), "p90": _mins(_quantile(arm_minutes, 0.9))},
             "p_infra": round(model.p_infra, 4),
+            # The harness setup trial minutes were planned with (setup_figure); None: each trial's own.
+            "setup": dict(model.setup) if model.setup else None,
             "unpriced_models": [arm.model] if model.unpriced else [],
             "notes": notes,
         })
@@ -954,7 +1135,9 @@ def estimate(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, A
     p90 = _quantile(ordered, 0.9)
     peak = (plan or {}).get("peak_containers") if isinstance(plan, Mapping) else None
     if not isinstance(peak, int):
-        peak = min(run.parallel_arms, len(run_spec.arms)) * run.n_concurrent
+        peak = (race_peak(run.n_concurrent, run.max_containers, run_spec.n_attempts,
+                          [list(a.tasks) for a in run_spec.arms]) if race is not None
+                else min(run.parallel_arms, len(run_spec.arms)) * run.n_concurrent)
     out: dict[str, Any] = {
         "spec_hash": run_spec.spec_hash, "ledger_fingerprint": fingerprint, "seed": seed, "replicates": replicates,
         "arms": arms_out,
@@ -968,13 +1151,50 @@ def estimate(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, A
             "inflight_allowance_usd": None,
             "wall_minutes": {"p50": _mins(_quantile(walls_sorted, 0.5)), "p90": _mins(_quantile(walls_sorted, 0.9))},
             "peak_containers": peak,
+            "schedule": run.schedule,
+            # Under schedule tasks: tasks x arms, the build minutes per task (from the plan, when it has them)
+            # and the peak disk, which is one task's images.
+            "race": None if race is None else {
+                "tasks": len({t for a in run_spec.arms for t in a.tasks}), "arms": len(run_spec.arms),
+                "max_containers": run.max_containers,
+                "build_wall_min_total": race_plan.get("build_wall_min_total"),
+                "build_wall_min_max": race_plan.get("build_wall_min_max"),
+                "peak_disk_gb": race_plan.get("peak_disk_gb"),
+                "images_to_build": race_plan.get("images_to_build"),
+            },
         },
         "pairing": _pairing(cfg, run_spec, rows),
+        # Trials the spec takes from the ledger: never simulated above, and their own cost is the cost avoided.
+        "reuse": reused,
         "warnings": warnings,
-        "assumptions": list(ASSUMPTIONS),
+        "assumptions": list(ASSUMPTIONS) + ([REUSE_ASSUMPTION] if reused is not None else []),
     }
     out["run"]["inflight_allowance_usd"] = inflight_allowance(run_spec.spec, plan, out)
     return out
+
+
+def reused_figures(spec: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """What a spec that reuses measured trials (spec.reused) does not run: its
+    trials, and the cost avoided, from the reused trials' own measured cost
+    (each task's mean x attempts). None when the spec reuses nothing."""
+    if not spec.get("reuse") or not isinstance(spec.get("reused"), Mapping):
+        return None
+    by_key = {r.get("trial_key"): r for r in rows}
+    attempts = int(spec["attempts"])
+    arms = []
+    for name, entries in spec["reused"].items():
+        per_task = []
+        for entry in entries:
+            costs = [c for c in (cost_of(by_key[k]) for k in entry["trials"] if k in by_key) if c is not None]
+            value = math.fsum(costs) / len(costs) * attempts if costs else None
+            per_task.append({"task": entry["task"], "trials": len(entry["trials"]), "cost_avoided_usd": _money(value)})
+        priced = [t["cost_avoided_usd"] for t in per_task if t["cost_avoided_usd"] is not None]
+        arms.append({"arm": name, "tasks": len(per_task), "trials": len(per_task) * attempts,
+                     "cost_avoided_usd": _money(math.fsum(priced)), "unpriced_tasks": len(per_task) - len(priced),
+                     "per_task": per_task})
+    return {"tasks": sum(a["tasks"] for a in arms), "trials": sum(a["trials"] for a in arms),
+            "cost_avoided_usd": _money(math.fsum(a["cost_avoided_usd"] for a in arms)),
+            "unpriced_tasks": sum(a["unpriced_tasks"] for a in arms), "arms": arms}
 
 
 def summary(est: Mapping[str, Any] | None) -> dict[str, Any]:

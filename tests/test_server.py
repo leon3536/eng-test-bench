@@ -305,6 +305,19 @@ class ConfigSaves(ServerCase):
         self.ok(self.client.put("/api/config/modes/pilot", json={"n_tasks": 1, "n_attempts": 2}))
         self.assertEqual(self.overrides()["modes"], {"pilot": {"n_attempts": 2}})
 
+    def test_harness_setup_run_settings_save_and_validate(self) -> None:
+        self.assertEqual({k: self.run_form()[k] for k in ("prebake", "setup_timeout_multiplier",
+                                                          "env_build_timeout_multiplier")},
+                         {"prebake": "prefer", "setup_timeout_multiplier": "auto", "env_build_timeout_multiplier": 1.0})
+        self.ok(self.client.put("/api/config/run", json={"prebake": "require", "setup_timeout_multiplier": 1.5}))
+        self.assertEqual(self.overrides(), {"run": {"prebake": "require", "setup_timeout_multiplier": 1.5}})
+        self.assertEqual((self.state.cfg.run.prebake, self.state.cfg.run.setup_timeout_multiplier), ("require", 1.5))
+        for body in ({"prebake": "sometimes"}, {"setup_timeout_multiplier": "fast"},
+                     {"env_build_timeout_multiplier": 0}):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.put("/api/config/run", json=body).status_code, 400)
+        self.assertEqual(self.overrides(), {"run": {"prebake": "require", "setup_timeout_multiplier": 1.5}})
+
     def test_arm_save_keeps_type_differing_and_hidden_options(self) -> None:
         # bench.yaml: max_budget_usd: 5 (an int; Harbor types it as a string, so the
         # editor shows '5') and reasoning_effort: high (never shown by the editor).
@@ -352,6 +365,9 @@ class ConfigSaves(ServerCase):
         self.assertNotIn("block1", view["modes"])
         state = self.ok(self.client.get("/api/state"))
         self.assertEqual(state["config"]["orphaned_overrides"]["arms"], ["strands"])
+        # The task scope the REPORT tab compares on, and where it comes from.
+        self.assertEqual(state["config"]["tasks"], TASKS)
+        self.assertTrue(state["config"]["tasks_file"].endswith("tasks.txt"), state["config"]["tasks_file"])
 
     def test_a_busy_overrides_file_is_503_not_500(self) -> None:
         with mock.patch.object(fsutil, "atomic_write_text", lambda *a, **k: False):

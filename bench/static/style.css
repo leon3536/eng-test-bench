@@ -357,6 +357,27 @@ table.grid-t .clip { display: block; max-width: 200px; overflow: hidden; text-ov
 .lane-progress { margin-top: 8px; height: 2px; background: var(--line-2); }
 .lane-progress i { display: block; height: 100%; background: var(--kelly); box-shadow: 0 0 8px var(--kelly); transition: width .6s var(--ease); }
 
+/* Task race (run.schedule tasks): progress by task, then the current task's lanes. */
+.p-race { margin-bottom: 16px; }
+.race-progress { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 12px; }
+.race-cell { width: 14px; height: 14px; flex: none; background: var(--inset); border: 1px solid var(--line-2); }
+.race-cell.done { background: var(--kelly); border-color: var(--kelly); }
+.race-cell.racing { background: var(--kelly-wash); border-color: var(--kelly); box-shadow: 0 0 6px rgba(76, 187, 23, .45); }
+.race-cell.building { background: var(--amber-wash); border-color: var(--amber); }
+.race-cell.stopped { background: var(--amber-wash); border-color: var(--amber-lo); }
+.race-cell.void { opacity: .35; }
+.race-cell.current { outline: 1px solid var(--text-2); outline-offset: 1px; }
+.race-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+.race-head b { font-size: 14px; }
+.race-head small { font: 11px var(--font-mono); }
+.race-lanes { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.race-lane { display: grid; grid-template-columns: 170px 120px 130px minmax(0, 1fr) 80px minmax(0, 220px); gap: 12px;
+  align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.race-lane.active { background: linear-gradient(90deg, rgba(76, 187, 23, .07), transparent 55%); box-shadow: inset 2px 0 0 var(--kelly); }
+.race-lane .chip { justify-self: start; }
+.race-spend { text-align: right; font-size: 12px; }
+.race-msg { font: 10.5px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* Trial cells: color plus shape, so an outcome never rests on color alone. */
 .cells { display: flex; flex-wrap: wrap; gap: 3px; }
 .cell { position: relative; width: 15px; height: 15px; flex: none; background: var(--inset); border: 1px solid var(--line-2); }
@@ -616,6 +637,8 @@ dialog .actions { justify-content: flex-end; }
   .lane-stats { grid-column: 1 / -1; justify-content: start; text-align: left; }
 }
 @media (max-width: 1100px) {
+  .race-lane { grid-template-columns: 140px 110px minmax(0, 1fr); }
+  .race-lane .race-spend, .race-lane .race-msg { text-align: left; }
   .live-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "lanes" "tele" "feed" "console"; }
   .launch, .analysis, .standby { grid-template-columns: minmax(0, 1fr); }
   .mission, .runlist { position: relative; top: auto; max-height: none; }  /* relative, not static: the panel corners are drawn relative to it */
@@ -717,6 +740,13 @@ dialog .arm-bills { font-weight: 600; color: var(--amber); letter-spacing: .02em
 .reserve-notes small { font: 10.5px/1.45 var(--font-mono); color: var(--muted); }
 .launch-btn.queue-mode { letter-spacing: .2em; }
 .orphan-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 10px 0 0; font: 11.5px/1.45 var(--font-mono); }
+/* LAUNCH: reuse measured trials, the toggle under the modes and what each arm reuses in the preflight. */
+.reuse-toggle { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; margin-top: 10px; cursor: pointer; }
+.reuse-toggle input { margin: 2px 0 0; }
+.reuse-toggle b { display: block; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); font-stretch: 85%; }
+.reuse-toggle input:checked + span b { color: var(--kelly); }
+.reuse-toggle small { display: block; margin-top: 2px; font: 10.5px/1.45 var(--font-mono); color: var(--muted); }
+.reuse-notes small.ok-text { color: var(--kelly); }
 .orphans { margin-bottom: 14px; }
 .orphans-body { display: grid; gap: 8px; min-width: 0; }
 .orphans-body p { margin: 0; color: var(--text-2); }
@@ -773,3 +803,61 @@ table.grid-t .arm-left { font-size: 11px; }
   .bar.brand-tight .brand-sub { display: none; }
   #status-pill { padding: 6px 7px; letter-spacing: .08em; }
 }
+
+/* LAUNCH: each module's harness setup (pre-baked images ready for its tasks), and Pull and Build missing. */
+.module-setup {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 64px; align-items: center; gap: 2px 10px;
+  padding: 6px 8px; border: 1px solid var(--line); background: var(--inset);
+}
+.module-setup .su-label {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--faint);
+  font-stretch: 85%;
+}
+.module-setup .su-text {
+  font: 12px var(--font-mono); color: var(--text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.module-setup .su-text.ok-text { color: var(--kelly); }
+.module-setup .su-text.warn-text { color: var(--amber); }
+.module-setup .su-text.bad-text { color: var(--red); }
+.module-setup .su-sub { grid-column: 2 / -1; font: 10.5px/1.4 var(--font-mono); min-width: 0; overflow-wrap: anywhere; }
+.su-meter { position: relative; height: 6px; background: var(--panel); border: 1px solid var(--line-2); }
+.su-meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--kelly); }
+.su-meter.warn i { background: var(--amber); }
+.su-meter.bad i { background: var(--red); }
+.img-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.img-actions .section-head { margin-bottom: 6px; }
+.img-actions .actions { flex-wrap: wrap; margin: 0; }
+.img-actions small { display: block; margin-top: 6px; font: 10.5px/1.45 var(--font-mono); }
+.img-note { margin: 0 0 8px; font: 11.5px/1.45 var(--font-mono); }
+
+/* IMAGES (drawer): readiness per arm, builds and their logs, disk, prune. */
+.img-pad { padding: 10px 14px; }
+.img-summary { display: grid; gap: 6px; }
+.img-summary p { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.img-summary small { font: 10.5px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+.img-summary .actions { flex-wrap: wrap; margin: 4px 0 0; }
+.img-build-head { display: grid; gap: 8px; }
+.img-build-head .field { margin: 0; }
+.img-build-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; }
+.img-build-head small { font: 10.5px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+.img-build-head .actions { flex-wrap: wrap; margin: 0; }
+table.grid-t .img-clip, .img-clip {
+  display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+table.grid-t.img-items tr.img-open td { background: var(--kelly-wash); }
+pre.log.img-log { max-height: 320px; margin: 0; }
+.img-prune-list { margin: 8px 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.img-prune-list li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: center; font-size: 12px;
+}
+.img-prune-list li small { grid-column: 2; font: 10.5px/1.4 var(--font-mono); }
+#img-disk p, #img-prune > p { margin: 0 0 10px; font-size: 12.5px; }
+#img-disk .params { margin-bottom: 10px; }
+#img-disk .params dd { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .img-clip, table.grid-t .img-clip { max-width: 180px; }
+  .module-setup { grid-template-columns: auto minmax(0, 1fr) 48px; }
+}
+table.grid-t.compact td.img-wrap { white-space: normal; }
+.nowrap { white-space: nowrap; }

@@ -214,6 +214,69 @@ class Verdicts(BenchTestCase):
         self.assertAlmostEqual(band[1], 4.65, places=4)
 
 
+class PublishedReference(BenchTestCase):
+    """reference.yaml read as harness / baseline, whichever way it was written."""
+
+    OLD = {"defaults": {"direction": "baseline_over_harness", "tolerance": 1.5},
+           "consensus": {"cost_per_trial": {"low": 2.0, "high": 3.0, "source": "S1"},
+                         "pass_rate_delta_pp": {"low": -5, "high": 5}},
+           "arms": {"pi": {"tokens_per_trial": {"value": 3.1}, "note": "n"},
+                    "strands": {"cost_per_trial": {"value": 2.1, "tolerance": 2.0}}, "terminus-2": {"note": "t"}}}
+    NEW = {"defaults": {"direction": "harness_over_baseline", "tolerance": 1.5},
+           "consensus": {"cost_per_trial": {"low": "1/3", "high": "1/2", "source": "S1"},
+                         "pass_rate_delta_pp": {"low": -5, "high": 5}},
+           "arms": {"pi": {"tokens_per_trial": {"value": "1/3.1"}, "note": "n"},
+                    "strands": {"cost_per_trial": {"value": "1/2.1", "tolerance": 2.0}}, "terminus-2": {"note": "t"}}}
+
+    def test_both_directions_read_the_same(self) -> None:
+        old, new = stats.published_reference(self.OLD), stats.published_reference(self.NEW)
+        self.assertEqual(old, new)
+        self.assertEqual(new["defaults"]["direction"], stats.DIRECTION)
+        self.assertEqual(new["consensus"]["cost_per_trial"], {"low": 1 / 3, "high": 0.5, "source": "S1"})
+        self.assertEqual(new["consensus"]["pass_rate_delta_pp"], {"low": -5, "high": 5})  # points, never inverted
+        self.assertEqual(new["arms"]["pi"]["tokens_per_trial"]["value"], 1 / 3.1)
+        self.assertEqual(new["arms"]["strands"]["cost_per_trial"], {"value": 1 / 2.1, "tolerance": 2.0})
+        self.assertEqual(new["arms"]["terminus-2"], {"note": "t"})
+        self.assertEqual(self.OLD["consensus"]["cost_per_trial"]["low"], 2.0)  # the input is left alone
+
+    def test_a_file_without_a_direction_is_read_the_old_way(self) -> None:
+        # Before defaults.direction existed every figure was baseline / harness.
+        undirected = {k: v for k, v in self.OLD.items() if k != "defaults"}
+        self.assertEqual(stats.reference_direction(undirected), stats.LEGACY_DIRECTION)
+        self.assertEqual(stats.published_reference(undirected)["consensus"],
+                         stats.published_reference(self.NEW)["consensus"])
+        self.assertEqual(stats.published_reference(undirected)["arms"], stats.published_reference(self.NEW)["arms"])
+        no_key = {**self.OLD, "defaults": {"tolerance": 1.5}}
+        self.assertEqual(stats.published_reference(no_key)["arms"]["strands"]["cost_per_trial"]["value"], 1 / 2.1)
+
+    def test_an_unknown_direction_is_refused(self) -> None:
+        for bad in ("baseline/harness", "harness_over_baseline ", 1):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                stats.published_reference({**self.NEW, "defaults": {"direction": bad}})
+
+    def test_a_single_value_band_inverts_with_its_tolerance(self) -> None:
+        strands = stats.published_reference(self.OLD)["arms"]["strands"]["cost_per_trial"]
+        old_band = stats.reference_band(self.OLD["arms"]["strands"]["cost_per_trial"], 1.5)
+        band = stats.reference_band(strands, 1.5)
+        self.assertAlmostEqual(band[0], 1 / old_band[1])
+        self.assertAlmostEqual(band[1], 1 / old_band[0])
+        self.assertAlmostEqual(band[0], 1 / (2.1 * 1.5))
+
+    def test_figure_numbers(self) -> None:
+        self.assertEqual(stats.figure_number("1/3.1"), 1 / 3.1)
+        self.assertEqual(stats.figure_number(" 1 / 4 "), 0.25)
+        self.assertEqual(stats.figure_number(0.5), 0.5)
+        self.assertEqual(stats.figure_number("0.5"), 0.5)
+        for bad in ("1/0", "a/b", "", None, True, "inf", float("nan")):
+            with self.subTest(bad=bad):
+                self.assertIsNone(stats.figure_number(bad))
+        broken = stats.published_reference({"defaults": {"direction": "baseline_over_harness"},
+                                            "consensus": {"cost_per_trial": {"low": 0, "high": "x"}}})
+        self.assertEqual(broken["consensus"]["cost_per_trial"], {"low": None, "high": None})
+        self.assertIsNone(stats.reference_band(broken["consensus"]["cost_per_trial"]))
+        self.assertEqual(stats.published_reference(None), {})
+
+
 class Schedules(BenchTestCase):
     def test_lpt_makespan(self) -> None:
         self.assertEqual(stats.lpt_makespan([5, 4, 3, 3, 3], 2), 10.0)  # LPT's textbook miss (optimum 9)
@@ -234,11 +297,12 @@ class PairedLogRatio(BenchTestCase):
     def test_hand_computed_example(self) -> None:
         base = {"a": 4.0, "b": 9.0, "c": 2.0, "d": 5.0, "e": 1.0}
         arm = {"a": 2.0, "b": 3.0, "c": 1.0, "d": 5.0, "x": 7.0}
-        logs = [math.log(2), math.log(3), math.log(2), 0.0]
+        logs = [math.log(1 / 2), math.log(1 / 3), math.log(1 / 2), 0.0]  # arm / baseline on a, b, c, d
         mean = statistics.fmean(logs)
         pooled = stats.paired_log_ratio(base, arm, pooled_sd=0.5)
         self.assertEqual((pooled.n, pooled.sd_source, pooled.sd_log), (4, "pooled", 0.5))
         self.assertAlmostEqual(pooled.multiple, math.exp(mean))
+        self.assertLess(pooled.multiple, 1.0)  # the arm spends less: under 1x
         half = 2.353 * 0.5 / 2
         self.assertAlmostEqual(pooled.ci[0], math.exp(mean - half), places=3)
         self.assertAlmostEqual(pooled.ci[1], math.exp(mean + half), places=3)

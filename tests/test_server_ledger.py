@@ -8,6 +8,8 @@ which the LIVE view polls, is checked against results.run_results directly.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import shutil
 import sqlite3
@@ -41,7 +43,7 @@ STATUS_KEYS = {"available", "error", "path", "size_bytes", "schema_version", "pa
                "last_backup", "pricing_sha"}
 RESCAN_KEYS = {"at", "scanned", "inserted", "upgraded", "unchanged", "incomplete", "skipped", "seconds"}
 FACET_KEYS = {"profiles", "sources", "models", "families", "configs", "harness_versions", "harbor_versions",
-              "efforts", "datasets", "tasks", "runs", "outcomes", "date_range", "task_order"}
+              "efforts", "setup_modes", "datasets", "tasks", "runs", "outcomes", "date_range", "task_order"}
 RUN_KEYS = {"run_key", "profile", "run_id", "source", "mode", "status", "created_at", "finished_at", "budget_usd",
             "trials", "spend_usd", "trials_unmeasured", "trials_lower_bound", "families", "models", "dataset_snapshot",
             "exclusion"}
@@ -50,11 +52,12 @@ TRIAL_ROW = {"id", "trial_key", "run_key", "profile", "run_id", "source", "arm",
              "config_hash", "config_label", "options", "cautions", "dataset", "dataset_snapshot", "task",
              "task_digest_short", "outcome", "outcome_reason", "harbor_cause", "exception_type", "exception_head",
              "reward", "passed", "n_input", "n_cache", "n_output", "usage_status", "tokens_total", "cost_usd",
-             "cost_at_ingest_usd", "reported_cost_usd", "unpriced_models", "primary_share", "started_at",
-             "finished_at", "phases", "total_sec", "exclusion", "log_url"}
-DETAIL_KEYS = TRIAL_ROW | {"usage", "config", "exception_message", "raw", "lock", "trial_dir", "trial_dir_exists"}
+             "cost_at_ingest_usd", "reported_cost_usd", "unpriced_models", "primary_share", "flags",
+             "started_at", "finished_at", "phases", "total_sec", "setup", "exclusion", "log_url"}
+DETAIL_KEYS = TRIAL_ROW | {"usage", "config", "exception_message", "raw", "lock", "prebake", "trial_dir",
+                           "trial_dir_exists"}
 EXCLUSION_KEYS = {"id", "target_type", "target_id", "action", "reason", "created_at"}
-REPORT_KEYS = {"spec", "provenance", "totals", "groups", "comparisons", "coverage", "warnings"}
+REPORT_KEYS = {"spec", "provenance", "scope", "totals", "groups", "comparisons", "coverage", "warnings"}
 COVERAGE_KEYS = {"provenance", "task_order", "untouched_tasks", "comparisons"}
 SNAPSHOT_KEYS = {"id", "name", "created_at", "fingerprint", "trials_used"}
 
@@ -147,19 +150,23 @@ class LedgerEndpoints(LedgerServerCase):
         response = self.client.post("/api/ledger/export", json={"format": "csv"})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.headers["content-type"].startswith("text/csv"))
-        self.assertRegex(response.headers["content-disposition"], r'attachment; filename="ledger-\d{8}T\d{6}Z\.csv"')
+        self.assertRegex(response.headers["content-disposition"],
+                         r'attachment; filename="ledger-all-tasks-\d{8}T\d{6}Z\.csv"')
         raw = response.content
         self.assertTrue(raw.startswith(b"\xef\xbb\xbf"))
         text = raw.decode("utf-8-sig")
         lines = text.split("\r\n")
-        self.assertEqual(lines[0], ",".join(EXPORT_COLUMNS))
+        self.assertEqual(lines[0], ",".join([*EXPORT_COLUMNS, "filters"]))  # the filters used, on every row
         self.assertEqual(len([line for line in lines if line]), 17)
+        self.assertTrue(all(line.endswith(",{}") for line in lines[1:] if line))
         self.assertNotIn("raw_result", text)
 
         ndjson = self.client.post("/api/ledger/export", json={"format": "jsonl", "filters": {"profiles": ["dev"]}})
         self.assertEqual(ndjson.headers["content-type"], "application/x-ndjson")
+        self.assertIn('filename="ledger-all-tasks-', ndjson.headers["content-disposition"])
         rows = [json.loads(line) for line in ndjson.text.splitlines() if line]
         self.assertEqual(len(rows), 16)
+        self.assertEqual({r["filters"] for r in rows}, {'{"profiles":["dev"]}'})
         self.assertEqual(self.client.post("/api/ledger/export", json={"format": "xlsx"}).status_code, 400)
 
     def test_report_coverage_pairs_and_export(self) -> None:
@@ -175,15 +182,45 @@ class LedgerEndpoints(LedgerServerCase):
         self.assertEqual(missing.status_code, 404)
 
         fingerprint = body["provenance"]["fingerprint"].split(":", 1)[1][:8]
+        scope = body["scope"]
+        self.assertEqual((scope["kind"], scope["tasks"], scope["scope_tasks"]), ("all", 0, 3))
+        self.assertTrue(scope["tasks_file"].endswith("tasks.txt"), scope)  # the test config's own task file
         for level in ("trials", "pairs", "comparisons"):
             with self.subTest(level):
                 exported = self.client.post("/api/report/export", json={"level": level})
                 self.assertEqual(exported.status_code, 200, exported.text)
-                self.assertIn(f'filename="bench-report-{fingerprint}-{level}.csv"',
+                self.assertIn(f'filename="bench-report-{fingerprint}-all-tasks-{level}.csv"',
                               exported.headers["content-disposition"])
                 self.assertTrue(exported.content.startswith(b"\xef\xbb\xbf"))
                 self.assertIn(b"\r\n", exported.content)
         self.assertEqual(self.client.post("/api/report/export", json={"level": "cells"}).status_code, 400)
+        # The REPORT tab's default: the profile's task scope, named in the file and given in every row.
+        scoped = {"filters": {"tasks": SAMPLE}}
+        body = self.ok(self.client.post("/api/report", json=scoped))
+        self.assertEqual(body["scope"]["kind"], "scope")
+        short = body["provenance"]["fingerprint"].split(":", 1)[1][:8]
+        exported = self.client.post("/api/report/export", json={**scoped, "level": "comparisons"})
+        self.assertIn(f'filename="bench-report-{short}-3-scope-tasks-comparisons.csv"',
+                      exported.headers["content-disposition"])
+        lines = exported.content.decode("utf-8-sig").splitlines()
+        self.assertTrue(lines[0].endswith(",direction,filters"))
+        self.assertTrue(all(line.endswith(',harness_over_baseline,"{""tasks"":[""adaptive-rejection-sampler"",'
+                                          '""protein-assembly"",""path-tracing""]}"') for line in lines[1:]), lines[1])
+        chosen = self.client.post("/api/report/export", json={"filters": {"tasks": SAMPLE[:1]}, "level": "pairs"})
+        self.assertIn("-1-tasks-pairs.csv", chosen.headers["content-disposition"])
+        # The Ledger sub-tab's export sends the same scope and records it the same way.
+        for fmt in ("csv", "jsonl"):
+            with self.subTest(fmt):
+                ledger = self.client.post("/api/ledger/export", json={**scoped, "format": fmt})
+                self.assertRegex(ledger.headers["content-disposition"],
+                                 rf'filename="ledger-3-scope-tasks-\d+T\d+Z\.{fmt}"')
+                text = ledger.content.decode("utf-8-sig")
+                rows = ([json.loads(line)["filters"] for line in text.splitlines() if line] if fmt == "jsonl"
+                        else list(csv.reader(io.StringIO(text)))[1:])
+                self.assertTrue(rows)
+                for row in rows:
+                    used = json.loads(row if fmt == "jsonl" else row[-1])
+                    self.assertEqual(used, {"tasks": SAMPLE})
 
     def test_snapshots_round_trip(self) -> None:
         saved = self.client.post("/api/report/snapshots", json={"name": "Pilots", "options": {"ci_level": 0.9}})
@@ -193,12 +230,41 @@ class LedgerEndpoints(LedgerServerCase):
         self.assertEqual(snap["trials_used"], 9)
         listed = self.ok(self.client.get("/api/report/snapshots"))["snapshots"]
         self.assertEqual([s["id"] for s in listed], [snap["id"]])
+        self.assertEqual(listed[0]["direction"], "harness_over_baseline")
         one = self.ok(self.client.get(f"/api/report/snapshots/{snap['id']}"))
         self.assertEqual(set(one), {"id", "name", "created_at", "request", "response"})
         self.assertEqual(one["response"]["provenance"]["fingerprint"], snap["fingerprint"])
+        self.assertEqual(one["response"]["provenance"]["direction"], "harness_over_baseline")
+        self.assertNotIn("converted_from", one["response"]["provenance"])
+        self.assertEqual(one["response"]["scope"]["kind"], "all")
         self.assertEqual(one["request"]["options"]["ci_level"], 0.9)
         self.assertEqual(self.client.get("/api/report/snapshots/rs-nope").status_code, 404)
         self.assertEqual(self.client.post("/api/report/snapshots", json={"name": ""}).status_code, 400)
+
+    def test_a_snapshot_saved_before_the_flip_comes_back_converted(self) -> None:
+        old = {"provenance": {"fingerprint": "sha256:0123456789abcdef", "trials_used": 4, "pricing_sha": "p",
+                              "stats_version": 3},
+               "spec": {"filters": {}, "options": {"ci_level": 0.9}},
+               "comparisons": [{"key": "a~b", "arm_name": "pi", "baseline_name": "claude-code", "provider": "anthropic",
+                                "model": "claude-opus-5-5", "headline": "claude-code used 2.00x the cost of pi",
+                                "coverage": {"metric": "cost"}, "caveats": [],
+                                "pass": {"status": "insufficient", "n": 0, "need": 3},
+                                "metrics": {"cost": {"status": "low_n", "n": 4, "need": 4,
+                                                     "geomean": {"estimate": 2.0, "lo": 1.6, "hi": 2.5},
+                                                     "reference": None}}}]}
+        saved = self.state.ledger.save_snapshot("Before the flip", {"filters": {}, "options": {}}, old)
+        listed = self.ok(self.client.get("/api/report/snapshots"))["snapshots"]
+        self.assertIsNone(next(s for s in listed if s["id"] == saved["id"])["direction"])
+        one = self.ok(self.client.get(f"/api/report/snapshots/{saved['id']}"))["response"]
+        self.assertEqual(one["provenance"]["converted_from"], "baseline_over_harness")
+        self.assertEqual(one["provenance"]["direction"], "harness_over_baseline")
+        gm = one["comparisons"][0]["metrics"]["cost"]["geomean"]
+        self.assertEqual((gm["estimate"], gm["lo"], gm["hi"]), (0.5, 0.4, 0.625))
+        self.assertTrue(one["comparisons"][0]["headline"].startswith(
+            "pi vs claude-code on anthropic:claude-opus-5-5: pi used 0.50x the cost of claude-code"))
+        self.assertEqual(one["scope"]["kind"], "all")
+        # What is stored is never rewritten.
+        self.assertEqual(self.state.ledger.snapshot(saved["id"])["response"], old)
 
     def test_bad_requests_are_400_and_unknown_ids_404(self) -> None:
         self.assertEqual(self.client.post("/api/report", json={"filters": {"colour": ["red"]}}).status_code, 400)
@@ -234,10 +300,17 @@ class LedgerEndpoints(LedgerServerCase):
 
     def test_state_has_a_ledger_block(self) -> None:
         block = self.ok(self.client.get("/api/state"))["ledger"]
-        self.assertEqual(set(block), {"available", "error", "trials", "last_ingest_at", "rescan_running"})
+        self.assertEqual(set(block), {"available", "error", "trials", "last_ingest_at", "rescan_running", "version"})
         self.assertEqual((block["available"], block["error"], block["trials"], block["rescan_running"]),
                          (True, None, 16, False))
         self.assertIsNotNone(block["last_ingest_at"])
+        # An exclusion changes what a LAUNCH plan reuses: only the version shows it.
+        trial = self.ok(self.client.post("/api/ledger/trials", json={"limit": 1}))["rows"][0]
+        self.ok(self.client.post("/api/ledger/exclusions", json={
+            "target_type": "trial", "target_id": trial["trial_key"], "action": "exclude", "reason": "Docker died"}), 201)
+        after = self.ok(self.client.get("/api/state"))["ledger"]
+        self.assertEqual((after["trials"], after["last_ingest_at"]), (block["trials"], block["last_ingest_at"]))
+        self.assertNotEqual(after["version"], block["version"])
 
 
 class UnavailableLedger(LedgerServerCase):
@@ -254,7 +327,7 @@ class UnavailableLedger(LedgerServerCase):
                 self.assertEqual(response.status_code, 503, response.text)
         state = self.ok(self.client.get("/api/state"))
         self.assertFalse(state["ledger"]["available"])
-        self.assertEqual(state["ledger"]["trials"], 0)
+        self.assertEqual((state["ledger"]["trials"], state["ledger"]["version"]), (0, None))
 
 
 class RunResultsRegression(LedgerServerCase):

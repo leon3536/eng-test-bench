@@ -1,0 +1,197 @@
+{
+ "alexgshaw/fix-git:20251031": {
+  "answers": {
+   "asciinema --version": [
+    127,
+    ""
+   ],
+   "cat /etc/os-release 2>/dev/null || echo 'not found'": [
+    0,
+    "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"12\"\nVERSION=\"12 (bookworm)\"\nVERSION_CODENAME=bookworm\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\n"
+   ],
+   "command -v bash >/dev/null 2>&1": [
+    0,
+    ""
+   ],
+   "command -v curl >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v gcc >/dev/null 2>&1 && command -v make >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v git >/dev/null 2>&1": [
+    0,
+    ""
+   ],
+   "command -v node >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v npm >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v pgrep >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "export PATH=\"$HOME/.local/bin:$PATH\"; claude --version": [
+    127,
+    ""
+   ],
+   "for manager in apt-get dnf yum apk; do if command -v \"$manager\" >/dev/null 2>&1; then printf \"%s\" \"$manager\"; break; fi; done": [
+    0,
+    "apt-get"
+   ],
+   "tmux -V": [
+    127,
+    ""
+   ],
+   "true": [
+    0,
+    ""
+   ],
+   "uname -s": [
+    0,
+    "Linux\n"
+   ],
+   "which apt-get >/dev/null 2>&1": [
+    0,
+    ""
+   ]
+  },
+  "image": {
+   "Id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+   "Os": "linux",
+   "User": ""
+  }
+ },
+ "alexgshaw/multi-source-data-merger:20251031": {
+  "answers": {
+   "asciinema --version": [
+    0,
+    "asciinema 2.4.0\n"
+   ],
+   "command -v bash >/dev/null 2>&1": [
+    0,
+    ""
+   ],
+   "command -v curl >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v gcc >/dev/null 2>&1 && command -v make >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v git >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v node >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v npm >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v pgrep >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "export PATH=\"$HOME/.local/bin:$PATH\"; claude --version": [
+    127,
+    ""
+   ],
+   "for manager in apt-get dnf yum apk; do if command -v \"$manager\" >/dev/null 2>&1; then printf \"%s\" \"$manager\"; break; fi; done": [
+    0,
+    "apt-get"
+   ],
+   "tmux -V": [
+    0,
+    "tmux 3.5a\n"
+   ],
+   "true": [
+    0,
+    ""
+   ]
+  },
+  "image": {
+   "Id": "sha256:8b32782078ff7383a1b4e5d3cecca8ce287e30f50bb4c0e5db009a18064e666e",
+   "Os": "linux",
+   "User": ""
+  }
+ },
+ "alexgshaw/regex-log:20251031": {
+  "answers": {
+   "asciinema --version": [
+    127,
+    ""
+   ],
+   "cat /etc/os-release 2>/dev/null || echo 'not found'": [
+    0,
+    "PRETTY_NAME=\"Ubuntu 24.04.3 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.3 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n"
+   ],
+   "command -v bash >/dev/null 2>&1": [
+    0,
+    ""
+   ],
+   "command -v curl >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v gcc >/dev/null 2>&1 && command -v make >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v git >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v node >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v npm >/dev/null 2>&1": [
+    1,
+    ""
+   ],
+   "command -v pgrep >/dev/null 2>&1": [
+    0,
+    ""
+   ],
+   "export PATH=\"$HOME/.local/bin:$PATH\"; claude --version": [
+    127,
+    ""
+   ],
+   "for manager in apt-get dnf yum apk; do if command -v \"$manager\" >/dev/null 2>&1; then printf \"%s\" \"$manager\"; break; fi; done": [
+    0,
+    "apt-get"
+   ],
+   "tmux -V": [
+    127,
+    ""
+   ],
+   "true": [
+    0,
+    ""
+   ],
+   "uname -s": [
+    0,
+    "Linux\n"
+   ],
+   "which apt-get >/dev/null 2>&1": [
+    0,
+    ""
+   ]
+  },
+  "image": {
+   "Id": "sha256:90101b2e815323a8da20528a1439bebc407eb9761c9c68a3d557730856c878e9",
+   "Os": "linux",
+   "User": ""
+  }
+ }
+}

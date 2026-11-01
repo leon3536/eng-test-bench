@@ -124,7 +124,7 @@ in the toast.
             computed_cost, reported_cost, minutes, models}] }
 ```
 An arm with `trials: 0` has only `arm, agent, model, trials`. Multiples are
-**baseline ÷ arm**: 2.0 means that harness used half of what the baseline used.
+**arm ÷ baseline**: 0.5 means that harness used half of what the baseline used.
 
 ## What each tab does
 

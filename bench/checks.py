@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -14,8 +15,8 @@ from typing import Any, Callable
 import anthropic
 import httpx
 
-from . import datasets, keys
-from .settings import Config
+from . import datasets, fsutil, keys
+from .settings import PREBAKE_OFF, PREBAKE_REQUIRE, SCHEDULE_TASKS, Config
 
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _lock = threading.Lock()
@@ -78,6 +79,9 @@ def _git_fix() -> dict[str, Any]:
 
 
 def readiness(cfg: Config) -> list[dict[str, Any]]:
+    """The dashboard's readiness rows: {name, ok, detail}, plus warn: true on
+    a row that is usable but worth a look (shown amber)."""
+    key = fsutil.sha256_hex(fsutil.canonical_json(cfg.effective))[:16]
     return [
         {"name": "Docker", **_cached("docker", 10, _docker)},
         {"name": "Harbor", "ok": True, "detail": f"harbor {importlib.metadata.version('harbor')}"},
@@ -86,8 +90,116 @@ def readiness(cfg: Config) -> list[dict[str, Any]]:
          "detail": f"{len(cfg.tasks)} tasks in config/tasks.txt" if cfg.tasks
          else "No task sample. Run: python -m bench.sample_tasks"},
         {"name": "Dataset snapshot", "ok": True, "detail": _snapshot_detail(cfg.dataset)},
+        {"name": "Pre-baked images", **_cached(f"prebake:{key}", 30, lambda: _prebake_images(cfg))},
+        {"name": "Docker disk", **_cached(f"docker_disk:{key}", 60, lambda: _docker_disk(cfg))},
         {"name": "Assistant", **_assistant(cfg)},
     ]
+
+
+def forget(prefix: str) -> None:
+    """Drop cached rows whose key starts with prefix (a build finished: 'prebake')."""
+    with _lock:
+        for name in [n for n in _cache if n.startswith(prefix)]:
+            del _cache[name]
+
+
+def _prebake_images(cfg: Config) -> dict[str, Any]:
+    """Whether the images the profile's largest mode would use are ready, for
+    its enabled arms. Shown only once Harbor's agent code is loaded (at start,
+    in the background), so the dashboard's first poll never waits on it."""
+    from . import prebake
+
+    if cfg.run.prebake == PREBAKE_OFF:
+        return {"ok": True, "detail": "Off (run.prebake): every trial installs its harness itself, as Harbor does"}
+    if not prebake.recipes_ready():
+        return {"ok": True, "warn": True, "detail": "Recording each harness's install; checked in a moment"}
+    if not cfg.modes or not any(a.enabled for a in cfg.arms):
+        return {"ok": True, "detail": "No mode or no enabled arm to check"}
+    try:
+        from .prebake import inventory
+        from .spec import spec_from_config
+
+        mode = max(cfg.modes, key=lambda m: cfg.modes[m].n_tasks)
+        found = inventory.readiness(cfg, spec_from_config(cfg, mode, [a.name for a in cfg.arms if a.enabled]))
+    except Exception as exc:
+        return {"ok": True, "warn": True, "detail": f"Could not be checked: {type(exc).__name__}: {exc}"}
+    arms = [r for r in found.values() if r.supported]
+    if not arms:
+        return {"ok": True, "detail": "No enabled arm pins its harness version, so every trial installs its harness "
+                                      "itself (stock setup)"}
+    errors = sorted({r.docker_error for r in arms if r.docker_error})
+    if errors:
+        return {"ok": True, "warn": True, "detail": f"Not checked: Docker did not answer ({errors[0]})"}
+    ready, total = sum(len(r.ready) for r in arms), sum(r.tasks for r in arms)
+    each = ", ".join(f"{r.family} {len(r.ready)}/{r.tasks}" for r in arms)
+    old = sum(len(r.over_age) for r in arms)
+    stale = f"; {old} baked more than {cfg.prebake.max_age_days} days ago, rebuild them" if old else ""
+    if ready == total:
+        return {"ok": True, "warn": bool(old), "detail": f"All {total} ready for the {mode} mode ({each}){stale}"}
+    detail = f"{ready} of {total} ready for the {mode} mode ({each}){stale}. "
+    if cfg.run.schedule == SCHEDULE_TASKS:
+        # A task race builds each task's missing images just before that task's race and removes them after it.
+        return {"ok": True, "warn": bool(old), "detail": detail + "Runs are task races (run.schedule tasks): each "
+                                                                  "task's images are built just before its race"}
+    if cfg.run.prebake == PREBAKE_REQUIRE:
+        return {"ok": False, "detail": detail + "run.prebake is require, so runs wait until they are built: "
+                                                "Build missing on LAUNCH"}
+    return {"ok": True, "warn": True, "detail": detail + "Trials without one install their harness themselves; "
+                                                         "Build missing on LAUNCH avoids that"}
+
+
+def _drive(path: Any) -> str:
+    return str(getattr(path, "drive", "") or getattr(path, "anchor", "") or path).rstrip("\\/")
+
+
+def _roomiest_drive(besides: str) -> tuple[str, float] | None:
+    """The other local drive with the most free space (Windows), for the fix text."""
+    if os.name != "nt":
+        return None
+    best: tuple[str, float] | None = None
+    for letter in "CDEFGHIJ":
+        if f"{letter}:" == besides.upper():
+            continue
+        try:
+            free = shutil.disk_usage(f"{letter}:\\").free / 1024 ** 3
+        except OSError:
+            continue
+        if best is None or free > best[1]:
+            best = (f"{letter}:", free)
+    return best
+
+
+def _docker_disk(cfg: Config) -> dict[str, Any]:
+    """The drive holding Docker Desktop's disk image (images and builds grow
+    it, and a full drive can stop Docker Desktop), and Docker's own disk as
+    last measured by a build or the IMAGES panel (measuring it starts a
+    container, which a status check should not)."""
+    from .prebake import builder
+
+    try:
+        path, _source = builder.docker_disk()
+        if path is None:
+            return {"ok": True, "warn": True, "detail": "Docker Desktop's disk image was not found, so the space it "
+                                                        "can grow into is not checked"}
+        free = builder.host_free_gb(path)
+    except OSError as exc:
+        return {"ok": True, "warn": True, "detail": f"The disk image's drive could not be read: {exc}"}
+    drive, reserve = _drive(path), cfg.prebake.host_reserve_gb
+    vm = builder.last_vm.get("free_gb")
+    inside = f"; Docker's own disk {vm:.0f} GB free" if isinstance(vm, (int, float)) else ""
+    if free < reserve:
+        other = _roomiest_drive(drive)
+        where = f" such as {other[0]} ({other[1]:.0f} GB free)" if other and other[1] > free + reserve else ""
+        return {"ok": False, "detail": (
+            f"Docker's disk image is on {drive}, which has only {free:.0f} GB free; keep at least {reserve:g} GB "
+            "(prebake.host_reserve_gb). Pre-baked images and pulls make it grow, and a full drive can stop Docker "
+            f"Desktop. Fix: in Docker Desktop, Settings > Resources > Advanced > Disk image location, move it to a "
+            f"drive with more room{where}, or free space on {drive}.")}
+    if isinstance(vm, (int, float)) and vm < cfg.prebake.vm_reserve_gb:
+        return {"ok": False, "detail": f"Docker's own disk has {vm:.0f} GB free; keep at least "
+                                       f"{cfg.prebake.vm_reserve_gb:g} GB (prebake.vm_reserve_gb). Prune unused "
+                                       "images in the IMAGES panel or with docker image prune."}
+    return {"ok": True, "detail": f"Disk image on {drive}, {free:.0f} GB free{inside}"}
 
 
 def _assistant(cfg: Config) -> dict[str, Any]:

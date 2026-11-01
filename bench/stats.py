@@ -27,7 +27,18 @@ from typing import Any, TypeVar
 # 2: trials whose usage was not recorded left the token and cost figures (same ledger, new numbers).
 # 3: verdicts are checked against trials cut short or unrecorded costing as much as their harness's
 #    most expensive trial, and a floor below the harness's uncut trials on its task is set aside.
-STATS_VERSION = 3
+# 4: every multiple is harness / baseline (it was baseline / harness): same ledger, inverted numbers.
+STATS_VERSION = 4
+
+# How every multiple reads: harness / baseline on the same tasks and model, so
+# 0.5 means the harness used half of what the baseline (Claude Code) used.
+# reference.yaml says which way its figures were written (defaults.direction:
+# this, or baseline_over_harness, read inverted). A file without the key is
+# read the way the bench read it before the key existed: baseline_over_harness.
+DIRECTION = "harness_over_baseline"
+LEGACY_DIRECTION = "baseline_over_harness"
+DIRECTIONS = (DIRECTION, LEGACY_DIRECTION)
+MULTIPLE_FIGURES = ("tokens_per_trial", "cost_per_trial")
 
 T = TypeVar("T")
 
@@ -328,6 +339,75 @@ def pooled_sd(entries: Sequence[tuple[float | None, int]]) -> float | None:
     return math.sqrt(num / den) if den else None
 
 
+def figure_number(value: Any) -> float | None:
+    """A published number: a number, or a fraction such as '1/3.1', which is
+    how reference.yaml restates a figure published as baseline / harness
+    exactly. None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str) and "/" in value:
+        top, _, bottom = value.partition("/")
+        try:
+            number = float(top) / float(bottom)
+        except (ValueError, ZeroDivisionError):
+            return None
+    else:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+    return number if math.isfinite(number) else None
+
+
+def _figure_as_multiple(figure: Mapping[str, Any], invert: bool) -> dict[str, Any]:
+    out = dict(figure)
+    numbers = {k: figure_number(figure[k]) for k in ("value", "low", "high") if figure.get(k) is not None}
+    if invert:
+        flipped = {k: 1.0 / v if v is not None and v > 0 else None for k, v in numbers.items()}
+        numbers = {**flipped, **({"low": flipped["high"], "high": flipped["low"]}
+                                 if "low" in flipped and "high" in flipped else {})}
+    out.update(numbers)
+    return out
+
+
+def reference_direction(reference: Mapping[str, Any] | None) -> str:
+    """Which way reference.yaml states its multiples: defaults.direction, or
+    baseline_over_harness when the key is missing (how the bench read a file
+    before the key existed). Anything else is refused rather than guessed."""
+    defaults = reference.get("defaults") if isinstance(reference, Mapping) else None
+    given = defaults.get("direction") if isinstance(defaults, Mapping) else None
+    if given is None:
+        return LEGACY_DIRECTION
+    if given not in DIRECTIONS:
+        raise ValueError(f"reference.yaml defaults.direction must be {' or '.join(DIRECTIONS)} (got {given!r})")
+    return given
+
+
+def published_reference(reference: Mapping[str, Any] | None) -> dict[str, Any]:
+    """reference.yaml with every published multiple read as harness / baseline:
+    a file written baseline_over_harness (defaults.direction, or no direction)
+    is inverted, so its 2-3 becomes 0.333-0.5, and fractions become numbers.
+    Pass-rate deltas are harness minus baseline either way and stay as they are."""
+    if not isinstance(reference, Mapping):
+        return {}
+    defaults = reference.get("defaults") if isinstance(reference.get("defaults"), Mapping) else {}
+    invert = reference_direction(reference) == LEGACY_DIRECTION
+    out = dict(reference)
+    out["defaults"] = {**defaults, "direction": DIRECTION}
+
+    def section(entries: Any) -> Any:
+        if not isinstance(entries, Mapping):
+            return entries
+        return {k: _figure_as_multiple(v, invert) if k in MULTIPLE_FIGURES and isinstance(v, Mapping) else v
+                for k, v in entries.items()}
+
+    out["consensus"] = section(reference.get("consensus"))
+    arms = reference.get("arms")
+    if isinstance(arms, Mapping):
+        out["arms"] = {family: section(entry) for family, entry in arms.items()}
+    return out
+
+
 def reference_band(ref: Mapping[str, Any] | None, tolerance: float = _DEFAULT_TOLERANCE) -> tuple[float, float] | None:
     """A published figure as a band: [low, high], or [v/tol, v*tol] for one value."""
     if not isinstance(ref, Mapping):
@@ -404,7 +484,7 @@ class RatioEstimate:
 def paired_log_ratio(base: Mapping[Any, float], arm: Mapping[Any, float], pooled_sd: float | None = None,
                      prior_sd: float = 0.6, *, level: float = 0.90, min_observed: int = 5,
                      pooled_source: str = "pooled") -> RatioEstimate | None:
-    """Baseline ÷ arm multiple over the keys both sides have (values > 0).
+    """Arm ÷ baseline multiple over the keys both sides have (values > 0).
 
     Below min_observed pairs the observed spread is too noisy to size an
     interval with, so a pooled spread from other comparisons (or the prior)
@@ -413,7 +493,7 @@ def paired_log_ratio(base: Mapping[Any, float], arm: Mapping[Any, float], pooled
     keys = [k for k in base if k in arm and (base[k] or 0) > 0 and (arm[k] or 0) > 0]
     if not keys:
         return None
-    d = [math.log(base[k]) - math.log(arm[k]) for k in keys]
+    d = [math.log(arm[k]) - math.log(base[k]) for k in keys]
     n = len(d)
     mean = math.fsum(d) / n
     if n >= min_observed:

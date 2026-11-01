@@ -5,7 +5,10 @@ not one run's results but a live query over the whole ledger. Each harness
 is compared with the baseline harness (Claude Code) on the same provider and
 model, task by task on identical task content, pooling every run and attempt
 that matches the filters. The task is the unit: repeats sharpen a task's
-mean but never add a pair.
+mean but never add a pair. With compare 'models' the other axis is held:
+each harness stays fixed, and each model it ran is compared with the
+baseline model (config baseline_model) on the same task content, with no
+published-figure verdicts, since those figures compare harnesses.
 
 Judgements are made here, at report time, from the ledger's facts: which
 trials count (a setup failure never counts as a cheap run, and a trial that
@@ -27,6 +30,7 @@ import dataclasses
 import hashlib
 import json
 import math
+import re
 import statistics
 import threading
 from collections import Counter, OrderedDict, defaultdict
@@ -36,7 +40,7 @@ from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 from typing import Any
 
-from . import classify, harnesses, pricing, stats
+from . import classify, extract, harnesses, pricing, settings, stats
 from .fsutil import canonical_json
 from .ledger import Filters, parse_filters
 from .settings import Config
@@ -45,15 +49,23 @@ __all__ = [
     "Options", "parse_options", "parse_filters", "options_dict", "filters_dict", "build_report", "build_coverage",
     "build_pairs", "export_rows", "analysis_rows", "ledger_fingerprint", "prepare_rows", "group_key",
     "pick_baselines", "build_cells", "compare_metric", "compare_pass", "reference_for", "verdict", "coverage_for",
-    "caveats_for", "headline",
+    "caveats_for", "headline", "setup_matches", "task_scope", "tasks_file", "saved_report", "harness_key",
+    "axis_key", "same_basis", "flag_caveats", "fallback_model",
 ]
 
 GROUP_BY = ("family", "implementation", "config")
 MATCH_ON = ("digest", "name")
 PRICING_MODES = ("current", "as_ingested", "reported")
+# What a comparison varies: the harness on one model, or the model under one harness.
+COMPARE_AXES = ("harnesses", "models")
+DEFAULT_BASELINE_MODEL = settings.DEFAULT_BASELINE_MODEL
 METRICS = ("tokens_total", "tokens_uncached", "cost")
 ESTIMATORS = ("ratio_of_means", "geomean")
 EXPORT_LEVELS = ("trials", "pairs", "comparisons")
+# Which trials by how their harness got installed (the ledger's setup_mode): stock takes a fallback too,
+# since Harbor installed the harness in that trial; one with no setup recorded counts under any only.
+SETUP_FILTERS = ("any", "stock", "prebaked")
+_SETUP_MATCHES = {"stock": ("stock", "fallback"), "prebaked": ("prebaked",)}
 
 # The harness the published multiples were measured against; a figure only
 # applies to a comparison whose baseline is this family.
@@ -75,6 +87,7 @@ RELIABILITY_OUTCOMES = ("setup_failure", "provider_failure", "infra")
 STOPPED_RUN_STATUSES = ("budget_stopped", "cancelled")
 
 NOT_APPLICABLE_CAVEAT = "Published figures were measured on Claude models; this is shown for position only."
+MODELS_NO_VERDICT = "Published figures compare harnesses, not models, so model comparisons get no verdict."
 VERDICTS_MET = ("within", "overlaps", "above", "below")
 OPENROUTER_CAVEAT = "OpenRouter bills the routed provider; harness-reported cost may be the truer figure"
 
@@ -85,6 +98,12 @@ ANALYSIS_KEYS = (
     "exception_type", "valid_tokens", "valid_cost", "valid_reward", "excluded_reason", "n_input", "n_cache",
     "n_output", "usage_status", "tokens_total", "tokens_uncached", "cost_usd", "reported_cost_usd",
     "cost_at_ingest_usd", "passed", "agent_minutes", "total_minutes", "started_at",
+    # How the harness got installed, its setup minutes and the trial's minutes without them, so the
+    # estimates can plan minutes for the setup an arm will have (a stock install or a pre-baked image).
+    "setup_mode", "setup_minutes", "minutes_ex_setup",
+    # What reuse.py matches a trial on beyond its cell: the dataset, its snapshot and the Harbor that ran it,
+    # the share of its tokens spent on the arm's model, and a person's exclusion whatever report.exclusions says.
+    "dataset", "dataset_snapshot", "harbor_version", "primary_share", "excluded_by_hand",
 )
 
 
@@ -111,6 +130,9 @@ class Options:
     target_pass_delta_pp: float = 5.0
     prior_sd_log: float = 0.6
     include_pairs: bool = False
+    setup: str = "any"      # SETUP_FILTERS
+    compare: str = "harnesses"                      # COMPARE_AXES
+    baseline_model: str = DEFAULT_BASELINE_MODEL    # 'provider:model', for compare 'models'
 
 
 # Where each option sits in a request body ({"pairing": {"match_on": ...}}).
@@ -134,6 +156,9 @@ _REQUEST_PATHS: dict[str, tuple[str, ...]] = {
     "target_pass_delta_pp": ("coverage_target", "pass_delta_pp"),
     "prior_sd_log": ("coverage_target", "prior_sd_log"),
     "include_pairs": ("include_pairs",),
+    "setup": ("setup",),
+    "compare": ("compare",),
+    "baseline_model": ("baseline", "model"),
 }
 
 # The flat keys a profile's `report:` section may set. The precision target,
@@ -146,6 +171,7 @@ _CONFIG_KEYS: dict[str, str] = {
     "same_run_only": "same_run_only", "match_on": "match_on", "ci_level": "ci_level",
     "bootstrap_resamples": "resamples", "seed": "seed", "min_pairs_estimate": "min_pairs_estimate",
     "min_pairs_verdict": "min_pairs_verdict", "pricing": "pricing", "target_pass_delta_pp": "target_pass_delta_pp",
+    "compare": "compare",
 }
 
 
@@ -207,6 +233,15 @@ def _coerce(name: str, value: Any, label: str) -> Any:
         return _number(value, label, 0.1, 100.0)
     if name == "prior_sd_log":
         return _number(value, label, 0.01, 5.0)
+    if name == "setup":
+        return _choice(value, SETUP_FILTERS, label)
+    if name == "compare":
+        return _choice(value, COMPARE_AXES, label)
+    if name == "baseline_model":
+        provider, _, model = value.partition(":") if isinstance(value, str) else ("", "", "")
+        if not provider.strip() or not model.strip() or len(value) > 200:
+            raise ValueError(f"{label} must be provider:model, e.g. {DEFAULT_BASELINE_MODEL}")
+        return f"{provider.strip()}:{model.strip()}"
     raise ValueError(f"Unknown option {label}")
 
 
@@ -219,6 +254,8 @@ def _code_defaults(cfg: Config | None) -> dict[str, Any]:
         values["baseline_family"] = arm.family or arm.agent
     except Exception:  # no arms configured: the reference baseline
         pass
+    if getattr(cfg, "baseline_model", None):
+        values["baseline_model"] = _coerce("baseline_model", cfg.baseline_model, "baseline_model in the config")
     st = getattr(cfg, "stats", None)
     if st is not None:
         values["ci_level"] = float(st.confidence)
@@ -332,20 +369,35 @@ def _current_cost(row: Mapping[str, Any], table: Mapping[str, Any] | None) -> tu
     return row.get("cost_usd"), list(row.get("unpriced_models") or [])
 
 
+def _usable_reported(row: Mapping[str, Any]) -> float | None:
+    """The harness's (or OpenRouter's billed) figure, unless this harness
+    prices this provider's models at another provider's rates. $0 for a
+    trial that used tokens is a harness that could not price the model
+    (LiteLLM does this), not a billed cost."""
+    reported = row.get("reported_cost_usd")
+    used_tokens = bool((row.get("n_input") or 0) + (row.get("n_output") or 0))
+    if (reported is not None and (float(reported) > 0 or not used_tokens)
+            and not harnesses.reports_mispriced_cost(row.get("family") or "", row.get("provider") or "")):
+        return float(reported)
+    return None
+
+
 def _chosen_cost(row: Mapping[str, Any], current: float | None, mode: str) -> float | None:
     if mode == "as_ingested":
         return row.get("cost_at_ingest_usd")
     if mode == "reported":
-        # The harness's (or OpenRouter's billed) figure, unless this harness
-        # prices this provider's models at another provider's rates.
-        # $0 for a trial that used tokens is a harness that could not price
-        # the model (LiteLLM does this), not a billed cost.
-        reported = row.get("reported_cost_usd")
-        used_tokens = bool((row.get("n_input") or 0) + (row.get("n_output") or 0))
-        if (reported is not None and (float(reported) > 0 or not used_tokens)
-                and not harnesses.reports_mispriced_cost(row.get("family") or "", row.get("provider") or "")):
-            return float(reported)
+        reported = _usable_reported(row)
+        if reported is not None:
+            return reported
     return current
+
+
+def fallback_model(row: Mapping[str, Any]) -> bool:
+    """A trial that spent more than 1 - PRIMARY_SHARE_MIN of its tokens on
+    models other than its arm's (a fallback model answered): its cost is
+    not the arm's model's, so it never counts toward a cost multiple."""
+    share = row.get("primary_share")
+    return share is not None and share < PRIMARY_SHARE_MIN
 
 
 def prepare_rows(rows: Sequence[Mapping[str, Any]], o: Options,
@@ -363,6 +415,7 @@ def prepare_rows(rows: Sequence[Mapping[str, Any]], o: Options,
         manual = _manual_reason(row, trials, runs)
         phases = _mapping(row.get("phases"))
         agent_sec, total_sec = phases.get("agent_exec_sec"), row.get("total_sec")
+        setup_sec = phases.get("agent_setup_sec")
         status = classify.usage_status({**row, "agent_exec_sec": row.get("agent_exec_sec", agent_sec)})
         validity = classify.validity(row["outcome"], crashes=o.crashes, misconfigured_cap=o.misconfigured_cap,
                                      usage=status)
@@ -371,19 +424,29 @@ def prepare_rows(rows: Sequence[Mapping[str, Any]], o: Options,
         current, unpriced = _current_cost(row, table)
         cost = _chosen_cost(row, current, o.pricing) if status != "unmeasured" else None
         kept = manual is None
+        fallback = fallback_model(row)
         row.update(
-            usage_status=status, floor_set_aside=False, floor_cost=None,
+            usage_status=status, floor_set_aside=False, floor_cost=None, fallback_model=fallback,
+            # Where cost came from: a pair takes the harnesses' own figures only when both sides have them.
+            cost_reported=o.pricing == "reported" and cost is not None and _usable_reported(row) is not None,
             cost_at_ingest_usd=row.get("cost_at_ingest_usd") if status != "unmeasured" else None,
             tokens_total=(n_input or 0) + (n_output or 0) if measured else None,
             tokens_uncached=max((n_input or 0) - (n_cache or 0), 0) + (n_output or 0) if measured else None,
             cost_current=current, cost=cost, unpriced=unpriced,
             manual=manual, included=kept and validity.included,
             valid_tokens=kept and validity.tokens and measured,
-            valid_cost=kept and validity.tokens and cost is not None,
+            valid_cost=kept and validity.tokens and cost is not None and not fallback,
             valid_reward=kept and validity.reward and row.get("passed") is not None,
             excluded_reason=manual or _policy_reason(row, validity.included),
+            # The latest action on the trial, else on its run (Ledger._trial_row), as _manual_reason decides it.
+            excluded_by_hand=manual is not None or _mapping(row.get("exclusion")).get("action") == "exclude",
             agent_minutes=agent_sec / 60.0 if agent_sec is not None else None,
             total_minutes=total_sec / 60.0 if total_sec is not None else None,
+            setup_mode=row.get("setup_mode"),
+            setup_minutes=setup_sec / 60.0 if setup_sec is not None else None,
+            # Without the harness's setup: 330-550 s stock for Claude Code, about 1 s pre-baked, so trials
+            # set up either way compare (a trial that never reached agent setup had none).
+            minutes_ex_setup=(max(total_sec - (setup_sec or 0.0), 0.0) / 60.0 if total_sec is not None else None),
         )
         out.append(row)
     _set_aside_low_floors(out, o)
@@ -439,10 +502,12 @@ def ledger_fingerprint(rows: Sequence[Mapping[str, Any]]) -> str:
 # Grouping and pairing ---------------------------------------------------------------------
 
 def group_key(row: Mapping[str, Any], o: Options) -> str:
-    """The line a trial pools into on its (provider, model)."""
+    """The line a trial pools into on its (provider, model). A pinned
+    baseline config stands apart only when harnesses are compared."""
     provider, model, family = row["provider"], row["model"], row["family"]
     config_hash = row.get("config_hash")
-    if o.baseline_config and config_hash == o.baseline_config and o.group_by != "config":
+    pinned = o.baseline_config and o.compare == "harnesses"
+    if pinned and config_hash == o.baseline_config and o.group_by != "config":
         key = f"cfg:{config_hash}"  # a pinned baseline config stands apart from its family
     elif o.group_by == "family":
         key = f"fam:{provider}|{model}|{family}"
@@ -469,9 +534,28 @@ def task_id(row: Mapping[str, Any], match_on: str) -> tuple[str, str]:
     return _task_id(row, match_on)
 
 def _pair_key(row: Mapping[str, Any], o: Options) -> tuple[str, ...]:
-    key: tuple[str, ...] = (row["provider"], row["model"], *_task_id(row, o.match_on))
+    # Comparing models, the same task content pairs across models; the group key holds the model.
+    task = _task_id(row, o.match_on)
+    key: tuple[str, ...] = tuple(task) if o.compare == "models" else (row["provider"], row["model"], *task)
     if o.same_run_only:
         key += (row["run_key"],)
+    return key
+
+
+def harness_key(row: Mapping[str, Any], o: Options) -> str:
+    """What compare 'models' holds fixed: the harness as the grouping sees
+    it, without the model. A configuration is its family, implementation,
+    effort and options, since its config hash covers the model too."""
+    family = row["family"]
+    if o.group_by == "family":
+        key = f"fam:{family}"
+    elif o.group_by == "implementation":
+        key = f"impl:{family}|{row.get('implementation') or 'builtin'}"
+    else:
+        key = (f"cfg:{family}|{row.get('implementation') or 'builtin'}|{row.get('effort')}|"
+               f"{canonical_json(_mapping(row.get('options')))}")
+    if o.split_harness_versions:
+        key += f"|v{row.get('harness_version') or '?'}"
     return key
 
 
@@ -493,6 +577,9 @@ def build_cells(rows: Sequence[Mapping[str, Any]], o: Options) -> dict[tuple[str
                 "values": {m: [] for m in METRICS}, "floors": {m: [] for m in METRICS},
                 "measured": {m: False for m in METRICS},
                 "passes": [], "mean": {}, "pass": None, "n_reward": 0,
+                # The cost values from list prices, and whether every cost value is the harness's own
+                # figure (pricing 'reported'): a pair uses reported figures only when both cells are.
+                "computed": {"values": [], "floors": []}, "reported_only": True,
             }
         cell["tasks"].add(row["task"])
         if row.get("task_digest"):
@@ -513,9 +600,16 @@ def build_cells(rows: Sequence[Mapping[str, Any]], o: Options) -> dict[tuple[str
                 cell["values"][metric].append(float(value))
                 if row.get("usage_status") == "lower_bound":
                     cell["floors"][metric].append(float(value))  # also in values
+                if metric == "cost":
+                    computed = row.get("cost_current") if row.get("cost_reported") else value
+                    cell["reported_only"] = cell["reported_only"] and bool(row.get("cost_reported"))
+                    cell["computed"]["values"].append(None if computed is None else float(computed))
+                    if row.get("usage_status") == "lower_bound":
+                        cell["computed"]["floors"].append(None if computed is None else float(computed))
         if row.get("valid_reward"):
             cell["passes"].append(1.0 if row.get("passed") else 0.0)
     for cell in cells.values():
+        cell["reported_only"] = cell["reported_only"] and bool(cell["values"]["cost"])
         cell["mean"] = {m: (math.fsum(v) / len(v) if v else None) for m, v in cell["values"].items()}
         cell["n_reward"] = len(cell["passes"])
         cell["pass"] = math.fsum(cell["passes"]) / len(cell["passes"]) if cell["passes"] else None
@@ -527,12 +621,42 @@ def _side(cells: Mapping[tuple[str, tuple], dict], group: str) -> dict[tuple, di
     return {pk: cell for (g, pk), cell in cells.items() if g == group}
 
 
+def _computed_cell(cell: Mapping[str, Any]) -> dict[str, Any]:
+    """The cell with its cost at list prices instead of the harness's figures."""
+    computed = cell["computed"]
+    values = [v for v in computed["values"] if v is not None]
+    whole = len(values) == len(computed["values"])
+    out = dict(cell)
+    out["values"] = {**cell["values"], "cost": values}
+    out["floors"] = {**cell["floors"], "cost": [v for v in computed["floors"] if v is not None]}
+    out["mean"] = {**cell["mean"], "cost": math.fsum(values) / len(values) if values and whole else None}
+    out["reported_only"] = False
+    return out
+
+
+def same_basis(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
+               o: Options) -> Mapping[tuple[str, tuple], dict]:
+    """With pricing 'reported', a task's two cells use the harnesses' own
+    figures only when both are made of them; otherwise both use list prices,
+    so a harness that reports nothing (strands) is never set against
+    another's exact bill. The cells of this comparison's two groups only."""
+    if o.pricing != "reported":
+        return cells
+    out = dict(cells)
+    for pk in set(_side(cells, arm)) & set(_side(cells, base)):
+        a, b = cells[(arm, pk)], cells[(base, pk)]
+        if not (a["reported_only"] and b["reported_only"]):
+            out[(arm, pk)], out[(base, pk)] = _computed_cell(a), _computed_cell(b)
+    return out
+
+
 def _metric_pairs(arm: Mapping[tuple, dict], base: Mapping[tuple, dict], metric: str, *,
                   arm_means: Mapping[tuple, float] | None = None, base_means: Mapping[tuple, float] | None = None
                   ) -> tuple[list[tuple[tuple, float, float]], dict[str, int]]:
     """[(pair key, baseline mean, arm mean)] for tasks where both sides have
     a valid value above zero, and why the other shared tasks were dropped.
-    arm_means and base_means replace some cells' means (_costed_high)."""
+    arm_means and base_means replace some cells' means (_costed_high). A
+    pair's multiple is arm mean / baseline mean (_log_ratio)."""
     dropped = {"no_arm_valid": 0, "no_baseline_valid": 0, "usage_not_recorded": 0, "tokens_not_reported": 0,
                "unpriced": 0, "zero_value": 0}
     pairs = []
@@ -558,6 +682,11 @@ def _metric_pairs(arm: Mapping[tuple, dict], base: Mapping[tuple, dict], metric:
     return pairs, dropped
 
 
+def _log_ratio(base: float, arm: float) -> float:
+    """One task's multiple, harness / baseline, on the log scale."""
+    return math.log(arm / base)
+
+
 def _unrecorded(cell: Mapping[str, Any], metric: str) -> bool:
     """The cell holds a trial cut short (a floor) or one with no usage recorded."""
     return bool(cell["floors"][metric] or cell["unmeasured"])
@@ -569,9 +698,9 @@ def _costed_high(side: Mapping[tuple, dict], other: Mapping[tuple, dict], metric
     usage recorded, had each of those cost UNRECORDED_FACTOR times the side's
     usual spend on that task (a floor above that keeps its own value). The
     usual spend is the cell's uncut trials, else the other side's mean on the
-    task over ratio (baseline ÷ arm on tasks where nothing was cut short),
-    else the side's most expensive trial on the model. Deliberately high,
-    since such a trial often ran to a time limit, and scaled to the task: a
+    task scaled by ratio (arm ÷ baseline on tasks where nothing was cut
+    short), else the side's most expensive trial on the model. Deliberately
+    high, since such a trial often ran to a time limit, and scaled to the task: a
     side maximum would price a small task like the biggest, and a big task
     like the biggest the side happened to finish. Only the cells this changes."""
     top = max((v for c in side.values() for v in c["values"][metric]), default=None)
@@ -585,7 +714,7 @@ def _costed_high(side: Mapping[tuple, dict], other: Mapping[tuple, dict], metric
         if uncut_n:
             high = UNRECORDED_FACTOR * uncut_sum / uncut_n
         elif there and ratio:
-            high = UNRECORDED_FACTOR * (there / ratio if arm else there * ratio)
+            high = UNRECORDED_FACTOR * (there * ratio if arm else there / ratio)
         elif top is not None:
             high = top
         else:
@@ -616,17 +745,50 @@ def _geomean(values: Sequence[float]) -> float:
 
 
 def _rom(pairs: Sequence[tuple[float, float]]) -> float:
-    return math.fsum(b for b, _ in pairs) / math.fsum(h for _, h in pairs)
+    """Ratio of means over (baseline, arm) pairs: the arm's mean bill over the baseline's."""
+    return math.fsum(h for _, h in pairs) / math.fsum(b for b, _ in pairs)
 
 
-def pick_baselines(groups: Mapping[str, Mapping[str, Any]], o: Options) -> tuple[dict[tuple[str, str], str], list[str]]:
+def axis_key(group: Mapping[str, Any], o: Options) -> tuple[str, ...]:
+    """What a comparison holds fixed: the (provider, model) when harnesses
+    are compared, the harness (harness_key) when models are."""
+    return (group["harness_key"],) if o.compare == "models" else (group["provider"], group["model"])
+
+
+def _pick_model_baselines(groups: Mapping[str, Mapping[str, Any]],
+                          o: Options) -> tuple[dict[tuple[str, ...], str], list[str]]:
+    """The baseline group of each harness: its group on the baseline model,
+    the one with the most valid trials when the grouping gives several."""
+    by_harness: dict[tuple[str, ...], list[str]] = defaultdict(list)
+    for key, g in groups.items():
+        by_harness[axis_key(g, o)].append(key)
+    picked: dict[tuple[str, ...], str] = {}
+    warnings: list[str] = []
+    for axis in sorted(by_harness):
+        keys = sorted(by_harness[axis])
+        candidates = [k for k in keys if f"{groups[k]['provider']}:{groups[k]['model']}" == o.baseline_model]
+        if not candidates:
+            continue
+        best = max(candidates, key=lambda k: (groups[k]["trials"]["included"], groups[k]["trials"]["total"]))
+        picked[axis] = best
+        if len(candidates) > 1:
+            others = "; ".join(groups[k]["label"] for k in candidates if k != best)
+            warnings.append(f"{len(candidates)} groups of one harness on {o.baseline_model}. The baseline is "
+                            f"{groups[best]['label']} (most valid trials); the others are compared with it: {others}.")
+    return picked, warnings
+
+
+def pick_baselines(groups: Mapping[str, Mapping[str, Any]], o: Options) -> tuple[dict[tuple[str, ...], str], list[str]]:
     """The baseline group on each (provider, model): the pinned config when
     there is one, else the baseline family's group, else the one of its
-    groups with the most valid trials, with a warning naming the rest."""
+    groups with the most valid trials, with a warning naming the rest.
+    Comparing models, the baseline of each harness (_pick_model_baselines)."""
+    if o.compare == "models":
+        return _pick_model_baselines(groups, o)
     by_model: dict[tuple[str, str], list[str]] = defaultdict(list)
     for key, g in groups.items():
         by_model[(g["provider"], g["model"])].append(key)
-    picked: dict[tuple[str, str], str] = {}
+    picked: dict[tuple[str, ...], str] = {}
     warnings: list[str] = []
     for pm in sorted(by_model):
         keys = sorted(by_model[pm])
@@ -673,6 +835,17 @@ def _group_names(key: str, rows: Sequence[Mapping[str, Any]], o: Options) -> tup
     return f"{family}{version}", f"{family} · {where}{version}"
 
 
+def _harness_name(row: Mapping[str, Any], name: str, o: Options) -> str:
+    """A group's harness without its model, for compare 'models': its name,
+    except a configuration's, whose config hash covers the model; that one is
+    named by its harness_key, so both sides of a model comparison agree."""
+    if o.group_by != "config":
+        return name
+    version = f" v{row.get('harness_version') or '?'}" if o.split_harness_versions else ""
+    digest = hashlib.sha256(harness_key(row, o).encode("utf-8")).hexdigest()[:6]
+    return f"{row['family']} {digest}{version}"
+
+
 def _config_diff(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[Any]]:
     """Settings that differ between the configurations pooled in a group."""
     configs: dict[str, dict[str, Any]] = {}
@@ -699,6 +872,7 @@ def _group(key: str, rows: list[dict], o: Options) -> dict[str, Any]:
     impls = {r.get("implementation") for r in rows}
     hashes = {r.get("config_hash") for r in rows}
     versions = Counter(r.get("harness_version") or "unknown" for r in rows)
+    setups = Counter(r.get("setup_mode") or "unknown" for r in rows)
     labels: dict[str, str] = {}
     for r in rows:
         labels.setdefault(r.get("config_hash"), r.get("config_label") or "")
@@ -731,11 +905,15 @@ def _group(key: str, rows: list[dict], o: Options) -> dict[str, Any]:
     outcomes = Counter(r["outcome"] for r in rows)
     return {
         "key": key, "label": label, "name": name, "provider": first["provider"], "model": first["model"],
+        # What compare 'models' holds fixed across models, and its name there.
+        "harness_key": harness_key(first, o), "harness_name": _harness_name(first, name, o),
         "family": first["family"], "implementation": next(iter(impls)) if len(impls) == 1 else None,
         "config_hash": next(iter(hashes)) if len(hashes) == 1 else None,
         "harness_version": next(iter(versions)) if len(versions) == 1 and "unknown" not in versions else None,
         "is_baseline": False, "configs": configs, "config_diff": _config_diff(rows),
         "harness_versions": dict(sorted(versions.items())),
+        # Provenance, not a split: stock and pre-baked trials of one configuration pool in one group.
+        "setup_modes": dict(sorted(setups.items())),
         "runs": len({r["run_key"] for r in rows}), "tasks": len(task_ids),
         "trials": {"total": len(rows), "by_outcome": {k: outcomes[k] for k in classify.OUTCOMES if outcomes[k]},
                    "valid_tokens": sum(1 for r in rows if r["valid_tokens"]),
@@ -756,6 +934,9 @@ def _group(key: str, rows: list[dict], o: Options) -> dict[str, Any]:
             "minutes": {k: v for k, v in _summary([r["total_minutes"] for r in rows
                                                    if r["included"] and r["total_minutes"] is not None]).items()
                         if k != "mean"},
+            "minutes_ex_setup": {k: v for k, v in _summary([r["minutes_ex_setup"] for r in rows if r["included"]
+                                                             and r["minutes_ex_setup"] is not None]).items()
+                                 if k != "mean"},
         },
         # Always filled: the harness's own figure against the computed one.
         "reported_vs_computed_cost": {"median_ratio": statistics.median(ratios) if ratios else None,
@@ -788,8 +969,10 @@ def _applies(patterns: Any, provider: str, model: str) -> bool:
 def reference_for(reference: Mapping[str, Any] | None, family: str, provider: str, model: str,
                   metric: str) -> dict | None:
     """The published figure for a family and metric as a band, with the
-    estimator its verdict uses and whether it applies to this model."""
-    reference = _mapping(reference)
+    estimator its verdict uses and whether it applies to this model. A
+    multiple's figure and band are harness / baseline whichever way
+    reference.yaml was written (stats.published_reference)."""
+    reference = stats.published_reference(reference)
     defaults = _mapping(reference.get("defaults"))
     consensus = _mapping(reference.get("consensus"))
     entry = _mapping(_mapping(reference.get("arms")).get(family))
@@ -813,8 +996,6 @@ def reference_for(reference: Mapping[str, Any] | None, family: str, provider: st
         band = stats.reference_band(published, tolerance)
         if band is None:
             return None
-        if defaults.get("direction") == "harness_over_baseline" and band[0] > 0:
-            band = (1.0 / band[1], 1.0 / band[0])
     estimator = entry.get("estimator") or defaults.get("estimator") or "ratio_of_means"
     if estimator not in ESTIMATORS:
         estimator = "ratio_of_means"
@@ -827,7 +1008,9 @@ def reference_for(reference: Mapping[str, Any] | None, family: str, provider: st
 
 def verdict(ci: Sequence[float | None] | None, band: Sequence[float], status: str, applies: bool) -> str:
     """Never 'confirmed': an interval is within, above, below or overlapping
-    the published band, and only once there are enough pairs."""
+    the published band, and only once there are enough pairs. With multiples
+    as harness / baseline, 'below' means the harness used less, relative to
+    the baseline, than the published figure says, and 'above' more."""
     if not applies:
         return "not_applicable"
     if status != "ok" or not ci or ci[0] is None or ci[1] is None:
@@ -860,9 +1043,10 @@ def compare_metric(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
                    *, variants: Mapping[str, Mapping[tuple[str, tuple], dict]] | None = None,
                    reference: Mapping[str, Any] | None = None,
                    names: tuple[str, str] = ("the arm", "the baseline")) -> dict:
-    """Baseline ÷ arm for one metric: the geometric mean of per-task ratios
-    with a t interval (the headline) and the ratio of mean bills with a task
-    bootstrap (like-for-like with published per-task averages).
+    """Arm ÷ baseline for one metric (0.5 means the arm used half): the
+    geometric mean of per-task ratios with a t interval (the headline) and
+    the ratio of mean bills with a task bootstrap (like-for-like with
+    published per-task averages).
 
     A trial cut short records a floor, and one with no usage recorded is left
     out, so either side's mean may be too low on its tasks. Each side is
@@ -881,9 +1065,9 @@ def compare_metric(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
                         "unrecorded_arm_high": None, "unrecorded_baseline_high": None},
         "robust": None, "reference": None, "dropped": dropped,
     }
-    clean = [math.log(b / h) for pk, b, h in pairs
+    clean = [_log_ratio(b, h) for pk, b, h in pairs
              if not _unrecorded(arm_cells[pk], metric) and not _unrecorded(base_cells[pk], metric)]
-    ratio = _geomean(clean) if clean else _geomean([math.log(b / h) for _, b, h in pairs]) if pairs else None
+    ratio = _geomean(clean) if clean else _geomean([_log_ratio(b, h) for _, b, h in pairs]) if pairs else None
     # (side, pairs with that side's unrecorded trials costed high, how many of them this changed)
     costed_high = []
     for side, here, there in (("arm", arm_cells, base_cells), ("baseline", base_cells, arm_cells)):
@@ -895,7 +1079,7 @@ def compare_metric(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
     if measured:
         out["status"], out["need"] = _status(n, o)
     if out["status"] in ("low_n", "ok"):
-        logs = [math.log(b / h) for _, b, h in pairs]
+        logs = [_log_ratio(b, h) for _, b, h in pairs]
         gm = stats.log_ratio_summary(logs, o.ci_level)
         out["geomean"] = {"estimate": gm["estimate"], "lo": gm["lo"], "hi": gm["hi"], "sd_log": gm["sd_log"],
                           "gsd": gm["gsd"], "method": "t_on_log_ratios"}
@@ -904,16 +1088,16 @@ def compare_metric(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
                                 level=o.ci_level)
         out["ratio_of_means"] = {"estimate": _rom(values), "lo": ci[0] if ci else None,
                                  "hi": ci[1] if ci else None, "method": "task_bootstrap"}
-        out["per_task"] = stats.quartiles([b / h for b, h in values])
+        out["per_task"] = stats.quartiles([h / b for b, h in values])
         loo = stats.leave_one_out(logs, _geomean)
         out["leave_one_out"] = list(loo) if loo else None
         for name, vcells in (variants or {}).items():
             vpairs, _ = _metric_pairs(_side(vcells, arm), _side(vcells, base), metric)
             if len(vpairs) >= o.min_pairs_estimate:
-                out["sensitivity"][name] = _geomean([math.log(b / h) for _, b, h in vpairs])
+                out["sensitivity"][name] = _geomean([_log_ratio(b, h) for _, b, h in vpairs])
         for side, spairs, _touched in costed_high:
             if len(spairs) >= o.min_pairs_estimate:
-                out["sensitivity"][f"unrecorded_{side}_high"] = _geomean([math.log(b / h) for _, b, h in spairs])
+                out["sensitivity"][f"unrecorded_{side}_high"] = _geomean([_log_ratio(b, h) for _, b, h in spairs])
         if gm["lo"] is not None:
             checks = [v for v in out["sensitivity"].values() if v is not None] + list(loo or ())
             out["robust"] = all(gm["lo"] <= v <= gm["hi"] for v in checks)
@@ -954,7 +1138,7 @@ def _verdict_on(pairs: Sequence[tuple[tuple, float, float]], reference: Mapping[
             ci = stats.bootstrap_ci([(b, h) for _, b, h in pairs], _rom, resamples=o.resamples,
                                     seed=stats.stable_seed(o.seed, key, metric), level=o.ci_level)
         else:
-            gm = stats.log_ratio_summary([math.log(b / h) for _, b, h in pairs], o.ci_level)
+            gm = stats.log_ratio_summary([_log_ratio(b, h) for _, b, h in pairs], o.ci_level)
             ci = (gm["lo"], gm["hi"])
     return verdict(ci, reference["band"], status, reference["applies"])
 
@@ -1031,7 +1215,8 @@ def _side_summary(cell: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def _ratio(base: float | None, arm: float | None) -> float | None:
-    return base / arm if base and arm and base > 0 and arm > 0 else None
+    """One task's multiple, harness / baseline."""
+    return arm / base if base and arm and base > 0 and arm > 0 else None
 
 
 def _pairs_table(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str, o: Options,
@@ -1090,7 +1275,7 @@ def coverage_for(comparison: Mapping[str, Any], cells: Mapping[tuple[str, tuple]
     else:
         pairs, _ = _metric_pairs(arm_cells, base_cells, metric)
         n = len(pairs)
-        logs = [math.log(b / h) for _, b, h in pairs]
+        logs = [_log_ratio(b, h) for _, b, h in pairs]
         if n >= MIN_SD_PAIRS:
             sd_used, sd_source = statistics.stdev(logs), "observed"
             halfwidth_now = math.exp(stats.t_quantile(o.ci_level, n - 1) * sd_used / math.sqrt(n))
@@ -1163,7 +1348,10 @@ def caveats_for(comparison: Mapping[str, Any], arm_group: Mapping[str, Any], bas
                 run_status: Mapping[str, str | None], o: Options) -> list[str]:
     """Plain-sentence warnings about what the comparison's numbers may hide."""
     out: list[str] = []
-    provider, model = comparison["provider"], comparison["model"]
+    if comparison.get("compare") == "models":
+        # Both sides are one harness: name each by its model.
+        arm_group = {**arm_group, "name": f"{comparison['harness']} on {comparison['arm_name']}"}
+        base_group = {**base_group, "name": f"{comparison['harness']} on {comparison['baseline_name']}"}
     sides = ((arm_group, [r for r in arm_rows if r["included"]]), (base_group, [r for r in base_rows if r["included"]]))
     for g, rows in sides:
         versions = sorted({r["harness_version"] for r in rows if r.get("harness_version")})
@@ -1214,23 +1402,25 @@ def caveats_for(comparison: Mapping[str, Any], arm_group: Mapping[str, Any], bas
     if any(r["outcome"] == "incomplete" or run_status.get(r["run_key"]) in STOPPED_RUN_STATUSES for r in every):
         out.append("Some trials come from runs stopped early (budget or cancel) or never finished; expensive "
                    "trials may be under-represented.")
-    if provider == "anthropic":
-        out.append("Harbor reports no cache-write tokens, so cache writes are priced as fresh input and cost "
-                   "multiples on Anthropic lean toward 1.")
-    if any(r.get("primary_share") is not None and r["primary_share"] < PRIMARY_SHARE_MIN
-           for _, rows in sides for r in rows):
-        out.append(f"Some trials spent more than {100 * (1 - PRIMARY_SHARE_MIN):.0f}% of their tokens on models "
-                   f"other than {model}.")
+    for g, rows in sides:
+        fallback = sum(1 for r in rows if r.get("fallback_model"))
+        if fallback:
+            many = fallback != 1
+            out.append(f"{fallback} {g['name']} trial{'s' if many else ''} spent more than "
+                       f"{100 * (1 - PRIMARY_SHARE_MIN):.0f}% of {'their' if many else 'its'} tokens on models other "
+                       f"than {g['model']} (a fallback model answered); {'they count' if many else 'it counts'} "
+                       "for pass rate only.")
+    out += flag_caveats(sides)
     for g, _ in sides:
         rvc = g["reported_vs_computed_cost"]
         ratio = rvc["median_ratio"]
         if ratio is None or REPORTED_RATIO_BAND[0] <= ratio <= REPORTED_RATIO_BAND[1]:
             continue
-        if harnesses.reports_mispriced_cost(g["family"], provider):
-            out.append(f"{g['name']} prices {provider} models at its own provider's rates (its reported cost is a "
-                       f"median {ratio:.2g}x the computed cost); the computed cost is used.")
+        if harnesses.reports_mispriced_cost(g["family"], g["provider"]):
+            out.append(f"{g['name']} prices {g['provider']} models at its own provider's rates (its reported cost "
+                       f"is a median {ratio:.2g}x the computed cost); the computed cost is used.")
             continue
-        if provider == "openrouter" and OPENROUTER_CAVEAT not in out:
+        if g["provider"] == "openrouter" and OPENROUTER_CAVEAT not in out:
             out.append(OPENROUTER_CAVEAT)
         out.append(f"{g['name']}'s own cost figure is a median {ratio:.2g}x the cost computed from list prices "
                    f"(n={rvc['n']}).")
@@ -1248,17 +1438,85 @@ def caveats_for(comparison: Mapping[str, Any], arm_group: Mapping[str, Any], bas
     references = [m.get("reference") for m in comparison["metrics"].values()] + [comparison["pass"].get("reference")]
     if any(ref is not None and not ref["applies"] for ref in references):
         out.append(NOT_APPLICABLE_CAVEAT)
+    if comparison.get("compare") == "models":
+        out.append(MODELS_NO_VERDICT)
     note = (comparison.get("coverage") or {}).get("note")
     if note:
         out.append(note)
     return list(dict.fromkeys(out))
 
 
+def _usd(value: float) -> str:
+    return f"${value:.4f}" if value < 0.01 else f"${value:.2f}"
+
+
+def _bound(rows: Sequence[Mapping[str, Any]], flag: str) -> str:
+    """' (up to $X in all)' from the flag's cost_usd_max on every row, else ''."""
+    bounds = [(r.get("flags") or {}).get(flag, {}).get("cost_usd_max") for r in rows]
+    return f" (up to {_usd(math.fsum(bounds))} in all)" if bounds and None not in bounds else ""
+
+
+def flag_caveats(sides: Sequence[tuple[Mapping[str, Any], Sequence[Mapping[str, Any]]]]) -> list[str]:
+    """Sentences for the trials whose flags (extract.trial_flags, raised at
+    ingest from the harness's log and the prices) say their cost may be off,
+    side by side; rows are the side's counted trials. A bound is summed over
+    the flagged trials: the printed running cost for calls never saved, the
+    costliest completed call for calls cut off mid-stream, and today's
+    prices for declined attempts."""
+    out: list[str] = []
+    for g, rows in sides:
+        def flagged(flag: str) -> list[Mapping[str, Any]]:
+            return [r for r in rows if flag in (r.get("flags") or {})]
+
+        def lead(hit: Sequence[Mapping[str, Any]], verb: tuple[str, str]) -> str:
+            one = len(hit) == 1
+            return f"{len(hit)} {g['name']} trial{'' if one else 's'} {verb[0] if one else verb[1]}"
+
+        declined = flagged("declined_attempts")
+        if declined:
+            out.append(f"{lead(declined, ('has', 'have'))} model attempts declined before another model answered "
+                       "(a refusal fallback); only the session log lists them and whether they are billed is "
+                       f"unknown, so the cost leaves them out{_bound(declined, 'declined_attempts')}.")
+        for flag, verb, what in (
+                ("unsaved_calls", ("lost", "lost"), "model calls that completed but were never saved (a timeout "
+                                                    "during a command)"),
+                ("unfinished_calls", ("started", "started"), "model calls that never finished (a kill mid-call)")):
+            hit = flagged(flag)
+            if hit:
+                calls = sum(int(r["flags"][flag].get("calls") or 0) for r in hit)
+                out.append(f"{lead(hit, verb)} {what}: {calls} call{'' if calls == 1 else 's'} missing from the "
+                           f"cost{_bound(hit, flag)}.")
+        mismatch = flagged("reported_cost_mismatch")
+        if mismatch:
+            worst = max((r["flags"]["reported_cost_mismatch"].get("diff_pct") or 0.0 for r in mismatch), key=abs)
+            out.append(f"{lead(mismatch, ('reports', 'report'))} a cost of its own more than "
+                       f"{100 * extract.REPORTED_COST_TOLERANCE:g}% from the cost computed from its tokens "
+                       f"(largest {worst:+.1f}%): a call the log does not show, or a price that differs.")
+        unknown = flagged("cache_writes_unknown")
+        if unknown:
+            out.append(f"{lead(unknown, ('has', 'have'))} cache writes no harness log gave; they are priced as "
+                       "fresh input, so the cost is low by the write premium.")
+        gone = flagged("trial_folder_missing")
+        if gone:
+            out.append(f"{lead(gone, ('had', 'had'))} no trial folder when last re-derived; their cache writes and "
+                       "log checks are the figures stored before.")
+    return out
+
+
+def _x(value: float) -> str:
+    """A multiple for prose: 2 decimals, or 2 significant figures under 0.1
+    (0.064, not 0.06), as the dashboard shows it."""
+    return f"{value:.2g}" if 0 < value < 0.1 else f"{value:.2f}"
+
+
 def headline(comparison: Mapping[str, Any], level: float = 0.90) -> str:
     """One line: who against whom, how many pairs, and the multiple once
     there are enough of them."""
     arm, base = comparison["arm_name"], comparison["baseline_name"]
-    who = f"{arm} vs {base} on {comparison['provider']}:{comparison['model']}"
+    if comparison.get("compare") == "models":
+        who = f"{arm} vs {base} with {comparison.get('harness') or 'one harness'}"
+    else:
+        who = f"{arm} vs {base} on {comparison['provider']}:{comparison['model']}"
     metric = (comparison.get("coverage") or {}).get("metric") or "cost"
     if metric == "pass":
         p = comparison["pass"]
@@ -1272,10 +1530,12 @@ def headline(comparison: Mapping[str, Any], level: float = 0.90) -> str:
         return f"{who}: {n} paired task{'' if n == 1 else 's'}; {m['need']} more for an estimate"
     gm = m["geomean"]
     word = "cost" if metric == "cost" else "tokens"
-    text = (f"{who}: {base} used {gm['estimate']:.2f}x the {word} of {arm} "
-            f"({level * 100:g}% CI {gm['lo']:.2f}-{gm['hi']:.2f}x, {n} tasks)")
+    text = (f"{who}: {arm} used {_x(gm['estimate'])}x the {word} of {base} "
+            f"({level * 100:g}% CI {_x(gm['lo'])}-{_x(gm['hi'])}x, {n} tasks)")
     if m["status"] == "low_n":
-        return text + f"; {m['need']} more for a verdict"
+        # A model comparison never gets a verdict; the same pair count still marks a settled figure.
+        goal = "a settled figure" if comparison.get("compare") == "models" else "a verdict"
+        return text + f"; {m['need']} more for {goal}"
     ref = m.get("reference")
     if ref:
         if ref.get("withheld"):
@@ -1283,8 +1543,8 @@ def headline(comparison: Mapping[str, Any], level: float = 0.90) -> str:
         if ref["verdict"] == "not_applicable":
             return text + "; published figures do not apply to this model"
         published, band = ref["published"], ref["band"]
-        figure = (f"{published['value']:g}x (read as {band[0]:.2f}-{band[1]:.2f}x)" if "value" in published
-                  else f"{band[0]:g}-{band[1]:g}x")
+        figure = (f"{_x(published['value'])}x (read as {_x(band[0])}-{_x(band[1])}x)"
+                  if published.get("value") is not None else f"{_x(band[0])}-{_x(band[1])}x")
         estimator = "ratio-of-means" if ref["estimator"] == "ratio_of_means" else "geometric-mean"
         phrase = {"within": "lies within", "overlaps": "overlaps", "above": "lies above",
                   "below": "lies below"}.get(ref["verdict"], "cannot yet be judged against")
@@ -1301,6 +1561,28 @@ class _Analysis:
     pairs_tables: dict[str, list[dict]]
 
 
+def tasks_file(cfg: Config) -> str:
+    """Where the profile's task scope (cfg.tasks) comes from, e.g. config/tasks.txt."""
+    effective = getattr(cfg, "effective", None)
+    return str((effective.get("tasks_file") if isinstance(effective, Mapping) else None) or "config/tasks.txt")
+
+
+def scope_label(scope: Mapping[str, Any]) -> str:
+    """A task_scope for a file name: '27-scope-tasks', 'all-tasks' or '5-tasks'."""
+    return {"scope": f"{scope['tasks']}-scope-tasks", "all": "all-tasks"}.get(scope["kind"], f"{scope['tasks']}-tasks")
+
+
+def task_scope(cfg: Config, f: Filters) -> dict[str, Any]:
+    """The tasks a report covers, against the profile's task scope (cfg.tasks,
+    read from its tasks_file): kind 'scope' when the task filter is exactly
+    those tasks, which the REPORT tab sends unless told otherwise, 'all' with
+    no task filter, else 'chosen'. Snapshots keep it, and exports name it."""
+    scope = set(cfg.tasks or [])
+    chosen = set(f.tasks)
+    kind = "all" if not chosen else "scope" if chosen == scope else "chosen"
+    return {"kind": kind, "tasks": len(chosen), "scope_tasks": len(scope), "tasks_file": tasks_file(cfg)}
+
+
 def _task_order(cfg: Config) -> dict[str, int]:
     order: dict[str, int] = {}
     for i, task in enumerate(cfg.tasks or []):
@@ -1308,9 +1590,15 @@ def _task_order(cfg: Config) -> dict[str, int]:
     return order
 
 
+def setup_matches(row: Mapping[str, Any], setup: str) -> bool:
+    """Whether a trial's setup_mode passes the report's setup option."""
+    return setup == "any" or row.get("setup_mode") in _SETUP_MATCHES.get(setup, ())
+
+
 def _fetch(ledger: Any, f: Filters, o: Options, *, runs: bool = True) -> tuple[list[dict], tuple, dict, Any]:
     _total, raw = ledger.query(f, order="started_at ASC")
-    raw = sorted(raw, key=lambda r: (r.get("started_at") or "~", r["trial_key"]))
+    raw = sorted((r for r in raw if setup_matches(r, o.setup)), key=lambda r: (r.get("started_at") or "~",
+                                                                              r["trial_key"]))
     excl = ledger.effective_exclusions() if o.apply_exclusions else (frozenset(), frozenset(), ())
     status = {r["run_key"]: r.get("status") for r in ledger.runs()} if runs else {}
     return raw, excl, status, pricing.load_table()
@@ -1330,49 +1618,65 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
     groups = {k: _group(k, rs, o) for k, rs in by_group.items()}
     baselines, warnings = pick_baselines(groups, o)
     for g in groups.values():
-        g["is_baseline"] = baselines.get((g["provider"], g["model"])) == g["key"]
+        g["is_baseline"] = baselines.get(axis_key(g, o)) == g["key"]
     cells = build_cells(used, o)
 
-    models: dict[tuple[str, str], list[str]] = defaultdict(list)
+    axes: dict[tuple[str, ...], list[str]] = defaultdict(list)
     for key, g in groups.items():
-        models[(g["provider"], g["model"])].append(key)
+        axes[axis_key(g, o)].append(key)
     comparisons: list[dict] = []
     pairs_tables: dict[str, list[dict]] = {}
     variants: dict[str, dict] | None = None
     ref_baseline = _reference_baseline(cfg.reference)
-    for pm in sorted(models):
-        base = baselines.get(pm)
-        others = [k for k in models[pm] if k != base]
+    by_models = o.compare == "models"
+    for axis in sorted(axes):
+        base = baselines.get(axis)
+        others = [k for k in axes[axis] if k != base]
         if base is None:
             if others:
                 one = len(others) == 1
-                warnings.append(f"No {o.baseline_family} trials on {pm[0]}:{pm[1]}, so {len(others)} "
-                                f"group{'' if one else 's'} there {'has' if one else 'have'} no comparison.")
+                where = (f"{o.baseline_model} with {groups[others[0]]['harness_name']}" if by_models
+                         else f"{axis[0]}:{axis[1]}")
+                warnings.append(f"No {'trials' if by_models else o.baseline_family + ' trials'} on {where}, so "
+                                f"{len(others)} group{'' if one else 's'} there {'has' if one else 'have'} "
+                                "no comparison.")
             continue
         if others and variants is None:
             variants = _variant_cells(raw, excl, table, o)
         bg = groups[base]
-        for arm in sorted(others, key=lambda k: (groups[k]["name"], k)):
+        for arm in sorted(others, key=lambda k: (groups[k]["name"], groups[k]["provider"], groups[k]["model"], k)):
             ag = groups[arm]
             key = f"{arm}~{base}"
-            ref_ok = ag["family"] != bg["family"] and bg["family"] == ref_baseline
+            # Published figures are harness multiples on one model: never a verdict on a model comparison.
+            ref_ok = not by_models and ag["family"] != bg["family"] and bg["family"] == ref_baseline
+            here = same_basis(cells, arm, base, o)
+            there = {name: same_basis(v, arm, base, o) for name, v in (variants or {}).items()}
+            if by_models:
+                names = (_model_name(ag, bg), _model_name(bg, ag))
+            else:
+                names = (ag["name"], bg["name"])
             metrics = {}
             for metric in METRICS:
-                ref = (reference_for(cfg.reference, ag["family"], pm[0], pm[1], metric)
+                ref = (reference_for(cfg.reference, ag["family"], ag["provider"], ag["model"], metric)
                        if ref_ok and metric != "tokens_uncached" else None)
-                metrics[metric] = compare_metric(cells, arm, base, metric, o, key, variants=variants, reference=ref,
-                                                 names=(ag["name"], bg["name"]))
-            pass_ref = reference_for(cfg.reference, ag["family"], pm[0], pm[1], "pass") if ref_ok else None
+                metrics[metric] = compare_metric(here, arm, base, metric, o, key, variants=there, reference=ref,
+                                                 names=names)
+            pass_ref = (reference_for(cfg.reference, ag["family"], ag["provider"], ag["model"], "pass")
+                        if ref_ok else None)
             comparison: dict[str, Any] = {
-                "key": key, "provider": pm[0], "model": pm[1], "group": arm, "baseline_group": base,
-                "arm_name": ag["name"], "baseline_name": bg["name"], "headline": "",
-                "pairs": _pairs_summary(cells, arm, base, metrics["cost"], order), "metrics": metrics,
-                "pass": compare_pass(cells, arm, base, o, key, reference=pass_ref), "coverage": {}, "caveats": [],
+                "key": key, "compare": o.compare, "provider": ag["provider"], "model": ag["model"],
+                "baseline_provider": bg["provider"], "baseline_model": bg["model"],
+                # The harness both sides ran (compare 'models'), else None.
+                "harness": ag["harness_name"] if by_models else None,
+                "group": arm, "baseline_group": base,
+                "arm_name": names[0], "baseline_name": names[1], "headline": "",
+                "pairs": _pairs_summary(here, arm, base, metrics["cost"], order), "metrics": metrics,
+                "pass": compare_pass(here, arm, base, o, key, reference=pass_ref), "coverage": {}, "caveats": [],
             }
-            comparison["coverage"] = coverage_for(comparison, cells, groups, cfg, o)
+            comparison["coverage"] = coverage_for(comparison, here, groups, cfg, o)
             comparison["caveats"] = caveats_for(comparison, ag, bg, by_group[arm], by_group[base], run_status, o)
             comparison["headline"] = headline(comparison, o.ci_level)
-            pairs_tables[key] = _pairs_table(cells, arm, base, o, order)
+            pairs_tables[key] = _pairs_table(here, arm, base, o, order)
             if o.include_pairs:
                 comparison["pairs_table"] = pairs_tables[key]
             comparisons.append(comparison)
@@ -1403,7 +1707,10 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
             "classifier_version": classify.CLASSIFIER_VERSION, "stats_version": stats.STATS_VERSION,
             "harbor_versions": sorted({r["harbor_version"] for r in used if r.get("harbor_version")}),
             "includes_active_run": active,
+            # How every multiple here reads, so a saved report is never read the other way (saved_report).
+            "direction": stats.DIRECTION,
         },
+        "scope": task_scope(cfg, f),
         "totals": {
             "trials": len(used), "runs": len({r["run_key"] for r in used}),
             "profiles": sorted({r["profile"] for r in used if r.get("profile")}),
@@ -1419,6 +1726,12 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
         "warnings": warnings,
     }
     return _Analysis(report=report, rows=rows, pairs_tables=pairs_tables)
+
+
+def _model_name(g: Mapping[str, Any], other: Mapping[str, Any]) -> str:
+    """A side of a model comparison by its model; with its provider when the
+    other side's model has the same id on another provider."""
+    return g["model"] if g["model"] != other["model"] else f"{g['provider']}:{g['model']}"
 
 
 def _variant_cells(raw: Sequence[Mapping[str, Any]], excl: tuple, table: Any, o: Options) -> dict[str, dict]:
@@ -1450,7 +1763,8 @@ _memo_lock = threading.Lock()
 def _cache_key(ledger: Any, cfg: Config, f: Filters, o: Options) -> tuple:
     request = hashlib.sha256(canonical_json({"filters": filters_dict(f), "options": options_dict(o)})
                              .encode("utf-8")).hexdigest()
-    context = hashlib.sha256(json.dumps({"reference": cfg.reference, "tasks": list(cfg.tasks or [])},
+    context = hashlib.sha256(json.dumps({"reference": cfg.reference, "tasks": list(cfg.tasks or []),
+                                         "tasks_file": tasks_file(cfg)},
                                         sort_keys=True, default=str).encode("utf-8")).hexdigest()
     return (str(getattr(ledger, "path", id(ledger))), id(ledger), request, tuple(ledger.version()),
             pricing.table_sha(), context)
@@ -1523,6 +1837,9 @@ def build_pairs(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
             reason = "tokens not reported" if null else "no usage recorded"
         elif reason is None and not r["valid_tokens"]:
             reason = "tokens not reported"
+        elif reason is None and r.get("fallback_model") and not r["valid_cost"]:
+            reason = (f"fallback model: {100 * (1 - (r.get('primary_share') or 0)):.0f}% of its tokens on models "
+                      f"other than {r['model']}")
         elif reason is None and not r["valid_cost"]:
             reason = ("no price for " + ", ".join(r["unpriced"])) if r["unpriced"] else "cost not available"
         if reason is not None:
@@ -1559,14 +1876,23 @@ def _csv_text(value: Any) -> str:
     return str(value)
 
 
+# Rows also say how their multiples read (direction) and which filters made them (filters), so a file read
+# later, or beside one from before multiples were harness / baseline, cannot be misread.
 _PAIR_COLUMNS = ("comparison", "provider", "model", "group", "baseline_group", "task", "digest_short", "run_key",
                  "same_run", "arm_trials", "arm_valid", "arm_tokens_total", "arm_cost", "arm_pass", "arm_trial_keys",
                  "baseline_trials", "baseline_valid", "baseline_tokens_total", "baseline_cost", "baseline_pass",
-                 "baseline_trial_keys", "ratio_tokens", "ratio_cost")
+                 "baseline_trial_keys", "ratio_tokens", "ratio_cost", "direction", "filters")
 _COMPARISON_COLUMNS = ("comparison", "provider", "model", "group", "baseline_group", "metric", "status", "n", "need",
                        "geomean", "geomean_lo", "geomean_hi", "sd_log", "ratio_of_means", "ratio_of_means_lo",
                        "ratio_of_means_hi", "delta_pp", "delta_pp_lo", "delta_pp_hi", "delta_method", "robust",
-                       "band_lo", "band_hi", "estimator", "applies", "position", "verdict", "headline")
+                       "band_lo", "band_hi", "estimator", "applies", "position", "verdict", "headline", "direction",
+                       "filters")
+
+
+def filters_text(f: Filters) -> str:
+    """The filters that are set, as canonical JSON: {} for none. Every
+    exported row carries it, so a file says what it was limited to."""
+    return canonical_json({k: v for k, v in filters_dict(f).items() if v not in (None, [], False)})
 
 
 def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, level: str) -> Iterator[list[str]]:
@@ -1577,9 +1903,10 @@ def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
     f = f if f is not None else Filters()
     o = o if o is not None else parse_options(None, cfg)
     out: list[list[str]] = []
+    used = filters_text(f)
     if level == "trials":
-        out.append(list(ANALYSIS_KEYS))
-        out += [[_csv_text(row[k]) for k in ANALYSIS_KEYS] for row in analysis_rows(ledger, cfg, f, o)]
+        out.append([*ANALYSIS_KEYS, "filters"])
+        out += [[_csv_text(row[k]) for k in ANALYSIS_KEYS] + [used] for row in analysis_rows(ledger, cfg, f, o)]
         return iter(out)
     analysis = _analysis(ledger, cfg, f, o)
     comparisons = analysis.report["comparisons"]
@@ -1592,7 +1919,7 @@ def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
                 for side in ("arm", "baseline"):
                     s = p[side]
                     values += [s["trials"], s["valid"], s["tokens_total"], s["cost"], s["pass"], s["trial_keys"]]
-                values += [p["ratio_tokens"], p["ratio_cost"]]
+                values += [p["ratio_tokens"], p["ratio_cost"], stats.DIRECTION, used]
                 out.append([_csv_text(v) for v in head + values])
         return iter(out)
     out.append(list(_COMPARISON_COLUMNS))
@@ -1604,7 +1931,7 @@ def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
             values = [metric, m["status"], m["n"], m["need"], gm.get("estimate"), gm.get("lo"), gm.get("hi"),
                       gm.get("sd_log"), rom.get("estimate"), rom.get("lo"), rom.get("hi"), None, None, None, None,
                       m["robust"], band[0], band[1], ref.get("estimator"), ref.get("applies"), ref.get("position"),
-                      ref.get("verdict"), c["headline"]]
+                      ref.get("verdict"), c["headline"], stats.DIRECTION, used]
             out.append([_csv_text(v) for v in head + values])
         p = c["pass"]
         ref = p["reference"] or {}
@@ -1612,6 +1939,104 @@ def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
         d = p["delta_pp"]
         values = ["pass", p["status"], p["n"], p["need"], None, None, None, None, None, None, None, d["estimate"],
                   d["lo"], d["hi"], d["method"], None, band[0], band[1], None, ref.get("applies"), None,
-                  ref.get("verdict"), c["headline"]]
+                  ref.get("verdict"), c["headline"], stats.DIRECTION, used]
         out.append([_csv_text(v) for v in head + values])
     return iter(out)
+
+
+# Saved reports ----------------------------------------------------------------------------------------
+
+_SWAPPED = {"above": "below", "below": "above"}
+
+
+def _inverse(value: Any) -> Any:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+        return value
+    return 1.0 / value
+
+
+def _invert_interval(block: Any) -> None:
+    if isinstance(block, dict):
+        lo, hi = block.get("lo"), block.get("hi")
+        block.update(estimate=_inverse(block.get("estimate")), lo=_inverse(hi), hi=_inverse(lo))
+
+
+def _swap_quoted(text: Any) -> Any:
+    """'above' and 'below' swapped inside a saved sentence (a withheld verdict's reason)."""
+    if not isinstance(text, str):
+        return text
+    return re.sub(r"'(above|below)'", lambda m: f"'{_SWAPPED[m.group(1)]}'", text)
+
+
+def _invert_metric(m: Any) -> None:
+    if not isinstance(m, dict):
+        return
+    for key in ("geomean", "ratio_of_means"):
+        _invert_interval(m.get(key))
+    q = m.get("per_task")
+    if isinstance(q, dict):
+        # min and max invert exactly. q1, median and q3 were interpolated between ratios the other way up, and
+        # interpolation does not commute with 1/x, so a fresh report's can differ (under 1% on the 2026-10-30
+        # ledger, more for an even count with far-apart middles); the snapshot view says so.
+        m["per_task"] = {"min": _inverse(q.get("max")), "q1": _inverse(q.get("q3")),
+                         "median": _inverse(q.get("median")), "q3": _inverse(q.get("q1")),
+                         "max": _inverse(q.get("min"))}
+    loo = m.get("leave_one_out")
+    if isinstance(loo, list) and len(loo) == 2:
+        m["leave_one_out"] = [_inverse(loo[1]), _inverse(loo[0])]
+    if isinstance(m.get("sensitivity"), dict):
+        m["sensitivity"] = {k: _inverse(v) for k, v in m["sensitivity"].items()}
+    ref = m.get("reference")
+    if not isinstance(ref, dict):
+        return
+    band = ref.get("band")
+    if isinstance(band, list) and len(band) == 2:
+        ref["band"] = [_inverse(band[1]), _inverse(band[0])]
+    published = ref.get("published")
+    if isinstance(published, dict):
+        if "value" in published:
+            published["value"] = _inverse(published["value"])
+        if "low" in published and "high" in published:
+            published["low"], published["high"] = _inverse(published["high"]), _inverse(published["low"])
+    for key in ("position", "verdict"):
+        ref[key] = _SWAPPED.get(ref.get(key), ref.get(key))
+    ref["withheld"] = _swap_quoted(ref.get("withheld"))
+
+
+def saved_report(response: Any, request: Any, cfg: Config) -> Any:
+    """A saved report (a snapshot's response) in today's reading. One saved
+    before multiples were harness / baseline (no provenance.direction) is
+    converted: every multiple, interval, band and published figure inverted,
+    'above' and 'below' swapped, headlines rewritten, and provenance names
+    converted_from, so its numbers are never read the wrong way round. Pass
+    rates are harness minus baseline either way. One saved without a scope
+    gets one from its request's filters."""
+    if not isinstance(response, Mapping):
+        return response
+    out = copy.deepcopy(dict(response))
+    provenance = out["provenance"] = dict(_mapping(out.get("provenance")))
+    if "scope" not in out:
+        filters = request.get("filters") if isinstance(request, Mapping) else None
+        try:
+            out["scope"] = task_scope(cfg, parse_filters(filters))
+        except ValueError:
+            out["scope"] = None
+    if provenance.get("direction") == stats.DIRECTION:
+        return out
+    level = _mapping(_mapping(out.get("spec")).get("options")).get("ci_level") or 0.90
+    for c in out.get("comparisons") or []:
+        if not isinstance(c, dict):
+            continue
+        for m in _mapping(c.get("metrics")).values():
+            _invert_metric(m)
+        for p in c.get("pairs_table") or []:
+            if isinstance(p, dict):
+                p.update(ratio_tokens=_inverse(p.get("ratio_tokens")), ratio_cost=_inverse(p.get("ratio_cost")))
+        c["caveats"] = [_swap_quoted(t) for t in c.get("caveats") or []]
+        try:
+            c["headline"] = headline(c, float(level))
+        except (KeyError, TypeError, ValueError):
+            c["headline"] = (f"{c.get('arm_name')} vs {c.get('baseline_name')}: saved before multiples were "
+                             "harness / baseline; read the figures, not this line")
+    provenance.update(direction=stats.DIRECTION, converted_from=provenance.get("direction") or "baseline_over_harness")
+    return out

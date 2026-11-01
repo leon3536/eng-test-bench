@@ -42,19 +42,23 @@ openrouter:
 
 REFERENCE_YAML = """\
 defaults:
-  direction: baseline_over_harness
+  direction: harness_over_baseline
   estimator: ratio_of_means
   tolerance: 1.5
   applies_to: ['anthropic:claude-*']
 consensus:
-  cost_per_trial: {low: 2.0, high: 3.0, source: "S1-S5"}
+  cost_per_trial: {low: 1/3, high: 1/2, source: "S1-S5"}
   pass_rate_delta_pp: {low: -5, high: 5, source: "S1-S5"}
 arms:
   pi:
-    tokens_per_trial: {value: 3.1, source: "S10 via S9"}
+    tokens_per_trial: {value: 1/3.1, source: "S10 via S9"}
   terminus-2:
     note: "no cost figures"
 """
+# The same figures as written before multiples were harness / baseline.
+REFERENCE_YAML_BASELINE_OVER_HARNESS = (REFERENCE_YAML.replace("harness_over_baseline", "baseline_over_harness")
+                                        .replace("{low: 1/3, high: 1/2,", "{low: 2.0, high: 3.0,")
+                                        .replace("{value: 1/3.1,", "{value: 3.1,"))
 
 CONFIG_YAML = """\
 dataset: terminal-bench@2.0
@@ -113,7 +117,8 @@ def arow(task: str, family: str, cost: float | None, *, where: tuple[str, str] =
 
 def paired(family: str, base: str, ratios: Sequence[float], *, tasks: Sequence[str] = SAMPLE,
            where: tuple[str, str] = GLM, base_cost: float = 0.3) -> list[dict[str, Any]]:
-    """Rows where the baseline costs ratios[i] times the family on task i."""
+    """Rows where the baseline costs ratios[i] times the family on task i: a multiple (family / baseline) of
+    1 / ratios[i]."""
     rows = []
     for i, k in enumerate(ratios):
         b = base_cost * (1 + 0.1 * i)
@@ -241,7 +246,29 @@ class BasisChain(EstimateCase):
         m = self.model(rows, arm)
         self.assertEqual((m.basis, m.confidence), ("prior", "low"))
         self.assertTrue(all(math.isclose(v, 0.62 / 3.1) for v in m.pool))
-        self.assertIn("3.1", m.detail)
+        self.assertIn("claude-code on openrouter:z-ai/glm-5.3 x 0.323 (reference pi tokens_per_trial)", m.detail)
+
+    def test_a_reference_written_either_way_predicts_the_same(self) -> None:
+        # The figures restated as harness / baseline (1/3.1, 1/3-1/2) predict exactly what 3.1 and 2-3 did.
+        old = self.load_test_config(CONFIG_YAML, pricing=PRICING_YAML, reference=REFERENCE_YAML_BASELINE_OVER_HARNESS,
+                                    tasks=SAMPLE)
+        rows = [arow(t, "claude-code", 0.62 + 0.01 * i) for i, t in enumerate(SAMPLE[:3])]
+        for agent in ("pi", "terminus-2"):
+            with self.subTest(agent):
+                arm = arm_spec(agent, agent)
+                new_pool = self.model(rows, arm).pool
+                old_pool = estimates.cell_model(old, rows, arm, config_hash="x" * 16, meta=META).pool
+                self.assertEqual(new_pool, old_pool)  # bitwise
+        self.assertEqual(estimates.reference_multiple(old.reference, "pi"),
+                         estimates.reference_multiple(self.cfg.reference, "pi"))
+        self.assertEqual(estimates.reference_multiple(self.cfg.reference, "terminus-2"),
+                         (1 / 2.5, "reference consensus cost_per_trial"))
+        self.assertEqual(estimates.reference_multiple({}, "pi"), (1 / 2.5, "the published 0.33x-0.5x, midpoint 0.4x"))
+        # No defaults.direction: the figures are the old baseline / harness ones, so 2.1 plans at 1/2.1.
+        undirected = {"consensus": {"cost_per_trial": {"low": 2.0, "high": 3.0}},
+                      "arms": {"strands": {"cost_per_trial": {"value": 2.1}}}}
+        self.assertEqual(estimates.reference_multiple(undirected, "strands")[0], 1 / 2.1)
+        self.assertEqual(estimates.reference_multiple(undirected, "pi")[0], 1 / 2.5)
 
     def test_prior_uses_the_consensus_midpoint_without_a_figure(self) -> None:
         arm = arm_spec("t2", "terminus-2")
@@ -351,13 +378,16 @@ class Budget(EstimateCase):
 
     def test_inflight_allowance_formula(self) -> None:
         spec = {"tasks": SAMPLE[:5], "attempts": 2, "arms": [{"tasks": None}, {"tasks": SAMPLE[:1]}],
-                "run": {"parallel_arms": 2, "n_concurrent": 3}}
+                "run": {"parallel_arms": 2, "n_concurrent": 3, "schedule": "arms"}}
         est = {"arms": [{"cap_usd": 1.0, "per_trial": {"p90": 0.9}}, {"cap_usd": None, "per_trial": {"p90": 0.7}}]}
         # min(2 x 3, 12 trials) busy x max(1.0 x 1.1, 2 x 0.7)
         self.assertAlmostEqual(estimates.inflight_allowance(spec, None, est), 6 * 1.4)
         small = {"tasks": SAMPLE[:1], "attempts": 1, "arms": [{"tasks": None}],
-                 "run": {"parallel_arms": 4, "n_concurrent": 8}}
+                 "run": {"parallel_arms": 4, "n_concurrent": 8, "schedule": "arms"}}
         self.assertAlmostEqual(estimates.inflight_allowance(small, None, {"arms": [{"cap_usd": 2.0}]}), 2.2)
+        # A task race: the busiest task's arms, at most max_containers: 2 arms x min(3, 2 attempts) on task 1.
+        race = {**spec, "run": {"parallel_arms": 2, "n_concurrent": 3, "schedule": "tasks", "max_containers": 3}}
+        self.assertAlmostEqual(estimates.inflight_allowance(race, None, est), 3 * 1.4)
         rows = [arow(t, "pi", 0.2) for t in SAMPLE[:4]]
         normalized = self.spec([ARM_CC, ARM_PI])
         got = self.estimate(normalized, rows)
@@ -374,7 +404,7 @@ class Budget(EstimateCase):
 
     def test_wall_time_and_containers(self) -> None:
         rows = [arow(t, "pi", 0.1, minutes=20.0) for t in SAMPLE[:4]]
-        est = self.estimate(self.spec([ARM_CC, ARM_PI], n_concurrent=2, parallel_arms=2), rows)
+        est = self.estimate(self.spec([ARM_CC, ARM_PI], n_concurrent=2, parallel_arms=2, schedule="arms"), rows)
         self.assertEqual(est["run"]["peak_containers"], 4)
         self.assertGreater(est["run"]["wall_minutes"]["p50"], estimates.PREFLIGHT_MINUTES)
         pi = next(a for a in est["arms"] if a["arm"] == "pi")
@@ -392,6 +422,11 @@ class Pairing(EstimateCase):
         self.assertLess(pair["ci_factor_after"], pair["ci_factor_now"])
         self.assertIsNotNone(pair["multiple_now"])
         self.assertEqual(pair["multiple_now"]["n"], 5)
+        # pi / claude-code: the geometric mean of 1/3.0, 1/1.8, ... (pi is the cheaper side).
+        expected = math.exp(sum(math.log(1 / k) for k in (3.0, 1.8, 4.5, 2.4, 3.6)) / 5)
+        self.assertAlmostEqual(pair["multiple_now"]["value"], expected, places=4)
+        lo, hi = pair["multiple_now"]["ci"]
+        self.assertTrue(lo < pair["multiple_now"]["value"] < hi < 1.0)
 
     def test_the_ledger_baseline_pairs_when_the_design_has_none(self) -> None:
         rows = paired("pi", "claude-code", [3.0, 2.0])
@@ -422,7 +457,8 @@ class QueueAdapter(EstimateCase):
     def test_queue_estimate_never_raises(self) -> None:
         def broken() -> list[dict[str, Any]]:
             raise RuntimeError("ledger busy")
-        spec = self.spec([dict(ARM_PI, name="mini", agent="bench.agents.mini_swe_agent:MiniSweAgentWithMcp")])
+        spec = self.spec([dict(ARM_PI, name="mini", agent="bench.agents.mini_swe_agent:MiniSweAgentWithMcp")],
+                         schedule="arms")
         got = estimates.queue_estimate(self.cfg, spec, broken)
         self.assertIsNone(got["expected_usd"])
         self.assertAlmostEqual(got["inflight_allowance_usd"], 2 * 1.1)  # 2 busy trials x the $1 cap x 1.1
@@ -563,6 +599,20 @@ class PairingRule(EstimateCase):
         self.assertEqual((within["pairs_now"], within["pairs_after"]), (2, 6))
 
 
+    def test_pairs_count_on_the_task_scope_only(self) -> None:
+        # The REPORT compares on cfg.tasks by default; the design's pairs and multiple use the same tasks.
+        cfg = self.load_test_config(CONFIG_YAML, pricing=PRICING_YAML, reference=REFERENCE_YAML, tasks=SAMPLE[:6])
+        rows = paired("pi", "claude-code", [3.0, 2.0, 2.5, 4.0])
+        rows += paired("pi", "claude-code", [0.5, 0.25], tasks=["extra-00", "extra-01"])  # outside the scope
+        spec = designs.normalize(cfg, {"tasks": SAMPLE[4:8], "run": {"budget_usd": 5.0}, "arms": [ARM_CC, ARM_PI]})
+        check = designs.validate(cfg, spec)
+        (pair,) = estimates.estimate(cfg, spec, rows, check["plan"], replicates=200)["pairing"]
+        self.assertEqual((pair["pairs_now"], pair["pairs_after"]), (4, 6))  # task-06 and task-07 never count
+        expected = math.exp(sum(math.log(1 / k) for k in (3.0, 2.0, 2.5, 4.0)) / 4)
+        self.assertAlmostEqual(pair["multiple_now"]["value"], expected, places=4)
+        self.assertEqual(pair["scope"], {"tasks": 6, "tasks_file": report.tasks_file(cfg), "outside": 2})
+
+
 class CellStats(EstimateCase):
     def test_cells_by_configuration_and_by_family(self) -> None:
         rows = [arow("task-00", "pi", 0.1, config_hash="a" * 16), arow("task-01", "pi", 0.3, config_hash="b" * 16),
@@ -590,3 +640,101 @@ class CellStats(EstimateCase):
         pi = estimates.cell_stats(self.cfg, [arow("task-00", "pi", 0.042, reported=0.013)])[0]
         self.assertAlmostEqual(pi["spend_per_trial"]["mean"], 0.042)
         self.assertAlmostEqual(pi["reported_cost_per_trial"]["mean"], 0.013)
+
+
+def set_up(row: dict[str, Any], mode: str | None, setup_sec: float | None) -> dict[str, Any]:
+    """An analysis row with its harness setup: setup_sec of its total_minutes went to agent setup."""
+    total = row["total_minutes"]
+    return dict(row, setup_mode=mode, setup_minutes=None if setup_sec is None else setup_sec / 60.0,
+                minutes_ex_setup=total - (setup_sec or 0.0) / 60.0)
+
+
+class SetupPlanning(EstimateCase):
+    """Stock setup installs the harness in each trial (Claude Code: minutes);
+    a pre-baked image cuts it to seconds. Plans use the setup the arm will have."""
+
+    def test_the_setup_an_arm_expects(self) -> None:
+        cases = [(None, "stock"), ({"mode": "off", "setup_timeout_multiplier": None}, "stock"),
+                 ({"mode": "prefer", "supported": False, "reason": "no adapter"}, "stock"),
+                 ({"mode": "prefer", "supported": True, "expect_stock": True}, "stock"),
+                 ({"mode": "prefer", "supported": True, "expect_stock": False}, "prebaked"),
+                 ({"mode": "require", "supported": True, "expect_stock": True}, "prebaked"),
+                 ({"mode": "require", "supported": False}, "stock")]
+        for block, expected in cases:
+            with self.subTest(block=block):
+                self.assertEqual(estimates.expected_setup_mode(block), expected)
+
+    def test_setup_figures_from_the_ledger_else_the_prior(self) -> None:
+        rows = [set_up(arow(t, "claude-code", 0.2), "stock", s) for t, s in zip(SAMPLE, (300.0, 330.0, 400.0))]
+        rows.append(set_up(arow("task-05", "claude-code", 0.2, minutes=6.0), "fallback", 334.0))
+        timed_out = arow("task-06", "claude-code", None, outcome="setup_failure", tokens=None,
+                         exception_type=estimates.SETUP_TIMEOUT, minutes=6.0)
+        rows.append(set_up(timed_out, "stock", 360.0))  # never got past setup: not a setup time
+        self.assertEqual(estimates.setup_figure(rows, "claude-code", "stock"),
+                         {"mode": "stock", "seconds": 332.0, "basis": "measured", "trials": 4})
+        self.assertEqual(estimates.setup_figure(rows, "claude-code", "prebaked"),
+                         {"mode": "prebaked", "seconds": 1.0, "basis": "prior", "trials": 0})
+        self.assertEqual(estimates.planned_setup_sec(rows, "pi", "prebaked"), 20.0)
+        self.assertIsNone(estimates.planned_setup_sec(rows, "pi", "stock"))  # never measured: trials keep their own
+        self.assertIsNone(estimates.planned_setup_sec(rows, "opencode", "prebaked"))
+        rows += [set_up(arow(t, "claude-code", 0.2), "prebaked", s) for t, s in zip(SAMPLE, (0.4, 0.6))]
+        self.assertEqual(estimates.setup_figure(rows, "claude-code", "prebaked"),
+                         {"mode": "prebaked", "seconds": 0.5, "basis": "measured", "trials": 2})
+        with self.assertRaises(ValueError):
+            estimates.setup_figure(rows, "claude-code", "fallback")
+
+    def test_trial_minutes_take_the_planned_setup(self) -> None:
+        arm = arm_spec("cc", "claude-code")
+        # 15-minute trials, 5 of them Claude Code's stock install; one older row says nothing of its setup.
+        rows = [set_up(arow(t, "claude-code", 0.2, minutes=15.0, config_hash="x" * 16), "stock", 300.0)
+                for t in SAMPLE[:3]]
+        rows.append(arow("task-03", "claude-code", 0.2, minutes=15.0, config_hash="x" * 16))
+
+        def minutes(mode: str | None) -> list[float]:
+            model = estimates.cell_model(self.cfg, rows, arm, config_hash="x" * 16, meta=META, setup_mode=mode)
+            self.assertEqual(model.setup_sec, None if mode is None else {"stock": 300.0, "prebaked": 1.0}[mode])
+            return [round(v, 4) for v in model.minutes_pool]
+
+        self.assertEqual(minutes(None), [15.0] * 4)
+        self.assertEqual(minutes("stock"), [15.0] * 4)
+        self.assertEqual(minutes("prebaked"), [round(10.0 + 1.0 / 60.0, 4)] * 3 + [15.0])
+
+    def test_a_pre_baked_arm_leaves_stock_setup_timeouts_out_of_its_infra_rate(self) -> None:
+        arm = arm_spec("cc", "claude-code")
+        rows = [set_up(arow(t, "claude-code", 0.2, config_hash="x" * 16), "stock", 300.0) for t in SAMPLE[:3]]
+        for i, mode in enumerate(("stock", "fallback", None, "prebaked")):
+            rows.append(set_up(arow(SAMPLE[3 + i], "claude-code", None, outcome="setup_failure", tokens=None,
+                                    exception_type=estimates.SETUP_TIMEOUT, config_hash="x" * 16), mode, 360.0))
+        rows.append(set_up(arow("task-09", "claude-code", None, outcome="infra", tokens=None, config_hash="x" * 16,
+                                exception_type="SandboxBuildFailedError"), "fallback", None))
+        rate = {mode: estimates.cell_model(self.cfg, rows, arm, config_hash="x" * 16, meta=META, setup_mode=mode)
+                for mode in (None, "stock", "prebaked")}
+        self.assertEqual((rate[None].p_infra, rate[None].infra_finished), (5 / 8, 8))
+        self.assertEqual((rate["stock"].p_infra, rate["stock"].infra_finished), (5 / 8, 8))
+        # Only the timeout on a pre-baked image, and the sandbox failure, are left to count.
+        self.assertEqual((rate["prebaked"].p_infra, rate["prebaked"].infra_finished), (2 / 5, 5))
+
+    def test_the_plan_sets_each_arms_setup(self) -> None:
+        spec = self.spec([ARM_CC], tasks=SAMPLE[:4])
+        chash = self.arm_hash(spec, "cc")
+        rows = [set_up(arow(t, "claude-code", 0.2, minutes=15.0, config_hash=chash), "stock", 300.0)
+                for t in SAMPLE[:4] for _ in range(3)]  # three per task: no extra spread on the minutes
+        plan = designs.validate(self.cfg, spec)["plan"]
+        self.assertIn("prebake", plan["arms"][0])
+        unpinned = estimates.estimate(self.cfg, spec, rows, plan, replicates=200)["arms"][0]
+        self.assertEqual(unpinned["setup"]["mode"], "stock")  # no pinned version, so no pre-baked image
+        self.assertEqual(unpinned["minutes_per_trial"]["p50"], 15.0)
+        plan["arms"][0]["prebake"] = {"mode": "require", "supported": True, "expect_stock": True}
+        baked = estimates.estimate(self.cfg, spec, rows, plan, replicates=200)["arms"][0]
+        self.assertEqual(baked["setup"], {"mode": "prebaked", "seconds": 1.0, "basis": "prior", "trials": 0})
+        self.assertEqual(baked["minutes_per_trial"]["p50"], 10.02)
+        override = estimates.estimate(self.cfg, spec, rows, plan, replicates=200, setup_modes={"cc": "stock"})
+        self.assertEqual(override["arms"][0]["minutes_per_trial"]["p50"], 15.0)
+        self.assertIsNone(estimates.estimate(self.cfg, spec, rows, None, replicates=200)["arms"][0]["setup"])
+
+    def test_cell_stats_show_minutes_without_setup(self) -> None:
+        rows = [set_up(arow("task-00", "pi", 0.1, minutes=5.0), "stock", 60.0),
+                set_up(arow("task-01", "pi", 0.1, minutes=4.2), "prebaked", 12.0)]
+        (cell,) = estimates.cell_stats(self.cfg, rows, family="pi")
+        self.assertEqual(cell["minutes_per_trial"]["ex_setup"]["median"], 4.0)
+        self.assertEqual(cell["setup_modes"], {"prebaked": 1, "stock": 1})

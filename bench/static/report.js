@@ -7,12 +7,17 @@
    The tab reads the ledger, which holds every trial of every run and profile.
    A status strip sits above five sub-tabs, and the first two share a filter
    rail:
-   - Report: multiples vs the baseline per model (forest plots, a pass strip
-     and a table), the unpaired group summary and the coverage matrix. A
+   - Report: multiples vs the baseline per model (harness ÷ baseline, so
+     under 1× is less than the baseline: forest plots, a pass strip and a
+     table), the unpaired group summary and the coverage matrix. A
      comparison row opens the pairs drawer, where trials and runs can be
      excluded or included again.
    - Ledger: the paged trial table. A row opens the trial drawer.
    - Runs, Exclusions and Snapshots.
+
+   The rail and every request carry the task scope, the profile's task file
+   (config tasks), unless tasks are ticked or the person switches to all
+   tasks; the strip says which applies and switches it in one click.
 
    Rail edits apply 400 ms after the last one. Until then hold() keeps a run
    the queue starts from pulling the page to LIVE. The rail is rebuilt only
@@ -38,30 +43,54 @@
   };
   const OUTCOME_ORDER = Object.keys(OUTCOMES);
   const CORNER = ['agent_crash', 'setup_failure', 'infra', 'incomplete'];  // marked in the corner of a coverage cell
-  // Reference verdicts: [glyph, chip text, tag tone]. Never "confirmed".
+  // Reference verdicts: [glyph, chip text, tag tone, what it means]. Never "confirmed". Multiples are
+  // harness ÷ baseline, so below the published range means relatively cheaper than published.
   const VERDICTS = {
-    within: ['✓', 'within published range', 'ok'],
-    overlaps: ['≈', 'overlaps', ''],
-    above: ['▲', 'above', 'warn'],
-    below: ['▼', 'below', 'warn'],
-    insufficient: ['…', 'too few pairs', ''],
-    not_applicable: ['–', 'n/a for this model', ''],
+    within: ['✓', 'within published range', 'ok', 'The whole interval lies inside the published range.'],
+    overlaps: ['≈', 'overlaps', '', 'The interval reaches both inside and outside the published range.'],
+    above: ['▲', 'above published range', 'warn',
+      'This harness used more, relative to the baseline, than the published figure says.'],
+    below: ['▼', 'below published range', 'warn',
+      'This harness used less, relative to the baseline, than the published figure says.'],
+    insufficient: ['…', 'too few pairs', '', 'Too few paired tasks for a verdict.'],
+    not_applicable: ['–', 'n/a for this model', '', 'The published figures were measured on Claude models.'],
   };
   const POSITION = {inside: 'estimate inside the band', above: 'estimate above the band', below: 'estimate below the band'};
   const USAGE = {lower_bound: ['≥ lower bound', 'warn'], unmeasured: ['usage not recorded', 'bad']};
   const TABS = [['report', 'Report'], ['ledger', 'Ledger'], ['runs', 'Runs'], ['exclusions', 'Exclusions'], ['snapshots', 'Snapshots']];
   const RAIL_TABS = new Set(['report', 'ledger']);
   const LIST_KEYS = ['profiles', 'sources', 'models', 'families', 'implementations', 'configs', 'exclude_configs',
-    'harness_versions', 'harbor_versions', 'efforts', 'datasets', 'snapshots', 'tasks', 'runs', 'exclude_runs'];
+    'harness_versions', 'harbor_versions', 'efforts', 'datasets', 'snapshots', 'tasks', 'runs', 'exclude_runs',
+    'setup_modes'];
+  const NULLABLE = new Set(['efforts', 'setup_modes']);  // null is a value: harness default, setup not recorded
+  // How a trial got its harness (the ledger's setup_mode): [label, tag tone, what it means].
+  const SETUP = {
+    prebaked: ['pre-baked', 'ok', 'started from a pre-baked image: its task image with the harness already installed'],
+    stock: ['stock', '', 'Harbor installed the harness inside the trial'],
+    fallback: ['fallback', 'warn',
+      'meant to use a pre-baked image, but none was usable, so Harbor installed the harness'],
+  };
+  const setupLabel = (mode) => (SETUP[mode] ? SETUP[mode][0] : 'not recorded');
   // Code defaults for the Advanced controls until the server's echo (spec.options) arrives.
   const OPTION_DEFAULTS = {
     group_by: 'family', split_harness_versions: false, 'baseline.family': 'claude-code', 'baseline.config': null,
     'pairing.match_on': 'digest', 'pairing.same_run_only': false, 'policy.crashes': 'include',
-    'policy.misconfigured_cap': 'exclude', 'policy.exclusions': true, pricing: 'current', ci_level: 0.9,
+    'policy.misconfigured_cap': 'exclude', 'policy.exclusions': true, pricing: 'current', ci_level: 0.9, setup: 'any',
+    compare: 'harnesses', 'baseline.model': null,
   };
-  const TICKS = [0.25, 0.5, 1, 2, 4, 8];   // the forest plots' log axis
-  const LOG_LO = Math.log(0.25);
-  const LOG_SPAN = Math.log(8) - LOG_LO;
+  // options.compare: harnesses (each model held fixed) or models (each harness held fixed).
+  const COMPARE_CHOICES = [['harnesses', 'Harnesses'], ['models', 'Models']];
+  // How each way names its two sides, its multiple and what enough pairs earn.
+  const SIDES = {
+    harnesses: {arm: 'harness', Arm: 'Harness', base: 'baseline', ratio: 'harness ÷ baseline',
+      diff: 'harness − baseline', goal: 'a verdict'},
+    models: {arm: 'model', Arm: 'Model', base: 'baseline model', ratio: 'model ÷ baseline model',
+      diff: 'model − baseline model', goal: 'a settled figure'},
+  };
+  const TICKS = [0.125, 0.25, 0.5, 1, 2, 4];   // the forest plots' log axis (harness ÷ baseline)
+  const tickLabel = (v) => (v < 1 ? `1/${Math.round(1 / v)}×` : `${v}×`);   // 1/8× is shorter than 0.125×
+  const LOG_LO = Math.log(0.125);
+  const LOG_SPAN = Math.log(4) - LOG_LO;
   const PASS_TICKS = [-50, -25, 0, 25, 50];
   const PAGE = 100;
   const SORTABLE = {started_at: 'DESC', task: 'ASC', family: 'ASC', tokens_total: 'DESC', cost_usd: 'DESC'};  // first direction on click
@@ -71,6 +100,8 @@
     tab: 'report',
     filters: {},            // the rail: what the next request sends
     options: {},            // options the person set; the rest come from the server's echo (spec.options)
+    allTasks: false,        // true: no task scope; false: the profile's task file, unless tasks are ticked
+    scopeFor: undefined,    // the scope the last render saw, to reload when the task file changes
     handed: null,           // filters from openReport that arrived before the first poll (prefs are per profile)
     railOpen: false,        // the rail below 1100 px, where it collapses above the content
     railStale: false,       // a rebuild waits until the rail holds nothing unsent
@@ -121,7 +152,12 @@
   const at = (p) => `${p.toFixed(2)}%`;
   const xLog = (v) => Math.max(0, Math.min(100, ((Math.log(v) - LOG_LO) / LOG_SPAN) * 100));
   const xPass = (v) => Math.max(0, Math.min(100, v + 50));
-  const signed = (v, digits = 1) => (!isNum(v) ? DASH : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}`);
+  // Signed once rounded, so float noise (a converted snapshot against now) reads 0.00, not −0.00.
+  const signed = (v, digits = 1) => {
+    if (!isNum(v)) return DASH;
+    const r = Number(v.toFixed(digits));
+    return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(digits)}`;
+  };
   const pts = (v) => (isNum(v) ? `${signed(v)} pts` : DASH);
   const interval = (lo, hi, fmt = multiple) => (isNum(lo) && isNum(hi) ? `[${fmt(lo)}–${fmt(hi)}]` : '');
   const ppInterval = (lo, hi) => (isNum(lo) && isNum(hi) ? `[${signed(lo)}, ${signed(hi)}]` : '');
@@ -203,6 +239,97 @@
   }
 
   /** The struck-through "excluded" badge with its reason, or null. */
+  const shortRef = (ref) => String(ref || '').replace(/^[^/]+\/[^/]+-r[0-9a-f]{10}\//, '');
+
+  /** A trial's harness setup as a tag: pre-baked, stock or fallback, with the image and setup time in its tooltip. */
+  function setupTag(setup, phases) {
+    const s = setup || {};
+    if (!s.mode) return h('span', {class: 'faint'}, DASH);
+    const [label, tone, meaning] = SETUP[s.mode] || [s.mode, '', ''];
+    const took = phases && isNum(phases.agent_setup_sec) ? `${phases.agent_setup_sec.toFixed(1)} s` : null;
+    const rows = [meaning, took && [took, 'agent setup'], s.image && [shortRef(s.image), 'image'],
+      s.baked_at && [when(s.baked_at), 'baked'], s.mode === 'fallback' && s.reason,
+      isNum(s.limit_sec) && [`${Math.round(s.limit_sec)} s`, 'setup limit']];
+    return tip(tag(label, tone), 'Harness setup', rows.filter(Boolean), true);
+  }
+
+  // Why a trial's cache writes are unknown (flags.cache_writes_unknown.reason), as a clause.
+  const WRITES_UNKNOWN = {'no harness log': 'no harness log gave them',
+    'not in the harness log': 'the harness log has none', 'trial folder gone': 'the trial folder is gone'};
+
+  /**
+   * A trial's cost checks (TrialRow.flags, raised at ingest from the harness's own log and the prices) as
+   * [label, sentence] rows: spend the cost may leave out, writes priced as input, a harness figure that disagrees.
+   */
+  function flagRows(flags) {
+    const f = flags || {};
+    const upTo = (x, how = 'up to') => (x && isNum(x.cost_usd_max) ? `, ${how} ${money(x.cost_usd_max)}` : '');
+    const calls = (n) => plural(isNum(n) ? n : 0, 'model call');
+    const rows = [];
+    if (f.declined_attempts) {
+      rows.push(['Declined attempts', `${plural(f.declined_attempts.attempts || 0, 'attempt')} declined before another `
+        + 'model answered (a refusal fallback). Whether they are billed is unknown, so the cost leaves them out'
+        + `${upTo(f.declined_attempts, 'up to')} at today's prices.`]);
+    }
+    if (f.unsaved_calls) {
+      const how = f.unsaved_calls.bound ? ` (${f.unsaved_calls.bound})` : '';
+      rows.push(['Calls never saved', `${calls(f.unsaved_calls.calls)} completed but never saved (a timeout during a `
+        + `command), missing from the cost${upTo(f.unsaved_calls)}${how}.`]);
+    }
+    if (f.unfinished_calls) {
+      rows.push(['Calls cut off', `${calls(f.unfinished_calls.calls)} never finished (a kill mid-call), missing from `
+        + `the cost${upTo(f.unfinished_calls, 'about')} at most (estimated from the costliest completed call).`]);
+    }
+    if (f.reported_cost_mismatch) {
+      const m = f.reported_cost_mismatch;
+      const off = isNum(m.diff_pct) ? `${signed(m.diff_pct)}%` : 'well';
+      // Four decimals: the check fires at 0.5%, which cents would round away ($0.05 vs $0.05).
+      const exact = (v) => (isNum(v) ? `$${v.toFixed(4)}` : DASH);
+      rows.push(['Own cost differs', `The harness reports ${exact(m.reported_usd)}, ${off} from the `
+        + `${exact(m.computed_usd)} computed from its tokens: a call the log does not show, or a price that differs.`]);
+    }
+    if (f.cache_writes_unknown) {
+      const u = f.cache_writes_unknown;
+      const which = (u.models || []).length ? ` (${u.models.join(', ')})` : '';
+      rows.push(['Cache writes unknown', `${isNum(u.calls) ? `${calls(u.calls)}: ` : ''}`
+        + `${WRITES_UNKNOWN[u.reason] || u.reason || 'not recorded'}${which}. Priced as fresh input, so the cost is `
+        + 'low by the write premium.']);
+    }
+    if (f.cache_writes_exceed_prompt) {
+      rows.push(['Writes over prompt', 'Recorded cache writes exceed the prompt on '
+        + `${[].concat(f.cache_writes_exceed_prompt).join(', ')}.`]);
+    }
+    if (f.trial_folder_missing) {
+      rows.push(['Folder gone', 'No trial folder when last re-derived; its cache writes and log checks are the '
+        + 'figures stored before.']);
+    }
+    return rows;
+  }
+
+  /** The ledger table's mark beside a cost its checks question, with the checks in its tooltip. */
+  function flagMark(flags) {
+    const rows = flagRows(flags);
+    if (!rows.length) return null;
+    return tip(h('span', {class: 'rp-flag', 'aria-label': plural(rows.length, 'cost check')}, '⚠'), 'Cost checks',
+      rows.map(([label, text]) => [text, label]), true);
+  }
+
+  /** The trial drawer's harness setup: which image it ran (or why it ran stock) and its bake. */
+  function setupSection(t) {
+    const s = t.setup || {};
+    if (!s.mode && !t.prebake) return null;
+    const sub = s.mode ? `${setupLabel(s.mode)}${SETUP[s.mode] ? `: ${SETUP[s.mode][2]}` : ''}` : 'not recorded';
+    return sideSection('Harness setup', sub, params([
+      ['Mode', setupLabel(s.mode)],
+      ['Image', s.image ? h('span', {class: 'mono rp-impl'}, s.image) : DASH],
+      ['Image id', s.image_id ? h('span', {class: 'mono'}, String(s.image_id).slice(0, 19)) : DASH],
+      ['Recipe', s.recipe ? h('span', {class: 'mono'}, String(s.recipe).slice(0, 12)) : DASH],
+      ['Baked', s.baked_at ? when(s.baked_at) : DASH],
+      ['Setup limit', isNum(s.limit_sec) ? `${Math.round(s.limit_sec)} s` : DASH],
+      s.reason && ['Why', s.reason],
+    ].filter(Boolean)));
+  }
+
   function exclusionBadge(ex) {
     if (!ex) return null;
     return ex.action === 'exclude'
@@ -233,12 +360,12 @@
     return ref.verdict === 'not_applicable' && POSITION[ref.position] ? `${text} · ${POSITION[ref.position]}` : text;
   }
 
-  /** The verdict chip; a withheld verdict shows its reason instead. */
+  /** The verdict chip, its meaning in the title; a withheld verdict shows its reason instead. */
   function verdictChip(ref) {
     if (!ref) return h('span', {class: 'faint'}, 'no published figure');
     if (ref.withheld) return h('span', {class: 'rp-withheld'}, h('b', null, 'Verdict withheld: '), ref.withheld);
-    const [glyph, text, tone] = VERDICTS[ref.verdict] || ['·', statusLabel(ref.verdict), ''];
-    return h('span', {class: 'rp-verdict'}, tag(`${glyph} ${text}`, tone),
+    const [glyph, text, tone, meaning] = VERDICTS[ref.verdict] || ['·', statusLabel(ref.verdict), '', ''];
+    return h('span', {class: 'rp-verdict', title: meaning || null}, tag(`${glyph} ${text}`, tone),
       ref.verdict === 'not_applicable' && POSITION[ref.position] && h('small', null, POSITION[ref.position]));
   }
 
@@ -266,15 +393,48 @@
     if (typeof f.date_to === 'string' && f.date_to) out.date_to = f.date_to;
     for (const k of LIST_KEYS) {
       if (!Array.isArray(f[k])) continue;
-      const list = f[k].filter((v) => typeof v === 'string' || (v === null && k === 'efforts'));
+      const list = f[k].filter((v) => typeof v === 'string' || (v === null && NULLABLE.has(k)));
       if (list.length) out[k] = unique(list).slice(0, 500);
     }
     if (f.include_cautioned === true) out.include_cautioned = true;
     return out;
   }
 
-  const requestBody = () => ({filters: cleanFilters(rp.filters), options: JSON.parse(JSON.stringify(rp.options))});
+  // The task scope: the profile's task file, as the config view lists it.
+  const scopeTasks = () => {
+    const cfg = ui.state && ui.state.config;
+    return cfg && Array.isArray(cfg.tasks) ? cfg.tasks : [];
+  };
+  const scopeFile = () => (ui.state && ui.state.config && ui.state.config.tasks_file) || 'config/tasks.txt';
+
+  /** What the rail asks for: its filters, and the task scope unless it is off or tasks are ticked. */
+  function railFilters() {
+    const f = cleanFilters(rp.filters);
+    const scope = scopeTasks();
+    if (!rp.allTasks && !f.tasks && scope.length) f.tasks = scope.slice(0, 500);
+    return f;
+  }
+
+  const requestBody = () => ({filters: railFilters(), options: JSON.parse(JSON.stringify(rp.options))});
   const bodyKey = () => JSON.stringify(requestBody());
+
+  /** One sentence on the tasks a report covers (its scope block), e.g. for the explainer and snapshots. */
+  function scopeText(scope) {
+    if (!scope) return '';
+    if (scope.kind === 'scope') return `${plural(scope.tasks, 'task')} from ${scope.tasks_file}`;
+    if (scope.kind === 'chosen') return `${plural(scope.tasks, 'chosen task')}`;
+    return scope.scope_tasks ? `all tasks, including those outside ${scope.tasks_file}` : 'all tasks';
+  }
+
+  /** Switches the task scope off (every task) or on and reloads at once. Not saved: each visit opens on the scope. */
+  function setAllTasks(on) {
+    rp.allTasks = on;
+    apply.cancel();
+    savePrefs();
+    renderStrip(true);
+    renderRail();
+    reload();
+  }
 
   function activeCount(f) {
     const c = cleanFilters(f);
@@ -285,8 +445,14 @@
     const mine = dig(rp.options, path);
     if (mine !== undefined) return mine;
     const echo = rp.report ? dig(rp.report.spec.options, path) : undefined;
-    return echo !== undefined ? echo : OPTION_DEFAULTS[path];
+    if (echo !== undefined) return echo;
+    // The profile's baseline_model until the server's echo arrives.
+    if (path === 'baseline.model') return (ui.state && ui.state.config && ui.state.config.baseline_model) || null;
+    return OPTION_DEFAULTS[path];
   }
+
+  /** Whether the report compares models (each harness held fixed) rather than harnesses (each model held fixed). */
+  const byModels = (r = rp.report) => (r ? dig(r.spec, 'options.compare') : optValue('compare')) === 'models';
 
   function optSet(path, value) {
     const keys = path.split('.');
@@ -303,6 +469,9 @@
       rp.filters = cleanFilters(saved.filters);
       rp.options = saved.options && typeof saved.options === 'object' && !Array.isArray(saved.options) ? saved.options : {};
     }
+    // The REPORT always opens on the task scope; "All tasks" lasts until the page is left or reloaded.
+    rp.allTasks = false;
+    prefs.set('report.allTasks', null);  // an earlier build saved the switch
     const tab = prefs.get('report.tab', 'report');
     rp.tab = TABS.some(([t]) => t === tab) ? tab : 'report';
     if (rp.handed) {
@@ -482,7 +651,8 @@
     const L = stateBlock('ledger');
     const rescanning = rp.rescanning || Boolean(L && L.rescan_running) || Boolean(s && s.rescan && s.rescan.running);
     const ingest = (L && L.last_ingest_at) || (s && s.last_ingest_at) || null;
-    const sig = [r && r.provenance, r && r.totals, s && [s.trials, s.warnings, s.last_error, s.available], ingest, rescanning];
+    const sig = [r && r.provenance, r && r.totals, r && r.scope, rp.allTasks, scopeTasks().length,
+      s && [s.trials, s.warnings, s.last_error, s.available], ingest, rescanning];
     if (!changed('report:strip', sig) && !force && box.firstChild) return;
     const p = r ? r.provenance : null;
     const t = r ? r.totals : null;
@@ -523,6 +693,7 @@
           t && [h('span', {class: 'faint'}, ' · '), tip(h('span', null, `spend ${lowerBound ? '≥ ' : ''}${money(t.spend_usd)}`), 'Spend of the trials used',
             [lowerBound ? `${plural(t.usage_unmeasured, 'trial')} recorded no usage, so this is a lower bound.` : 'Every trial used recorded its usage.'], true)]),
         h('div', {class: 'rp-strip-tags'},
+          scopeControl(r),
           p && p.includes_active_run && tag('includes a running run', 'run'),
           t && t.excluded_manual > 0 && tag(`${count(t.excluded_manual)} excluded by hand`, 'warn'),
           lowerBound && tag(`${plural(t.usage_unmeasured, 'trial')} without usage`, 'warn'),
@@ -530,6 +701,29 @@
           s && s.last_error && tip(tag('ledger error', 'bad'), 'Last ledger error', [[when(s.last_error.at), 'at'], [s.last_error.where || DASH, 'where'], s.last_error.message], true),
           s && (s.warnings || []).map((w) => h('span', {class: 'warn-text rp-strip-warn'}, `! ${w}`))),
         t ? outcomeBar(t.by_outcome) : null));
+  }
+
+  /** The tasks the report covers, and the one-click switch between the task scope and every task. */
+  function scopeControl(r) {
+    const n = scopeTasks().length;
+    const scope = r && r.scope;
+    if (!n && !(scope && scope.kind === 'chosen')) return null;
+    if ((rp.filters.tasks || []).length) {
+      return h('span', {class: 'rp-scope'}, tag(`tasks: ${plural(rp.filters.tasks.length, 'ticked task')}`),
+        h('small', {class: 'faint'}, ' chosen in Filters, instead of the scope'));
+    }
+    if (rp.allTasks) {
+      return h('span', {class: 'rp-scope'},
+        tip(tag('all tasks', 'warn'), 'Task scope off',
+          [`Trials on tasks outside ${scopeFile()} count too, so comparisons may pair on different tasks.`,
+            'Not saved: the next visit opens on the scope again.'], true),
+        h('button', {type: 'button', class: 'btn ghost small', onclick: () => setAllTasks(false)},
+          `Only the ${n} in ${scopeFile()}`));
+    }
+    return h('span', {class: 'rp-scope'},
+      tip(tag(`${plural(n, 'task')} from ${scopeFile()}`, 'ok'), 'Task scope',
+        ["Every comparison is on these tasks, the profile's task file. Trials on other tasks are left out."], true),
+      h('button', {type: 'button', class: 'btn ghost small', onclick: () => setAllTasks(true)}, 'All tasks'));
   }
 
   // Rail --------------------------------------------------------------------
@@ -540,7 +734,8 @@
     return !apply.pending() && !rp.invalid && !(rail && focus && focus !== rail && rail.contains(focus));
   }
 
-  const railSig = () => JSON.stringify([rp.facets, shownOptions(), cleanFilters(rp.filters), rp.metaError && rp.metaError.message]);
+  const railSig = () => JSON.stringify([rp.facets, shownOptions(), cleanFilters(rp.filters), rp.allTasks,
+    scopeTasks().length, rp.metaError && rp.metaError.message]);
 
   /** Rebuilds the rail when its data changed, but never while it holds unsent input (unless forced by a deliberate replace). */
   function renderRail(force = false) {
@@ -782,6 +977,10 @@
       section('Efforts', ['efforts'], withChosen('efforts', (f.efforts || []).map((e) => ({
         value: e.value, label: e.value === null ? 'harness default' : e.value, count: e.trials,
       }))).map((i) => optRow('efforts', i))),
+      section('Harness setup', ['setup_modes'], withChosen('setup_modes', (f.setup_modes || []).map((m) => ({
+        value: m.value, label: setupLabel(m.value), count: m.trials,
+        sub: SETUP[m.value] ? SETUP[m.value][2] : 'killed before its environment started',
+      }))).map((i) => optRow('setup_modes', i))),
       section('Datasets', ['datasets', 'snapshots'], [
         withChosen('datasets', (f.datasets || []).map((d) => ({value: d.value, label: d.value, count: sum(d.snapshots || [], (s) => s.trials)}))).map((i) => optRow('datasets', i)),
         h('div', {class: 'rp-subhead'}, 'Snapshots'),
@@ -795,6 +994,11 @@
         sub: `${r.profile} · ${statusLabel(r.status)} · ${when(r.created_at)}`,
       })), 'exclude_runs').map((i) => optRow('runs', i, {excludeKey: 'exclude_runs'}))),
       section('Tasks', ['tasks'], [
+        scopeTasks().length > 0 && h('label', {class: 'switch rp-switch'},
+          h('input', {type: 'checkbox', checked: !rp.allTasks, onchange: (e) => setAllTasks(!e.target.checked)}),
+          h('span', null, `Only the ${plural(scopeTasks().length, 'task')} in ${scopeFile()}`)),
+        scopeTasks().length > 0 && h('small', {class: 'faint rp-scope-note'},
+          'Ticking tasks below replaces the scope.'),
         order.length > 0 && h('div', {class: 'rp-subhead'}, 'Block 1'),
         block(0, 10).map((t) => optRow('tasks', taskItem(t))),
         order.length > 10 && h('div', {class: 'rp-subhead'}, 'Block 2'),
@@ -806,7 +1010,8 @@
       ], {tools: order.length ? [
         h('button', {type: 'button', class: 'btn ghost small', onclick: () => setTasks(block(0, 10)), title: 'Tasks 1 to 10 of this profile\'s sample'}, 'Block 1'),
         order.length > 10 && h('button', {type: 'button', class: 'btn ghost small', onclick: () => setTasks(block(10, 20)), title: 'Tasks 11 to 20 of this profile\'s sample'}, 'Block 2'),
-        h('button', {type: 'button', class: 'btn ghost small', onclick: () => setTasks([])}, 'Any task'),
+        h('button', {type: 'button', class: 'btn ghost small', onclick: () => setTasks([]),
+          title: 'Untick every task: the task scope applies, or every task with it off'}, 'Clear'),
       ] : null}),
       section('Harbor versions', ['harbor_versions'], withChosen('harbor_versions', (f.harbor_versions || []).map((v) => ({
         value: v.value, label: v.value, count: v.trials,
@@ -848,7 +1053,7 @@
   function advancedSection() {
     const f = rp.facets || {};
     const changedOption = () => edited();
-    const seg = (path, choices) => {
+    const seg = (path, choices, after = null) => {
       const group = h('div', {class: 'rp-seg', role: 'group'}, choices.map(([v, label]) => h('button', {
         type: 'button', 'data-v': v, class: optValue(path) === v ? 'active' : null, 'aria-pressed': String(optValue(path) === v),
         onclick: () => {
@@ -858,6 +1063,7 @@
             b.setAttribute('aria-pressed', String(b.dataset.v === v));
           }
           changedOption();
+          if (after) after();
         },
       }, label)));
       return group;
@@ -872,10 +1078,17 @@
     const families = (f.families || []).map((fam) => [fam.value, fam.value]);
     const pinChoices = [['', 'Any config'], ...(f.configs || []).filter((c) => c.family === family)
       .map((c) => [c.config_hash, `#${c.config_hash.slice(0, 8)} · ${c.label.split(' · ').slice(1).join(' · ')}`])];
-    const pin = select('baseline_config', pinChoices, optValue('baseline.config') || '', {onchange: (e) => {
-      optSet('baseline.config', e.target.value || null);
-      changedOption();
-    }});
+    const models = optValue('compare') === 'models';
+    const pin = select('baseline_config', pinChoices, optValue('baseline.config') || '', {disabled: models,
+      onchange: (e) => {
+        optSet('baseline.config', e.target.value || null);
+        changedOption();
+      }});
+    const baseModel = optValue('baseline.model') || '';
+    const modelChoices = (f.models || []).map((m) => [m.key, m.key]);
+    if (baseModel && !modelChoices.some(([v]) => v === baseModel)) {
+      modelChoices.unshift([baseModel, `${baseModel} (no trials)`]);
+    }
     const ciError = h('small', {class: 'warn-text', hidden: !rp.invalid}, rp.invalid);
     const ci = numberInput('ci_level', optValue('ci_level'), {min: 0.8, max: 0.99, step: 0.01, oninput: (e) => {
       const v = Number(e.target.value);
@@ -891,14 +1104,22 @@
       ciError.textContent = rp.invalid;
     }});
     return section('Advanced', [], [
+      field('Compare', seg('compare', COMPARE_CHOICES, () => renderRail(true)), {notes: [note(models
+        ? 'Each harness held fixed: every model it ran ÷ its baseline model.'
+        : 'Each model held fixed: every harness ÷ the baseline family.')]}),
       field('Group by', seg('group_by', [['family', 'Harness'], ['implementation', 'Implementation'], ['config', 'Exact config']])),
       sw('split_harness_versions', 'Split by harness version'),
-      field('Baseline family', select('baseline_family', families, family, {onchange: (e) => {
+      field('Baseline family', select('baseline_family', families, family, {disabled: models, onchange: (e) => {
         optSet('baseline.family', e.target.value);
         optSet('baseline.config', null);
         pin.value = '';
         changedOption();
-      }})),
+      }}), {notes: models ? [note('Comparing models: each harness is its own baseline.')] : []}),
+      field('Baseline model', select('baseline_model', modelChoices, baseModel, {disabled: !models, onchange: (e) => {
+        optSet('baseline.model', e.target.value);
+        changedOption();
+      }}), {notes: [note(models ? 'Every model is compared with this one, harness by harness.'
+        : 'Used when comparing models.')]}),
       field('Baseline config', pin, {notes: [note('Pin the baseline to one exact configuration.')]}),
       field('Pair on', select('match_on', [['digest', 'task content (default)'], ['name', 'task name']], optValue('pairing.match_on'), {onchange: (e) => {
         optSet('pairing.match_on', e.target.value);
@@ -913,6 +1134,8 @@
         changedOption();
       }})),
       field('CI level', ci, {notes: [note('0.80 to 0.99'), ciError]}),
+      field('Harness setup', seg('setup', [['any', 'Any'], ['stock', 'Stock'], ['prebaked', 'Pre-baked']]),
+        {notes: [note('Stock includes fallbacks. Neither changes what a trial measures.')]}),
     ]);
   }
 
@@ -921,6 +1144,7 @@
     rp.filters = {};
     rp.options = {};
     rp.invalid = '';
+    rp.allTasks = false;
     savePrefs();
     renderRail(true);
     const reset = $('#rp-rail .rp-reset');
@@ -1018,7 +1242,7 @@
 
   async function loadLedger() {
     const L = rp.ledger;
-    const body = {filters: cleanFilters(rp.filters), limit: PAGE, offset: L.offset, order: L.order};
+    const body = {filters: railFilters(), limit: PAGE, offset: L.offset, order: L.order};
     if (L.outcomes.length) body.outcomes = L.outcomes;
     const key = JSON.stringify(body);
     try {
@@ -1101,20 +1325,22 @@
   }
 
   async function exportLedger(format) {
-    const name = await download('/api/ledger/export', {filters: cleanFilters(rp.filters), format});
+    const name = await download('/api/ledger/export', {filters: railFilters(), format});
     toast(`Saved ${name}`);
   }
 
   async function saveSnapshot() {
     const body = requestBody();
-    const n = activeCount(body.filters);
+    const n = activeCount({...rp.filters, tasks: undefined});
+    const tasks = scopeText(rp.report && rp.report.scope);
     const input = h('input', {type: 'text', name: 'name', required: true, maxlength: 80, autocomplete: 'off', placeholder: 'e.g. After pilot 3'});
     rp.dialog = {input, initial: ''};
     const saved = await formDialog({
       code: 'SNAP', title: 'Save a snapshot', ok: 'Save snapshot',
       body: [
         h('p', null, 'Stores this report as it is now, with its filters and options, so you can open it later and compare it with the ledger then.'),
-        field('Name', input, {notes: [note(`${n ? plural(n, 'filter') : 'No filters'} · 1 to 80 characters`)]}),
+        field('Name', input, {notes: [note(`${tasks ? `${tasks} · ` : ''}`
+          + `${n ? plural(n, 'other filter') : 'No other filters'} · 1 to 80 characters`)]}),
       ],
       read: async () => {
         const name = input.value.trim();
@@ -1233,12 +1459,27 @@
         retry && h('button', {type: 'button', class: 'btn ghost', onclick: retry}, 'Try again'))));
   }
 
-  /** Groups and comparisons per provider:model, in the report's order. */
+  /**
+   * Groups and comparisons per what the report holds fixed, in its order: per provider:model when harnesses are
+   * compared, per harness (the group's harness_key) when models are. title names it.
+   */
   function modelsOf(r) {
     const models = new Map();
+    if (byModels(r)) {
+      const groups = new Map((r.groups || []).map((g) => [g.key, g]));
+      const get = (g) => {
+        if (!models.has(g.harness_key)) {
+          models.set(g.harness_key, {key: g.harness_key, title: g.harness_name || g.name, groups: [], comparisons: []});
+        }
+        return models.get(g.harness_key);
+      };
+      for (const g of r.groups || []) get(g).groups.push(g);
+      for (const c of r.comparisons || []) if (groups.has(c.group)) get(groups.get(c.group)).comparisons.push(c);
+      return [...models.values()].sort((a, b) => a.title.localeCompare(b.title));
+    }
     const get = (provider, model) => {
       const key = `${provider}:${model}`;
-      if (!models.has(key)) models.set(key, {key, provider, model, groups: [], comparisons: []});
+      if (!models.has(key)) models.set(key, {key, title: key, provider, model, groups: [], comparisons: []});
       return models.get(key);
     };
     for (const g of r.groups || []) get(g.provider, g.model).groups.push(g);
@@ -1246,12 +1487,48 @@
     return [...models.values()];
   }
 
+  /** How the report names its two sides: harness and baseline, or model and baseline model. */
+  const sidesOf = (r = rp.report) => SIDES[byModels(r) ? 'models' : 'harnesses'];
+
+  /** The baseline's name in headings: "Opus 5.5" when models are compared, "Claude Code" when harnesses are. */
+  function baselineLabel(r) {
+    return byModels(r) ? modelLabel(dig(r.spec, 'options.baseline.model'))
+      : harnessLabel(dig(r.spec, 'options.baseline.family') || 'claude-code');
+  }
+
+  /** The Harnesses | Models switch above the multiples (the same option as Compare in Advanced). */
+  function compareSwitch(r, readOnly) {
+    const now = byModels(r) ? 'models' : 'harnesses';
+    const text = byModels(r) ? `model ÷ ${baselineLabel(r)}, harness by harness`
+      : `harness ÷ ${baselineLabel(r)}, model by model`;
+    return h('div', {class: 'rp-compare-bar'},
+      eyebrow('Compare'),
+      readOnly ? tag(now === 'models' ? 'Models' : 'Harnesses')
+        : h('div', {class: 'rp-seg', role: 'group', 'aria-label': 'Compare'}, COMPARE_CHOICES.map(([v, label]) => h(
+          'button', {type: 'button', class: now === v ? 'active' : null, 'aria-pressed': String(now === v),
+            onclick: () => {
+              if (optValue('compare') === v) return;
+              optSet('compare', v);
+              edited();
+              renderRail(true);
+            }}, label))),
+      h('span', {class: 'faint'}, text));
+  }
+
   function headlinePanel(r, {readOnly = false} = {}) {
     const ci = Math.round((dig(r.spec, 'options.ci_level') || 0.9) * 100);
     const models = modelsOf(r);
-    return panel({code: 'R-02', title: 'Multiples vs baseline', meta: `${plural((r.comparisons || []).length, 'comparison')} · ${ci}% intervals`},
-      h('p', {class: 'rp-explainer'},
-        `Multiple = baseline ÷ harness on the same tasks and model; 2.0× means the harness used half. Intervals are ${ci}%. `
+    const tasks = scopeText(r.scope);
+    const lead = byModels(r)
+      ? `Multiple = model ÷ baseline model (${baselineLabel(r)}) on the same tasks with the same harness: 0.5× means `
+        + 'the model used half as much, under 1× less than the baseline model, over 1× more. Published figures compare '
+        + 'harnesses, so model comparisons get no verdict. '
+      : 'Multiple = harness ÷ baseline on the same tasks and model: 0.5× means the harness used half as much, under 1× '
+        + 'less than the baseline, over 1× more. ';
+    return panel({code: 'R-02', title: byModels(r) ? 'Multiples vs baseline model' : 'Multiples vs baseline',
+      meta: `${plural((r.comparisons || []).length, 'comparison')} · ${ci}% intervals`},
+      compareSwitch(r, readOnly),
+      h('p', {class: 'rp-explainer'}, `${lead}Intervals are ${ci}%. ${tasks ? `Tasks: ${tasks}. ` : ''}`
         + 'Pass rates on fewer than about 100 tasks cannot confirm a 5-point claim.'),
       models.map((m) => modelCard(m, r, {readOnly})));
   }
@@ -1259,30 +1536,38 @@
   function modelCard(m, r, {readOnly = false} = {}) {
     const groups = new Map((r.groups || []).map((g) => [g.key, g]));
     const base = m.groups.find((g) => g.is_baseline);
-    const baseFamily = dig(r.spec, 'options.baseline.family') || 'claude-code';
-    const baseName = baseFamily === 'claude-code' ? 'Claude Code' : baseFamily;
+    const models = byModels(r);
+    const baseFamily = models ? dig(r.spec, 'options.baseline.model')
+      : dig(r.spec, 'options.baseline.family') || 'claude-code';
+    const baseName = baselineLabel(r);
+    const S = sidesOf(r);
     const comps = m.comparisons;
-    const caveats = unique(comps.flatMap((c) => c.caveats || []));
+    const caveats = unique(comps.flatMap(caveatsOf));
     const ns = comps.map((c) => c.pairs.n_tasks);
     const lo = Math.min(...ns);
     const hi = Math.max(...ns);
     const noBaseline = !base || !(base.trials.valid_reward > 0 || base.trials.valid_cost > 0 || base.trials.valid_tokens > 0);
     const head = h('div', {class: 'rp-card-head'},
-      h('h3', null, m.key),
-      h('span', {class: 'rp-card-meta'}, base ? `baseline ${base.name}` : `no ${baseFamily} baseline`),
+      h('h3', null, m.title),
+      h('span', {class: 'rp-card-meta'},
+        base ? `baseline ${models ? baseName : base.name}` : `no ${baseFamily} baseline`),
       comps.length > 0 && h('span', {class: 'rp-card-meta'}, lo === hi ? plural(lo, 'paired task') : `${lo}–${hi} paired tasks`),
       caveats.length > 0 && tag(`⚠ ${plural(caveats.length, 'caveat')}`, 'warn'));
+    const noneText = models
+      ? `No usable ${baseName} trials with ${m.title} yet. Multiples need the baseline model on the same tasks.`
+      : `No usable ${baseName} trials on this model yet. Multiples need the baseline on the same tasks.`;
     if (!comps.length) {
-      return h('article', {class: 'rp-card'}, head, h('p', {class: 'rp-card-empty'}, noBaseline
-        ? `No usable ${baseName} trials on this model yet. Multiples need the baseline on the same tasks.`
-        : `Only ${base.name} has trials on this model, so there is nothing to compare yet.`));
+      return h('article', {class: 'rp-card'}, head, h('p', {class: 'rp-card-empty'}, noBaseline ? noneText
+        : models ? `Only ${baseName} has trials with ${m.title}, so there is nothing to compare yet.`
+          : `Only ${base.name} has trials on this model, so there is nothing to compare yet.`));
     }
     return h('article', {class: 'rp-card'}, head,
-      noBaseline && h('p', {class: 'rp-card-empty'}, `No usable ${baseName} trials on this model yet. Multiples need the baseline on the same tasks.`),
-      h('div', {class: 'rp-plots'}, forest(comps, 'tokens_total', 'Tokens'), forest(comps, 'cost', 'Cost')),
-      passStrip(comps),
-      plotLegend(),
-      h('div', {class: 'scroll'}, compTable(comps, groups, readOnly)),
+      noBaseline && h('p', {class: 'rp-card-empty'}, noneText),
+      h('div', {class: 'rp-plots'}, forest(comps, 'tokens_total', `Tokens vs ${baseName}`, S),
+        forest(comps, 'cost', `Cost vs ${baseName}`, S)),
+      passStrip(comps, S),
+      plotLegend(baseName, models),
+      h('div', {class: 'scroll'}, compTable(comps, groups, readOnly, baseName, models)),
       caveats.length > 0 && caveatList(comps, caveats));
   }
 
@@ -1299,16 +1584,34 @@
   const diamond = (p, y, cls) => svg('svg', {x: at(p), y, width: 1, height: 1, overflow: 'visible'},
     svg('path', {d: 'M0 -5L5 0L0 5L-5 0Z', class: cls}));
 
-  function forest(comps, metric, title) {
+  function forest(comps, metric, title, S = sidesOf()) {
     return h('div', {class: 'rp-forest'},
-      h('div', {class: 'rp-forest-head'}, eyebrow(`${title} multiple`), h('span', {class: 'faint'}, 'baseline ÷ harness, log scale')),
-      comps.map((c) => forestRow(c, metric)),
-      axisRow(TICKS.map((v) => [xLog(v), v === 1 ? '1×' : `${v}×`, v === 1])));
+      h('div', {class: 'rp-forest-head'}, eyebrow(title),
+        h('span', {class: 'faint'}, `${S.ratio}, log scale; left of 1× is less`)),
+      comps.map((c) => forestRow(c, metric, S)),
+      axisRow(TICKS.map((v) => [xLog(v), tickLabel(v), v === 1])));
   }
 
-  function forestRow(c, metric) {
+  /** A comparison's candidate as rows and plots label it: the harness, or the model ("Sonnet 5.5"). */
+  const armLabel = (c) => (c.compare === 'models' ? modelLabel(c.arm_name) : c.arm_name);
+  /** The server's headline and caveats name a model comparison's sides by id; show them as the cards do. */
+  function modelProse(c, text) {
+    if (c.compare !== 'models' || !text) return text;
+    return [c.arm_name, c.baseline_name].filter(Boolean).sort((a, b) => b.length - a.length).reduce((out, id) => {
+      const literal = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return out.replace(new RegExp(`(?<![\\w.:/-])${literal}(?![\\w.-])`, 'g'), modelLabel(id));
+    }, text);
+  }
+  const caveatsOf = (c) => (c.caveats || []).map((text) => modelProse(c, text));
+  /** "Sonnet 5.5 vs Opus 5.5 with pi", or "terminus-2 vs claude-code". */
+  const pairTitle = (c) => (c.compare === 'models'
+    ? `${modelLabel(c.arm_name)} vs ${modelLabel(c.baseline_name)} with ${c.harness}`
+    : `${c.arm_name} vs ${c.baseline_name}`);
+
+  function forestRow(c, metric, S = sidesOf()) {
     const m = c.metrics ? c.metrics[metric] : null;
-    const label = h('div', {class: 'rp-who', title: `${c.arm_name} vs ${c.baseline_name}`}, h('span', null, c.arm_name), m && m.status === 'low_n' && tag('low n'));
+    const label = h('div', {class: 'rp-who', title: `${c.arm_name} vs ${c.baseline_name}`},
+      h('span', null, armLabel(c)), m && m.status === 'low_n' && tag('low n'));
     if (!m || m.status === 'not_measured') {
       return h('div', {class: 'rp-frow'}, label,
         h('div', {class: 'rp-track-note'}, m ? notMeasuredText(m) : 'tokens not reported by this harness'),
@@ -1338,11 +1641,12 @@
       ref && [publishedText(ref), 'published'],
       ref && [verdictText(ref), 'verdict'],
       ref && ref.published && ref.published.source,
-      m.status === 'low_n' && `Low n: ${plural(m.need, 'more pair')} for a verdict.`,
+      m.status === 'low_n' && `Low n: ${plural(m.need, 'more pair')} for ${S.goal}.`,
     ].filter(Boolean);
     return h('div', {class: `rp-frow${m.status === 'low_n' ? ' rp-lown' : ''}`}, label,
-      tip(h('div', {class: 'rp-track-wrap', role: 'img', 'aria-label': `${c.arm_name}: ${metricText(m)}`}, track),
-        `${c.arm_name} · ${metric === 'cost' ? 'cost' : 'tokens'}`, rows, true),
+      tip(h('div', {class: 'rp-track-wrap', role: 'img', 'aria-label': `${armLabel(c)}: ${metricText(m)}`}, track),
+        `${armLabel(c)} · ${metric === 'cost' ? 'cost' : 'tokens'} vs `
+          + `${c.compare === 'models' ? modelLabel(c.baseline_name) : c.baseline_name}`, rows, true),
       h('div', {class: 'rp-val'}, h('b', null, times(g.estimate)), ' ', h('span', {class: 'rp-ci'}, interval(g.lo, g.hi)),
         rom && isNum(rom.estimate) && h('small', null, `mean ratio ${times(rom.estimate)}`)));
   }
@@ -1355,17 +1659,18 @@
       h('span'));
   }
 
-  function passStrip(comps) {
+  function passStrip(comps, S = sidesOf()) {
     return h('div', {class: 'rp-forest rp-pass'},
-      h('div', {class: 'rp-forest-head'}, eyebrow('Δ pass rate'), h('span', {class: 'faint'}, 'harness − baseline, in points, on paired tasks')),
-      comps.map(passRow),
+      h('div', {class: 'rp-forest-head'}, eyebrow('Δ pass rate'),
+        h('span', {class: 'faint'}, `${S.diff}, in points, on paired tasks`)),
+      comps.map((c) => passRow(c, S)),
       axisRow(PASS_TICKS.map((v) => [xPass(v), v === 0 ? '0' : `${signed(v, 0)}`, v === 0])));
   }
 
-  function passRow(c) {
+  function passRow(c, S = sidesOf()) {
     const p = c.pass;
     const d = p && p.delta_pp;
-    const label = h('div', {class: 'rp-who'}, h('span', null, c.arm_name), p && p.status === 'low_n' && tag('low n'));
+    const label = h('div', {class: 'rp-who'}, h('span', null, armLabel(c)), p && p.status === 'low_n' && tag('low n'));
     const mde = p && isNum(p.mde_pp) ? `can detect ±${Math.round(p.mde_pp)} pts` : '';
     if (!p || !d || !isNum(d.estimate)) {
       return h('div', {class: 'rp-frow'}, label,
@@ -1382,9 +1687,10 @@
       svg('circle', {cx: at(xPass(d.estimate)), cy: 15, r: 4.5, class: 'rp-gm'}));
     const rows = [
       [`${pts(d.estimate)} ${ppInterval(d.lo, d.hi)}`, 'Δ pass'],
-      [`${pct(p.arm_rate)} vs ${pct(p.baseline_rate)}`, 'harness vs baseline'],
+      [`${pct(p.arm_rate)} vs ${pct(p.baseline_rate)}`, `${S.arm} vs ${S.base}`],
       [count(p.n), 'paired tasks'],
-      p.discordant && [`${p.discordant.arm_only} / ${p.discordant.baseline_only}`, 'only harness / only baseline passed'],
+      p.discordant && [`${p.discordant.arm_only} / ${p.discordant.baseline_only}`,
+        `only ${S.arm} / only ${S.base} passed`],
       isNum(p.mcnemar_p) && [p.mcnemar_p.toFixed(3), 'McNemar p'],
       mde && [mde, 'resolution'],
       ref && [passPublishedText(ref), 'published'],
@@ -1392,18 +1698,22 @@
       ref && ref.published && ref.published.source,
     ].filter(Boolean);
     return h('div', {class: `rp-frow${p.status === 'low_n' ? ' rp-lown' : ''}`}, label,
-      tip(h('div', {class: 'rp-track-wrap', role: 'img', 'aria-label': `${c.arm_name}: ${pts(d.estimate)}`}, track), `${c.arm_name} · Δ pass`, rows, true),
+      tip(h('div', {class: 'rp-track-wrap', role: 'img', 'aria-label': `${armLabel(c)}: ${pts(d.estimate)}`}, track),
+        `${armLabel(c)} · Δ pass`, rows, true),
       h('div', {class: 'rp-val'}, h('b', null, pts(d.estimate)), ' ', h('span', {class: 'rp-ci'}, ppInterval(d.lo, d.hi)), mde && h('small', null, mde)));
   }
 
-  function plotLegend() {
+  function plotLegend(baseName, models = false) {
     const sw = (...marks) => svg('svg', {class: 'rp-sw', viewBox: '0 0 24 14', width: 24, height: 14, 'aria-hidden': 'true'}, marks);
     return h('div', {class: 'legend rp-legend'},
       h('span', null, sw(svg('line', {x1: 1, x2: 23, y1: 7, y2: 7, class: 'rp-gm-ci'}), svg('circle', {cx: 12, cy: 7, r: 4, class: 'rp-gm'})), 'geometric mean with its interval'),
-      h('span', null, sw(svg('line', {x1: 1, x2: 23, y1: 7, y2: 7, class: 'rp-rom-ci'}), svg('path', {d: 'M12 2L17 7L12 12L7 7Z', class: 'rp-rom'})), 'ratio of means (used for verdicts)'),
-      h('span', null, sw(svg('rect', {x: 1, y: 1, width: 22, height: 12, class: 'rp-band'})), 'published band'),
-      h('span', null, sw(svg('line', {x1: 12, x2: 12, y1: 0, y2: 14, class: 'rp-parity'})), '1× / no difference'),
-      h('span', null, tag('low n'), 'too few pairs for a verdict'));
+      h('span', null, sw(svg('line', {x1: 1, x2: 23, y1: 7, y2: 7, class: 'rp-rom-ci'}),
+        svg('path', {d: 'M12 2L17 7L12 12L7 7Z', class: 'rp-rom'})),
+        models ? 'ratio of means' : 'ratio of means (used for verdicts)'),
+      !models && h('span', null, sw(svg('rect', {x: 1, y: 1, width: 22, height: 12, class: 'rp-band'})),
+        'published band'),
+      h('span', null, sw(svg('line', {x1: 12, x2: 12, y1: 0, y2: 14, class: 'rp-parity'})), `1× = same as ${baseName}`),
+      h('span', null, tag('low n'), models ? 'too few pairs for a settled figure' : 'too few pairs for a verdict'));
   }
 
   function metricCell(m) {
@@ -1428,9 +1738,11 @@
     ];
   }
 
-  function compTable(comps, groups, readOnly) {
+  function compTable(comps, groups, readOnly, baseName, models = false) {
+    const S = SIDES[models ? 'models' : 'harnesses'];
     return h('table', {class: 'grid-t compact rp-cmp'},
-      thead('Harness', thNum('Pairs'), thNum('Tokens ×'), thNum('Cost ×'), 'Published', 'Verdict', 'Pass, harness vs baseline', thNum('Setup failures')),
+      thead(S.Arm, thNum('Pairs'), thNum(`Tokens vs ${baseName}`), thNum(`Cost vs ${baseName}`), !models && 'Published',
+        !models && 'Verdict', `Pass, ${S.arm} vs ${S.base}`, thNum('Setup failures')),
       comps.map((c) => {
         const open = readOnly ? null : () => openPairs(c.key);
         const arm = groups.get(c.group);
@@ -1442,27 +1754,28 @@
           h('tr', null,
             h('td', null,
               readOnly
-                ? h('b', null, c.arm_name)
+                ? h('b', null, armLabel(c))
                 : h('button', {type: 'button', class: 'rp-link', title: 'Open the pairs', onclick: (e) => {
                   e.stopPropagation();
                   open();
-                }}, c.arm_name, h('span', {class: 'arrow'}, ' ›')),
-              h('span', {class: 'sub mono'}, `vs ${c.baseline_name}`),
-              (c.caveats || []).length > 0 && tip(h('span', {class: 'rp-cav'}, `⚠ ${plural(c.caveats.length, 'caveat')}`), 'Caveats', c.caveats, true)),
+                }}, armLabel(c), h('span', {class: 'arrow'}, ' ›')),
+              h('span', {class: 'sub mono'}, models ? `${c.provider}:${c.model}` : `vs ${c.baseline_name}`),
+              (c.caveats || []).length > 0 && tip(h('span', {class: 'rp-cav'},
+                `⚠ ${plural(c.caveats.length, 'caveat')}`), 'Caveats', caveatsOf(c), true)),
             tdNum(count(c.pairs.n_tasks)),
             metricCell(c.metrics.tokens_total),
             metricCell(c.metrics.cost),
-            h('td', null, refs.length
+            !models && h('td', null, refs.length
               ? refs.map(([name, ref]) => h('div', null, both && h('span', {class: 'faint'}, `${name} `),
                 tip(h('span', {class: 'rp-pub'}, publishedText(ref)), `Published (${name.toLowerCase()})`,
                   [(ref.published && ref.published.source) || 'No source given', [ref.estimator ? statusLabel(ref.estimator) : DASH, 'compared with']], true)))
               : h('span', {class: 'faint'}, 'none published')),
-            h('td', null, refs.length
+            !models && h('td', null, refs.length
               ? refs.map(([name, ref]) => h('div', {class: 'rp-vrow'}, both && h('span', {class: 'faint'}, `${name} `), verdictChip(ref)))
               : DASH),
             h('td', null, passCell(c.pass)),
             tdNum(sf ? `${pct(sf.estimate)} ${interval(sf.lo, sf.hi, pct)}` : DASH, sf ? `${plural(sf.trials, 'trial')}, Wilson interval` : null)),
-          h('tr', {class: 'rp-headline'}, h('td', {colspan: 8}, c.headline)));
+          h('tr', {class: 'rp-headline'}, h('td', {colspan: models ? 6 : 8}, modelProse(c, c.headline))));
       }));
   }
 
@@ -1470,7 +1783,7 @@
     return h('details', {class: 'rp-caveats'},
       h('summary', null, `Caveats (${caveats.length})`),
       h('ul', null, caveats.map((text) => {
-        const who = comps.filter((c) => (c.caveats || []).includes(text)).map((c) => c.arm_name);
+        const who = comps.filter((c) => caveatsOf(c).includes(text)).map(armLabel);
         return h('li', null, text, who.length < comps.length && h('span', {class: 'faint'}, ` · ${who.join(', ')}`));
       })));
   }
@@ -1487,7 +1800,7 @@
       thead('Group', 'Outcomes', thNum('Pass rate'), thNum('Tokens mean · median'), thNum('Cost mean'),
         thNum('Reported ÷ computed'), thNum('Median min'), thNum('Setup failures'), 'Configs'),
       h('tbody', null, models.map((m) => [
-        h('tr', {class: 'rp-block'}, h('th', {colspan: 9, scope: 'colgroup'}, m.key)),
+        h('tr', {class: 'rp-block'}, h('th', {colspan: 9, scope: 'colgroup'}, m.title)),
         [...m.groups].sort((a, b) => Number(b.is_baseline) - Number(a.is_baseline)).map((g) => {
           const t = g.trials;
           const pt = g.per_trial || {};
@@ -1495,7 +1808,8 @@
           const sf = g.setup_failure_rate;
           const versions = Object.entries(g.harness_versions || {}).map(([v, n]) => `${v} ×${n}`).join(', ');
           return h('tr', {class: g.is_baseline ? 'baseline' : null},
-            h('td', null, h('b', null, g.name), g.is_baseline && [' ', tag('baseline', 'ok')],
+            h('td', null, h('b', null, byModels(r) ? `${g.provider}:${g.model}` : g.name),
+              g.is_baseline && [' ', tag('baseline', 'ok')],
               g.implementation && g.implementation !== 'builtin' && h('span', {class: 'sub mono rp-impl'}, g.implementation),
               g.implementation === null && h('span', {class: 'sub'}, 'mixed implementations'),
               versions && h('span', {class: 'sub mono'}, `version ${versions}`)),
@@ -1511,11 +1825,21 @@
               t.usage_unmeasured > 0 && h('small', {class: 'sub warn-text'}, `${plural(t.usage_unmeasured, 'trial')} without usage, left out`),
               t.usage_lower_bound > 0 && h('small', {class: 'sub warn-text'}, `${count(t.usage_lower_bound)} lower bound${t.usage_lower_bound === 1 ? '' : 's'} in the mean`)),
             h('td', {class: 'num'}, isNum(rvc.median_ratio) ? [times(rvc.median_ratio), h('small', {class: 'sub'}, `n=${count(rvc.n)}`)] : DASH),
-            tdNum(pt.minutes ? minutes(pt.minutes.median) : DASH),
+            h('td', {class: 'num'}, pt.minutes ? minutes(pt.minutes.median) : DASH,
+              pt.minutes_ex_setup && isNum(pt.minutes_ex_setup.median)
+                && h('small', {class: 'sub'}, `${minutes(pt.minutes_ex_setup.median)} ex setup`),
+              setupModesText(g.setup_modes) && h('small', {class: 'sub'}, setupModesText(g.setup_modes))),
             tdNum(sf ? `${pct(sf.estimate)} ${interval(sf.lo, sf.hi, pct)}` : DASH, sf ? `${plural(sf.trials, 'trial')}` : null),
             h('td', null, configsCell(g)));
         }),
       ])));
+  }
+
+  /** "10 pre-baked · 3 stock": how a group's trials got their harness; nothing when every one ran stock. */
+  function setupModesText(modes) {
+    const entries = Object.entries(modes || {}).filter(([, n]) => n > 0);
+    if (!entries.length || (entries.length === 1 && entries[0][0] === 'stock')) return '';
+    return entries.map(([m, n]) => `${n} ${m === 'unknown' ? 'not recorded' : setupLabel(m)}`).join(' · ');
   }
 
   function configsCell(g) {
@@ -1567,9 +1891,12 @@
       tasks.map((task) => h('tr', null, h('td', {class: 'task'}, task), cols.map((g) => covCell(g, task, cells, base, cols, has)))),
     ] : []);
     return h('div', {class: 'rp-cov-model'},
-      h('h3', {class: 'rp-cov-title'}, m.key),
+      h('h3', {class: 'rp-cov-title'}, m.title),
       h('div', {class: 'scroll'}, h('table', {class: 'matrix rp-cov'},
-        h('thead', null, h('tr', null, h('th', null, 'Task'), cols.map((g) => h('th', {title: g.label}, g.is_baseline ? `${g.name} ◆` : g.name)))),
+        h('thead', null, h('tr', null, h('th', null, 'Task'), cols.map((g) => {
+          const name = byModels(r) ? modelLabel(`${g.provider}:${g.model}`) : g.name;
+          return h('th', {title: g.label}, g.is_baseline ? `${name} ◆` : name);
+        }))),
         h('tbody', null,
           rowsFor(order.slice(0, 10), 'Block 1'),
           rowsFor(order.slice(10, 20), 'Block 2'),
@@ -1593,7 +1920,10 @@
       [count(valid), 'valid trials'],
       c && [count(c.passed), 'passed'],
       ...(c ? outcomeEntries(c.by_outcome).map(([o, n]) => [count(n), `${glyphOf(o)} ${labelOf(o)}`]) : []),
-      missing && (g.is_baseline ? 'The harness ran this task; the baseline has no valid trial.' : 'The baseline ran this task; this harness has no valid trial.'),
+      missing && (byModels() ? (g.is_baseline ? 'Another model ran this task; the baseline model has no valid trial.'
+        : 'The baseline model ran this task; this model has no valid trial.')
+        : g.is_baseline ? 'The harness ran this task; the baseline has no valid trial.'
+          : 'The baseline ran this task; this harness has no valid trial.'),
     ].filter(Boolean);
     return h('td', null, tip(box, `${g.name} · ${task}`, rows, true));
   }
@@ -1612,11 +1942,15 @@
     }
     if (isNum(cv.pass_tasks_needed)) parts.push(`±${passDelta} pts on pass rate needs about ${count(cv.pass_tasks_needed)} tasks.`);
     const next = cv.next || [];
-    const nextList = () => [`# ${c.arm_name} vs ${c.baseline_name} on ${m.key}: next tasks to run (task, side, reason)`,
+    const where = c.compare === 'models' ? `with ${m.title}` : `on ${m.key}`;
+    const nextList = () => [`# ${c.arm_name} vs ${c.baseline_name} ${where}: next tasks to run (task, side, reason)`,
       ...next.map((n) => `${n.task}\t${n.side}\t${n.reason}`)].join('\n');
     return h('div', {class: 'rp-covline'},
-      h('div', {class: 'rp-covhead'}, h('b', null, `${c.arm_name} vs ${c.baseline_name}`),
-        h('span', {class: 'faint'}, `${plural(cv.pairs, 'pair')} · ${count(cv.need_for_estimate)} more for an estimate · ${count(cv.need_for_verdict)} more for a verdict${cv.sd_source === 'prior' ? ' · spread from the prior' : ''}`)),
+      h('div', {class: 'rp-covhead'}, h('b', null, pairTitle(c)),
+        h('span', {class: 'faint'}, `${plural(cv.pairs, 'pair')} · `
+          + `${count(cv.need_for_estimate)} more for an estimate · ${count(cv.need_for_verdict)} more for `
+          + `${c.compare === 'models' ? 'a settled figure' : 'a verdict'}`
+          + `${cv.sd_source === 'prior' ? ' · spread from the prior' : ''}`)),
       h('p', null, parts.join(' ')),
       cv.note && h('p', {class: 'muted'}, cv.note),
       next.length > 0 && h('div', {class: 'rp-next'},
@@ -1630,11 +1964,13 @@
   // Pairs drawer ------------------------------------------------------------
 
   const comparisonOf = (key) => (rp.report ? (rp.report.comparisons || []).find((c) => c.key === key) || null : null);
+  /** Whether the open pairs drawer's comparison is between models. */
+  const comparisonModels = () => Boolean(rp.side && rp.side.comp && rp.side.comp.compare === 'models');
 
   function openPairs(key) {
     const c = comparisonOf(key);
     rp.side = {kind: 'pairs', key, data: null, error: null};
-    showSide('R-05', c ? `${c.arm_name} vs ${c.baseline_name}` : 'Pairs', [h('p', {class: 'muted'}, 'Loading the pairs…')]);
+    showSide('R-05', c ? pairTitle(c) : 'Pairs', [h('p', {class: 'muted'}, 'Loading the pairs…')]);
     loadPairs();
   }
 
@@ -1645,7 +1981,9 @@
     for (const e of pairs.excluded_trials) keys.add(e.trial_key);
     const tasks = unique([...pairs.pairs.map((p) => p.task), ...pairs.excluded_trials.map((e) => e.task)]);
     if (!tasks.length || !c) return [];
-    const filters = {...cleanFilters(rp.filters), models: [`${c.provider}:${c.model}`], tasks: tasks.slice(0, 500)};
+    const models = unique([`${c.provider}:${c.model}`,
+      `${c.baseline_provider || c.provider}:${c.baseline_model || c.model}`]);
+    const filters = {...railFilters(), models, tasks: tasks.slice(0, 500)};
     delete filters.runs;          // a trial stays listed after its run is excluded or filtered
     delete filters.exclude_runs;
     const res = await api('POST', '/api/ledger/trials', {filters, limit: 1000});
@@ -1698,33 +2036,44 @@
     }
     if (!side.data || !c) return;
     const {pairs, trials} = side.data;
+    const models = c.compare === 'models';
+    const S = SIDES[models ? 'models' : 'harnesses'];
     const sideOf = new Map();
     for (const p of pairs.pairs) {
-      for (const k of p.arm.trial_keys) sideOf.set(k, 'harness');
+      for (const k of p.arm.trial_keys) sideOf.set(k, S.arm);
       for (const k of p.baseline.trial_keys) sideOf.set(k, 'baseline');
     }
-    for (const e of pairs.excluded_trials) if (!sideOf.has(e.trial_key)) sideOf.set(e.trial_key, e.side === 'arm' ? 'harness' : 'baseline');
+    for (const e of pairs.excluded_trials) {
+      if (!sideOf.has(e.trial_key)) sideOf.set(e.trial_key, e.side === 'arm' ? S.arm : 'baseline');
+    }
     const d = c.pairs.dropped || {};
     const dropped = Object.entries(d).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${statusLabel(k)}`);
-    $('#rp-side-title').textContent = `${c.arm_name} vs ${c.baseline_name}`;
+    $('#rp-side-title').textContent = pairTitle(c);
     fill(box,
       !current && h('div', {class: 'banner warn'}, 'This comparison is no longer in the report under the current filters, for example because its last usable trial was excluded. The pairs below are as they were; the trial rows and their buttons are current.'),
       side.error && h('p', {class: 'bad-text'}, `Could not refresh the pairs: ${side.error.message}`),
-      h('p', {class: 'rp-side-lead'}, c.headline),
+      h('p', {class: 'rp-side-lead'}, modelProse(c, c.headline)),
       params([
+        models && ['Harness', c.harness || DASH],
         ['Model', h('span', {class: 'mono'}, `${c.provider}:${c.model}`)],
+        models && ['Baseline model', h('span', {class: 'mono'}, `${c.baseline_provider}:${c.baseline_model}`)],
         ['Paired tasks', count(c.pairs.n_tasks)],
         ['Same run', isNum(c.pairs.same_run_fraction) ? pct(c.pairs.same_run_fraction) : DASH],
-        ['Harness only', c.pairs.arm_only_tasks.length ? plural(c.pairs.arm_only_tasks.length, 'task') : 'none'],
+        [`${S.Arm} only`, c.pairs.arm_only_tasks.length ? plural(c.pairs.arm_only_tasks.length, 'task') : 'none'],
         ['Baseline only', c.pairs.baseline_only_tasks.length ? plural(c.pairs.baseline_only_tasks.length, 'task') : 'none'],
         ['Dropped', dropped.length ? dropped.join(', ') : 'none'],
-      ]),
-      sideSection('Per-task ratios', 'baseline ÷ harness on each paired task, log scale', ratioStrip(pairs.pairs, c)),
-      sideSection('Pairs', `${plural(pairs.pairs.length, 'task')}`, pairsTable(pairs.pairs)),
-      sideSection('Sensitivity', 'the token and cost multiple under other choices', sensitivityTable(c)),
+      ].filter(Boolean)),
+      sideSection('Per-task ratios', `${S.ratio} on each paired task, log scale; left of 1× is less`,
+        ratioStrip(pairs.pairs, c, S)),
+      sideSection('Pairs',
+        `${plural(pairs.pairs.length, 'task')}${models ? ' · M is the model, B the baseline model' : ''}`,
+        pairsTable(pairs.pairs, models ? 'M' : 'H')),
+      sideSection('Sensitivity', `the token and cost multiple (${S.ratio}) under other choices`,
+        sensitivityTable(c, S)),
       sideSection('Trials', 'every trial behind these pairs; exclude a trial or its run, with a reason', trialsTable(trials, sideOf)),
       sideSection('Left out', 'trials of these two groups the report could not use', excludedTable(pairs.excluded_trials, trials)),
-      (c.caveats || []).length > 0 && sideSection('Caveats', '', h('ul', {class: 'rp-list'}, c.caveats.map((t) => h('li', null, t)))));
+      (c.caveats || []).length > 0 && sideSection('Caveats', '',
+        h('ul', {class: 'rp-list'}, caveatsOf(c).map((t) => h('li', null, t)))));
   }
 
   function sideSection(title, sub, ...body) {
@@ -1733,7 +2082,7 @@
       body);
   }
 
-  function ratioStrip(pairs, c) {
+  function ratioStrip(pairs, c, S = SIDES.harnesses) {
     const rows = [['Tokens', 'ratio_tokens', c.metrics.tokens_total], ['Cost', 'ratio_cost', c.metrics.cost]];
     if (!pairs.length) return h('p', {class: 'muted'}, 'No paired tasks yet.');
     return h('div', {class: 'rp-forest rp-ratios'},
@@ -1741,9 +2090,9 @@
         const marks = pairs.filter((p) => isNum(p[key]) && p[key] > 0).map((p) => tip(svg('g', {class: 'rp-dot'},
           svg('circle', {cx: at(xLog(p[key])), cy: 15, r: 11, class: 'rp-hit'}),
           svg('circle', {cx: at(xLog(p[key])), cy: 15, r: 4, class: 'rp-gm'})),
-        p.task, [[times(p[key]), `${label.toLowerCase()} ratio`],
-          [key === 'ratio_tokens' ? tokens(p.baseline.tokens_total) : money(p.baseline.cost), 'baseline mean'],
-          [key === 'ratio_tokens' ? tokens(p.arm.tokens_total) : money(p.arm.cost), 'harness mean'],
+        p.task, [[times(p[key]), `${label.toLowerCase()}, ${S.ratio}`],
+          [key === 'ratio_tokens' ? tokens(p.baseline.tokens_total) : money(p.baseline.cost), `${S.base} mean`],
+          [key === 'ratio_tokens' ? tokens(p.arm.tokens_total) : money(p.arm.cost), `${S.arm} mean`],
           [p.same_run ? 'yes' : 'no', 'same run']], true));
         const g = m && m.geomean;
         return h('div', {class: 'rp-frow'},
@@ -1755,15 +2104,17 @@
             marks)),
           h('div', {class: 'rp-val'}, marks.length ? `${marks.length} tasks` : 'none', g && h('small', null, `geomean ${times(g.estimate)}`)));
       }),
-      axisRow(TICKS.map((v) => [xLog(v), v === 1 ? '1×' : `${v}×`, v === 1])));
+      axisRow(TICKS.map((v) => [xLog(v), tickLabel(v), v === 1])));
   }
 
-  function pairsTable(pairs) {
+  /** The pairs; arm is the candidate side's letter in the heads: H for a harness, M for a model. */
+  function pairsTable(pairs, arm = 'H') {
     if (!pairs.length) return h('p', {class: 'muted'}, 'No task has a valid trial on both sides yet.');
     const passText = (s) => (isNum(s.pass) ? pct(s.pass) : DASH);
     return h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact'},
-      thead('Task', 'Digest', 'Same run', thNum('Trials H / B'), thNum('Valid H / B'), thNum('Tokens H'), thNum('Tokens B'),
-        thNum('Cost H'), thNum('Cost B'), thNum('Tokens ×'), thNum('Cost ×'), thNum('Pass H / B')),
+      thead('Task', 'Digest', 'Same run', thNum(`Trials ${arm} / B`), thNum(`Valid ${arm} / B`), thNum(`Tokens ${arm}`),
+        thNum('Tokens B'), thNum(`Cost ${arm}`), thNum('Cost B'), thNum(`Tokens ${arm} ÷ B`), thNum(`Cost ${arm} ÷ B`),
+        thNum(`Pass ${arm} / B`)),
       h('tbody', null, pairs.map((p) => h('tr', null,
         h('td', {class: 'mono'}, p.task),
         h('td', {class: 'mono faint'}, p.digest_short || DASH),
@@ -1776,7 +2127,7 @@
         tdNum(`${passText(p.arm)} / ${passText(p.baseline)}`))))));
   }
 
-  function sensitivityTable(c) {
+  function sensitivityTable(c, S = SIDES.harnesses) {
     const cols = [['Tokens', c.metrics.tokens_total], ['Cost', c.metrics.cost]];
     const val = (m, fn) => (m && m.status !== 'not_measured' && m.status !== 'insufficient' ? fn(m) : m ? metricText(m) : DASH);
     const row = (label, fn) => h('tr', null, h('td', null, label), cols.map(([, m]) => tdNum(val(m, fn))));
@@ -1791,14 +2142,16 @@
         row('Leave one out', (m) => (m.leave_one_out ? `${times(m.leave_one_out[0])} – ${times(m.leave_one_out[1])}` : DASH)),
         row('Per task: min · median · max', (m) => (m.per_task ? `${multiple(m.per_task.min)} · ${multiple(m.per_task.median)} · ${times(m.per_task.max)}` : DASH)),
         row('Spread (geometric SD)', (m) => (isNum(m.geomean.gsd) ? `×/÷${multiple(m.geomean.gsd)}` : DASH)),
-        row('Harness\'s unrecorded trials at 2× spend', (m) => times(m.sensitivity && m.sensitivity.unrecorded_arm_high)),
-        row('Baseline\'s unrecorded trials at 2× spend', (m) => times(m.sensitivity && m.sensitivity.unrecorded_baseline_high)),
+        row(`${S.Arm}'s unrecorded trials at 2× spend`,
+          (m) => times(m.sensitivity && m.sensitivity.unrecorded_arm_high)),
+        row(`${titleCase(S.base)}'s unrecorded trials at 2× spend`,
+          (m) => times(m.sensitivity && m.sensitivity.unrecorded_baseline_high)),
         row('Robust', (m) => (m.robust === true ? '✓ yes' : m.robust === false ? '✕ no' : DASH)))));
   }
 
   function trialsTable(trials, sideOf) {
     if (!trials.length) return h('p', {class: 'muted'}, 'No ledger rows match these pairs under the current filters.');
-    const order = (t) => `${sideOf.get(t.trial_key) === 'harness' ? 0 : 1}|${t.task}|${t.trial_name}`;
+    const order = (t) => `${sideOf.get(t.trial_key) === 'baseline' ? 1 : 0}|${t.task}|${t.trial_name}`;
     return h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact'},
       thead('Side', 'Task', 'Trial', 'Outcome', thNum('Tokens'), thNum('Cost'), 'Run', ''),
       h('tbody', null, [...trials].sort((a, b) => order(a).localeCompare(order(b))).map((t) => {
@@ -1826,7 +2179,7 @@
         const row = rowOf.get(e.trial_key);
         const manual = /excluded by hand/.test(e.reason);
         return h('tr', null,
-          h('td', null, e.side === 'arm' ? 'harness' : e.side),
+          h('td', null, e.side === 'arm' ? SIDES[comparisonModels() ? 'models' : 'harnesses'].arm : e.side),
           h('td', {class: 'mono'}, e.task),
           h('td', {class: 'mono'}, h('span', {class: manual ? 'rp-struck' : null}, trialName(e.trial_key))),
           h('td', null, outcomeTag(e.outcome)),
@@ -1917,16 +2270,26 @@
         ['Unpriced models', (t.unpriced_models || []).join(', ') || 'none'],
         ['Primary model share', pct(t.primary_share)],
       ])),
+      flagRows(t.flags).length > 0 && sideSection('Cost checks', 'raised at ingest from the harness\'s own log',
+        h('dl', {class: 'params rp-params rp-flags'}, flagRows(t.flags).map(([k, v]) => h('div', null, h('dt', null, k),
+          h('dd', null, v))))),
       usage.length > 0 && sideSection('Usage per model', '', h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact'},
-        thead('Model', thNum('Input'), thNum('Cache'), thNum('Output'), thNum('Reported'), 'Notes'),
+        thead('Model', thNum('Input'), thNum('Cache'), thNum('Output'), thNum('Writes 5m / 1h'), thNum('Reported'),
+          'Notes'),
         h('tbody', null, usage.map(([model, u]) => h('tr', null,
           h('td', {class: 'mono'}, model, u.primary && [' ', tag('primary', 'ok')]),
-          tdNum(count(u.n_input)), tdNum(count(u.n_cache)), tdNum(count(u.n_output)), tdNum(money(u.reported_cost_usd)),
+          tdNum(count(u.n_input)), tdNum(count(u.n_cache)), tdNum(count(u.n_output)),
+          isNum(u.n_cache_write_5m) || isNum(u.n_cache_write_1h)
+            ? tdNum(`${count(u.n_cache_write_5m || 0)} / ${count(u.n_cache_write_1h || 0)}`)
+            : tdNum(h('span', {class: 'faint'}, 'unknown'),
+              'No harness log gave the cache writes; priced as fresh input'),
+          tdNum(money(u.reported_cost_usd)),
           h('td', {class: 'faint'}, [u.recovered_from && `recovered from ${u.recovered_from}`, u.synthesized && 'synthesized', gap(u).some((v) => v > 0) && 'reconciled with the totals', gap(u).some((v) => v < 0) && 'above the totals', u.reported_as && `reported as ${u.reported_as}`].filter(Boolean).join(' · ') || DASH))))))),
       sideSection('Phases', `${secs(t.total_sec)} in all`, params([
         ['Environment setup', secs(ph.env_setup_sec)], ['Agent setup', secs(ph.agent_setup_sec)],
         ['Agent run', secs(ph.agent_exec_sec)], ['Verifier', secs(ph.verifier_sec)],
       ])),
+      setupSection(t),
       sideSection('Options', t.config_label || '', Object.keys(t.options || {}).length
         ? h('div', {class: 'chips'}, Object.entries(t.options).map(([k, v]) => h('span', {class: 'chip'}, h('span', {class: 'src'}, k), shown(v))))
         : h('p', {class: 'muted'}, 'Harness defaults.'),
@@ -1990,7 +2353,8 @@
         h('thead', null, h('tr', null,
           sortHead('started_at', 'Started'), h('th', null, 'Run'), sortHead('family', 'Harness'), h('th', null, 'Model'), sortHead('task', 'Task'),
           h('th', null, 'Outcome'), h('th', {class: 'num'}, 'Reward'), sortHead('tokens_total', 'Tokens', true), sortHead('cost_usd', 'Cost', true),
-          h('th', {class: 'num'}, 'Reported'), h('th', {class: 'num'}, 'Min'), h('th', null, ''))),
+          h('th', {class: 'num'}, 'Reported'), h('th', {class: 'num'}, 'Min'), h('th', null, 'Setup'),
+          h('th', null, ''))),
         h('tbody', null, data.rows.map((t) => h('tr', {class: 'rp-click', onclick: () => openTrial(t.id)},
         h('td', {class: 'mono'}, openButton(t, {}, when(t.started_at))),
         h('td', {class: 'mono'}, t.run_id, h('span', {class: 'sub'}, t.profile)),
@@ -2000,9 +2364,10 @@
         h('td', null, outcomeTag(t.outcome), t.outcome_reason && h('span', {class: 'sub clip', title: t.outcome_reason}, t.outcome_reason)),
         tdNum(isNum(t.reward) ? String(Math.round(t.reward * 100) / 100) : DASH),
         tdNum(usageValue(t.tokens_total, t.usage_status, tokens), isNum(t.tokens_total) ? count(t.tokens_total) : null),
-        tdNum(usageValue(t.cost_usd, t.usage_status)),
+        h('td', {class: 'num nowrap'}, usageValue(t.cost_usd, t.usage_status), flagMark(t.flags)),
         tdNum(money(t.reported_cost_usd)),
         tdNum(isNum(t.total_sec) ? minutes(t.total_sec / 60) : DASH),
+        h('td', null, setupTag(t.setup, t.phases)),
         h('td', null, exclusionBadge(t.exclusion))))))) : h('p', {class: 'muted rp-pad'}, 'No trials match these filters.')),
       data && total > PAGE && h('div', {class: 'rp-pager'},
         h('button', {type: 'button', class: 'btn ghost small', disabled: L.offset === 0, onclick: () => {
@@ -2109,7 +2474,12 @@
         list && (list.length ? h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact'},
           thead('Name', 'Saved', 'Fingerprint', thNum('Trials used'), ''),
           h('tbody', null, list.map((x) => h('tr', {class: s && s.id === x.id ? 'baseline' : null},
-            h('td', null, h('b', null, x.name), h('span', {class: 'sub mono'}, x.id)),
+            h('td', null, h('b', null, x.name), h('span', {class: 'sub mono'}, x.id),
+              x.direction !== 'harness_over_baseline' && tip(
+                h('span', {class: 'sub faint'}, 'saved as baseline ÷ harness; shown converted'),
+                'Saved before multiples were harness ÷ baseline',
+                ['Opening it inverts every multiple, interval and band, and swaps above and below, so it reads '
+                  + 'like a report today.'], true)),
             h('td', {class: 'mono'}, when(x.created_at)),
             h('td', {class: 'mono'}, shortFp(x.fingerprint)),
             tdNum(count(x.trials_used)),
@@ -2129,7 +2499,7 @@
   function snapshotPanel(s) {
     const r = s.response || {};
     const req = s.request || {};
-    const n = activeCount(req.filters || {});
+    const n = activeCount({...(req.filters || {}), tasks: undefined});
     const cmp = rp.compare && rp.compare.id === s.id ? rp.compare.now : null;
     return panel({code: 'R-12', title: `Snapshot: ${s.name}`, cls: 'hot rp-snap', meta: h('span', {class: 'actions'},
       h('button', {type: 'button', class: 'btn small', onclick: (e) => busy(e.currentTarget, () => compareNow(s))}, cmp ? 'Compare again' : 'Compare to now'),
@@ -2140,7 +2510,13 @@
         renderSnapshotsPane();
       }}, 'Close'))},
     h('div', {class: 'note-strip'}, tag('read-only', 'warn'),
-      `Saved ${when(s.created_at)} · ${r.provenance ? `${count(r.provenance.trials_used)} trials used · fingerprint ${shortFp(r.provenance.fingerprint)}` : ''} · ${n ? plural(n, 'filter') : 'no filters'}. These are the numbers as they were then.`),
+      `Saved ${when(s.created_at)} · ${r.provenance ? `${count(r.provenance.trials_used)} trials used · `
+        + `fingerprint ${shortFp(r.provenance.fingerprint)}` : ''} · ${scopeText(r.scope) || 'tasks not recorded'} · `
+        + `${n ? plural(n, 'other filter') : 'no other filters'}. These are the numbers as they were then.`),
+    r.provenance && r.provenance.converted_from && h('div', {class: 'note-strip'}, tag('converted', 'warn'),
+      'Saved when multiples read baseline ÷ harness. Shown converted to harness ÷ baseline: every multiple, '
+      + 'interval and published band inverted, and above and below swapped. Per-task quartiles are the saved ones '
+      + 'inverted; a fresh report interpolates them between the new ratios, so its median and quartiles can differ.'),
     cmp && compareTable(r, cmp),
     r.comparisons ? [headlinePanel(r, {readOnly: true}), groupsPanel(r)] : h('p', {class: 'muted'}, 'This snapshot holds no report.'));
   }
@@ -2158,6 +2534,11 @@
     delete options.include_pairs;
     apply.cancel();
     rp.filters = cleanFilters(req.filters || {});
+    // Its tasks: the scope itself (kept as the scope), every task (the scope off), or tasks ticked.
+    const scope = scopeTasks();
+    const ticked = rp.filters.tasks || [];
+    rp.allTasks = !ticked.length;
+    if (ticked.length === scope.length && scope.every((t) => ticked.includes(t))) delete rp.filters.tasks;
     rp.options = options;
     rp.invalid = '';
     savePrefs();
@@ -2192,7 +2573,7 @@
           const da = a && a.pass && a.pass.delta_pp;
           const db = b && b.pass && b.pass.delta_pp;
           return h('tr', null,
-            h('td', null, h('b', null, `${c.arm_name} vs ${c.baseline_name}`), h('span', {class: 'sub mono'}, `${c.provider}:${c.model}`),
+            h('td', null, h('b', null, pairTitle(c)), h('span', {class: 'sub mono'}, `${c.provider}:${c.model}`),
               !a && tag('new'), !b && tag('gone', 'warn')),
             tdNum(`${a ? count(a.pairs.n_tasks) : DASH} → ${b ? count(b.pairs.n_tasks) : DASH}`),
             change(a && a.metrics.tokens_total, b && b.metrics.tokens_total),
@@ -2245,6 +2626,13 @@
     renderBanner();
     renderStrip(force);
     if (force || rp.railStale) renderRail();
+    const scopeKey = scopeTasks().join('\n');
+    if (rp.scopeFor !== undefined && rp.scopeFor !== scopeKey) {
+      renderRail();
+      if (ui.view === 'report') reload();
+      else rp.stale = true;
+    }
+    rp.scopeFor = scopeKey;
     if (rp.showPending) {
       rp.showPending = false;
       onShow();

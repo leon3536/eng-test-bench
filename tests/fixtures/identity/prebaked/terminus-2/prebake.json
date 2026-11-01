@@ -1,0 +1,17 @@
+{
+  "harness": "terminus-2",
+  "version": "0.25.0",
+  "task_image": "alexgshaw/fix-git:20251031",
+  "image": "benchprobe/terminus-2-0.25.0/alexgshaw/fix-git:20251031",
+  "used": true,
+  "candidate": "benchprobe/terminus-2-0.25.0/alexgshaw/fix-git:20251031",
+  "reason": "pre-baked image verified",
+  "image_id": "sha256:aab85feeac03790a2f6672b90d86dc94e2224fdc8d9a3ef6262b5ed4cbd5f0ff",
+  "task_image_id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+  "added_layers": 1,
+  "baked_at": "2026-10-29T22:37:58.665990398Z",
+  "recipe": null,
+  "skip_execs": [],
+  "skipped_execs": [],
+  "written_at": "2026-10-29T23:32:07.408508+00:00"
+}

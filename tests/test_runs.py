@@ -68,10 +68,16 @@ def timed_out(name):
 if phase == "dry":
     if scenario == "fail-dry":
         sys.exit(1)
+    if scenario in ("docker-slow-dry", "docker-down-dry"):
+        with open(calls, encoding="utf-8") as f:
+            tries = sum(1 for line in f if line.split() == [os.path.basename(job_dir), "dry"])
+        if scenario == "docker-down-dry" or tries == 1:
+            print("Docker daemon is not running. Please start Docker and try again.")
+            sys.exit(1)
     if scenario == "slow-dry":
         time.sleep(2.5)
     sys.exit(0)
-if scenario == "ok":
+if scenario in ("ok", "docker-slow-dry"):
     trial("t1", 0.25)
     sys.exit(0)
 if scenario == "unrecorded":
@@ -111,6 +117,8 @@ run:
   parallel_arms: {parallel}
   budget_usd: {budget}
   max_turns: 50
+  schedule: {schedule}
+  max_containers: {max_containers}
 baseline_arm: a
 arms:
   - {{name: a, agent: terminus-2, provider: anthropic, model: claude-opus-5-5}}
@@ -179,6 +187,7 @@ class RunsTestCase(BenchTestCase):
         snapshot.mkdir()
         for target, name, value in (
                 (runs, "POLL_SECONDS", POLL),
+                (runs, "ARM_STAGGER_SECONDS", 0),
                 (runs.RunManager, "_supervise", supervise),
                 (procs, "cleanup_containers", self._fake_cleanup),
                 (runs, "cleanup_containers", self._fake_cleanup),
@@ -220,8 +229,13 @@ class RunsTestCase(BenchTestCase):
 
     # Helpers ------------------------------------------------------------------
 
-    def config(self, budget: float = 10, parallel: int = 1) -> settings.Config:
-        return self.load_test_config(YAML.format(budget=budget, parallel=parallel), tasks=["task-a", "task-b"])
+    def config(self, budget: float = 10, parallel: int = 1, schedule: str = "arms", max_containers: int = 6,
+               modes: str = "") -> settings.Config:
+        # These tests pin the arms schedule (one harbor job per arm); tests/test_runs_race.py the task races.
+        text = YAML.format(budget=budget, parallel=parallel, schedule=schedule, max_containers=max_containers)
+        if modes:
+            text = text.replace("  pilot: {n_tasks: 1}\n", f"  pilot: {{n_tasks: 1}}\n{modes}")
+        return self.load_test_config(text, tasks=["task-a", "task-b", "task-c"])
 
     def manager(self, ledger: Any = None) -> runs.RunManager:
         manager = runs.RunManager(ledger=ledger)
@@ -359,6 +373,31 @@ class StartTests(RunsTestCase):
         self.assertEqual(self.cleanups, [], "harbor exiting 0 needs no sweep")
         self.assertTrue(all(isinstance(x["pid"], int) for x in final["arms"]))
 
+    def test_harbor_gets_each_arms_harness_setup_flags(self) -> None:
+        manager = self.manager()
+        run_id = manager.start(self.config(), "pilot", ["a", "b"])["id"]
+        final = self.finish(manager)
+        self.assertEqual(final["status"], "done")
+        by_arm: dict[str, list[list[str]]] = {}
+        for cmd in self.commands:
+            by_arm.setdefault(cmd[cmd.index("--job-name") + 1], []).append(cmd)
+        # terminus-2 ships in Harbor, so Harbor's version pins it and it can be
+        # pre-baked; pi here pins no version, so it runs stock with the setup net.
+        for cmd in by_arm["a"]:
+            env = cmd.index("--env")
+            self.assertEqual(cmd[env:env + 4], ["--env", "bench.environments.prebaked:PrebakedDockerEnvironment",
+                                                "--ek", 'prebake_harness="terminus-2"'])
+            self.assertIn("prebake_required=false", cmd)
+        for cmd in by_arm["b"]:
+            self.assertNotIn("--env", cmd)
+            self.assertEqual(cmd[cmd.index("--agent-setup-timeout-multiplier") + 1], "2")
+        self.assertEqual([len(by_arm["a"]), len(by_arm["b"])], [2, 2])  # the dry run and the real job
+        resolved = {a["name"]: a["prebake"] for a in self.on_disk(run_id)["resolved_arms"]}
+        self.assertEqual((resolved["a"]["supported"], resolved["a"]["version"]), (True, "0.25.0"))
+        self.assertEqual((resolved["b"]["supported"], resolved["b"]["mode"]), (False, "prefer"))
+        self.assertIn('harness setup: {"mode": "prefer", "family": "terminus-2", "supported": true',
+                      self.arm_log(run_id, "a"))
+
     def test_start_spec_runs_a_design(self) -> None:
         cfg = self.config()
         manager = self.manager()
@@ -444,6 +483,63 @@ class FinalStatusTests(RunsTestCase):
         self.assertEqual((final["status"], final["message"]), ("failed", "Every arm failed. See the arm logs."))
         self.assertEqual({a["status"] for a in final["arms"]}, {"failed"})
         self.assertEqual(self.calls(), ["a", "dry", "b", "dry"])
+
+    def test_a_preflight_docker_answered_too_slowly_is_tried_again(self) -> None:
+        cfg = self.config()
+        manager = self.manager()
+        self.scenarios["a"] = "docker-slow-dry"
+        with mock.patch.object(runs, "PREFLIGHT_RETRY_WAITS", (0.01, 0.01)), \
+                mock.patch.object(checks, "docker_ok", lambda: True):
+            run_id = manager.start(cfg, "pilot", ["a"])["id"]
+            final = self.finish(manager)
+        self.assertEqual(final["arms"][0]["status"], "done")
+        self.assertEqual(self.calls(), ["a", "dry", "a", "dry", "a", "real"])
+        self.assertIn("answered harbor's check too slowly; trying again", self.arm_log(run_id, "a"))
+
+    def _docker_failing_preflight(self, docker_up: bool) -> None:
+        cfg = self.config()
+        manager = self.manager()
+        self.scenarios["a"] = "docker-down-dry"
+        with mock.patch.object(runs, "PREFLIGHT_RETRY_WAITS", (0.01, 0.01)), \
+                mock.patch.object(checks, "docker_ok", lambda: docker_up):
+            manager.start(cfg, "pilot", ["a"])
+            final = self.finish(manager)
+        self.assertEqual((final["arms"][0]["status"], final["arms"][0]["message"]),
+                         ("failed", "Preflight failed, so nothing was spent. See the log."))
+
+    def test_preflight_retries_stop_when_docker_keeps_answering_too_slowly(self) -> None:
+        self._docker_failing_preflight(docker_up=True)
+        self.assertEqual(self.calls(), ["a", "dry"] * 3)
+
+    def test_a_preflight_is_not_tried_again_when_docker_is_down(self) -> None:
+        self._docker_failing_preflight(docker_up=False)
+        self.assertEqual(self.calls(), ["a", "dry"])
+
+    def test_a_plain_preflight_failure_is_not_tried_again(self) -> None:
+        cfg = self.config()
+        manager = self.manager()
+        self.scenarios["a"] = "fail-dry"
+        with mock.patch.object(checks, "docker_ok", mock.Mock(side_effect=AssertionError("Docker never asked"))):
+            manager.start(cfg, "pilot", ["a"])
+            final = self.finish(manager)
+        self.assertEqual(final["arms"][0]["status"], "failed")
+        self.assertEqual(self.calls(), ["a", "dry"])
+
+    def test_the_first_parallel_arms_start_apart(self) -> None:
+        cfg = self.config(parallel=2)
+        manager = self.manager()
+        delays: list[float] = []
+        real_slot = runs.RunManager._arm_slot
+
+        def slot(manager: runs.RunManager, *args: Any) -> None:
+            delays.append(args[-1])
+            real_slot(manager, *args)
+
+        with mock.patch.object(runs, "ARM_STAGGER_SECONDS", 0.05), \
+                mock.patch.object(runs.RunManager, "_arm_slot", slot):
+            manager.start(cfg, "pilot", ["a", "b", "m"])
+            self.finish(manager)
+        self.assertEqual(sorted(delays), [0, 0, 0.05])  # a and b start 0.05 s apart; m waits for a free slot
 
     def test_early_exception_fails_the_arms_instead_of_leaving_them_queued(self) -> None:
         cfg = self.config()

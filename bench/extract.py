@@ -20,7 +20,11 @@ import json
 import math
 import os
 import re
+import shutil
+import sqlite3
+import tempfile
 import zlib
+from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -30,10 +34,19 @@ from typing import Any, Literal
 import yaml
 
 from . import classify, pricing, settings
-from .fsutil import canonical_json
-from .harnesses import is_import_path
+from .fsutil import canonical_json, harbor_jobs
+from .harnesses import is_import_path, reports_mispriced_cost
 
-PARSER_VERSION = 4
+# 5: setup provenance (setup_mode, agent_setup_limit_sec, prebake_*); rederive gives older rows 'stock'.
+# 6: cache writes per model (usage_json n_cache_write_5m/1h) and flags_json, both from the harness's own
+#    log, which result.json does not hold: rederive re-reads the trial folder where it still exists.
+#    Killed trials re-recovered from their logs also gain mini-swe-agent's extra.cost (reported_cost_usd)
+#    and terminus-2's per-step model names (reported_as).
+# 7: Cline CLI, OpenCode and Goose calls from their own logs. Cline's and OpenCode's replace Harbor's usage,
+#    whose adapters leave reasoning tokens out of the output (both) and cache writes out of the prompt
+#    (OpenCode); a stored row keeps the replaced usage once its folder is gone. Kilo Code's kilo.txt
+#    joined later without a bump: no stored row was Kilo's, so none needs re-deriving.
+PARSER_VERSION = 7
 
 # Text in a failed trial's message that means the harness never got going.
 SETUP_SIGNATURES: tuple[str, ...] = ("No module named", "ModuleNotFoundError", "command not found",
@@ -118,6 +131,7 @@ class TrialFacts:
     reported_cost_usd: float | None
     cost_at_ingest_usd: float | None
     pricing_sha_at_ingest: str | None
+    flags_json: str     # checks only the harness's log or the prices could make (trial_flags)
     started_at: str | None
     finished_at: str | None
     env_setup_sec: float | None
@@ -125,6 +139,15 @@ class TrialFacts:
     agent_exec_sec: float | None
     verifier_sec: float | None
     total_sec: float | None
+    # Setup provenance (setup_provenance): how the harness got installed. Never identity.
+    setup_mode: str | None
+    agent_setup_limit_sec: float | None
+    prebake_image: str | None
+    prebake_image_id: str | None
+    prebake_recipe: str | None
+    prebake_baked_at: str | None
+    prebake_reason: str | None
+    prebake_json: str | None
     parser_version: int
     raw_result_z: bytes | None
     raw_lock_z: bytes | None
@@ -304,7 +327,8 @@ def discover(roots: Sequence[ScanRoot], skipped: list[dict[str, str]] | None = N
              root: Path | None = None) -> Iterator[tuple[Path, RunContext, dict | None, bool]]:
     """(job_dir, ctx, run_dict, terminal) for every Harbor job under the roots.
 
-    A bench job is <jobs_dir>/<run_id>/<arm>/ with runs_dir/<run_id>/run.json;
+    A bench job is <jobs_dir>/<run_id>/<arm>/ with runs_dir/<run_id>/run.json, or
+    under a task race (run.schedule tasks) each <jobs_dir>/<run_id>/<arm>/<task>/;
     it is terminal once run.json leaves 'running'. Anything else is a plain
     Harbor job found by its config.json 'job_name', terminal once its
     result.json has finished_at. Unreadable folders go to `skipped`.
@@ -372,8 +396,10 @@ def discover(roots: Sequence[ScanRoot], skipped: list[dict[str, str]] | None = N
                 except Exception as exc:
                     skip(run_json, f"run.json has an unexpected shape: {type(exc).__name__}: {exc}")
                     break
-                if fresh(arm_dir):
-                    yield arm_dir, ctx, run, terminal
+                # One Harbor job per arm, or one per task under a task race (jobs/<run>/<arm>/<task>/).
+                for job_dir in harbor_jobs(arm_dir):
+                    if fresh(job_dir):
+                        yield job_dir, ctx, run, terminal
 
 
 # Models -----------------------------------------------------------------------
@@ -470,14 +496,21 @@ def config_identity(trial_cfg: Mapping[str, Any], family: str, implementation: s
     effort = None if effort is None else str(effort)
     options = {str(k): _normalize(v) for k, v in sorted(kwargs.items(), key=lambda kv: str(kv[0]))}
 
+    # Setup limits (agent_setup_timeout_multiplier, agent.override_setup_timeout_sec)
+    # are left out: a setup limit cannot change a trial that got past setup, and
+    # one that did not is infra and already excluded. So the setup safety net a
+    # run adds for stock setups (run.setup_timeout_multiplier) keeps its cell.
+    # Nothing in `environment` beyond the resource overrides below is read either:
+    # its type, import_path, kwargs and extra_docker_compose are how a trial got
+    # its container (a pre-baked image or a stock install), not what it measured.
+    # tests/test_extract.py pins both, with the five arms' hashes.
     timeouts: dict[str, Any] = {}
     multiplier = trial_cfg.get("timeout_multiplier")
     if multiplier is not None and _normalize(multiplier) != 1:
         timeouts["timeout_multiplier"] = _normalize(multiplier)
-    for key in ("agent_timeout_multiplier", "agent_setup_timeout_multiplier"):
-        if trial_cfg.get(key) is not None:
-            timeouts[key] = _normalize(trial_cfg[key])
-    for key in ("override_timeout_sec", "override_setup_timeout_sec", "max_timeout_sec"):
+    if trial_cfg.get("agent_timeout_multiplier") is not None:
+        timeouts["agent_timeout_multiplier"] = _normalize(trial_cfg["agent_timeout_multiplier"])
+    for key in ("override_timeout_sec", "max_timeout_sec"):
         if agent.get(key) is not None:
             timeouts[key] = _normalize(agent[key])
 
@@ -605,6 +638,93 @@ def phase_seconds(result: Mapping) -> dict[str, float | None]:
         "verifier_sec": verifier if verifier is not None else _step_span(result, "verifier"),
         "total_sec": _span(result),
     }
+
+
+# Setup provenance -------------------------------------------------------------
+#
+# How a trial's harness got installed: by Harbor's own install in the trial's
+# container (stock), or already, in a pre-baked image that
+# bench/environments/prebaked.py chose at environment start and recorded in
+# <trial_dir>/prebake.json. Provenance only: config_identity, task_identity,
+# report pairing and reuse never read it, so a pre-baked and a stock trial of
+# one arm stay one cell.
+
+# bench.environments.prebaked's constants, kept here because that module loads Harbor's Docker environment.
+PREBAKED_ENV = "bench.environments.prebaked:PrebakedDockerEnvironment"
+PREBAKE_RECORD = "prebake.json"
+SETUP_MODES = ("stock", "prebaked", "fallback")
+# Harbor 0.25.0's BaseAgent.DEFAULT_SETUP_TIMEOUT_SEC, and the harnesses that set their own.
+DEFAULT_SETUP_TIMEOUT_SEC = 360.0
+SETUP_TIMEOUT_SEC = {"hermes": 1200.0}
+_PREBAKE_TEXT = 300
+
+
+def read_prebake_record(trial_dir: Path) -> dict | None:
+    """The environment class's prebake.json in a trial folder, or None."""
+    record = read_json(Path(trial_dir) / PREBAKE_RECORD)
+    return record if isinstance(record, dict) else None
+
+
+def _is_prebaked_env(import_path: Any) -> bool:
+    # The bench's class, or the research prototype's (prebake_env:PrebakedDockerEnvironment).
+    return isinstance(import_path, str) and import_path.rsplit(":", 1)[-1] == PREBAKED_ENV.rsplit(":", 1)[-1]
+
+
+def _seconds(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        number = float(value)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
+def agent_setup_limit(trial_cfg: Mapping[str, Any]) -> float | None:
+    """The agent setup timeout the trial ran under, as Harbor's Trial computes
+    it: agent.override_setup_timeout_sec, else the harness's default, times
+    agent_setup_timeout_multiplier, else timeout_multiplier."""
+    agent = trial_cfg.get("agent") if isinstance(trial_cfg.get("agent"), Mapping) else {}
+    base = _seconds(agent.get("override_setup_timeout_sec"))
+    if base is None:
+        base = SETUP_TIMEOUT_SEC.get(str(agent.get("name") or ""), DEFAULT_SETUP_TIMEOUT_SEC)
+    multiplier = trial_cfg.get("agent_setup_timeout_multiplier")
+    if multiplier is None:
+        multiplier = trial_cfg.get("timeout_multiplier", 1.0)
+    multiplier = _seconds(1.0 if multiplier is None else multiplier)
+    return None if multiplier is None else round(base * multiplier, 3)
+
+
+def _record_text(value: Any) -> str | None:
+    return None if value in (None, "") else redact(str(value))[:_PREBAKE_TEXT]
+
+
+def setup_provenance(trial_cfg: Mapping[str, Any], record: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The setup columns of one trial, from its config (result.json's, or
+    config.json or lock.json for a killed one) and its prebake.json. setup_mode:
+    - 'prebaked': the record says the pre-baked image was used;
+    - 'fallback': the record says it was not, so Harbor installed the harness
+      on the task image (or, with prebake_required, the trial failed fast);
+    - 'stock': the trial did not run through the pre-baked environment class;
+    - None: it did, but left no record, which the class writes before any
+      container starts (the trial was killed before environment start)."""
+    environment = trial_cfg.get("environment") if isinstance(trial_cfg.get("environment"), Mapping) else {}
+    out: dict[str, Any] = {"setup_mode": "stock", "agent_setup_limit_sec": agent_setup_limit(trial_cfg),
+                           "prebake_image": None, "prebake_image_id": None, "prebake_recipe": None,
+                           "prebake_baked_at": None, "prebake_reason": None, "prebake_json": None}
+    if isinstance(record, Mapping) and "used" in record:
+        baked_at = record.get("baked_at")
+        out.update(
+            setup_mode="prebaked" if record.get("used") is True else "fallback",
+            prebake_image=_record_text(record.get("image")), prebake_image_id=_record_text(record.get("image_id")),
+            # What the arm asked for; a used image's own recipe label is checked equal to it.
+            prebake_recipe=_record_text(record.get("wanted_recipe") or record.get("recipe")),
+            prebake_baked_at=utc_text(baked_at) or _record_text(baked_at),
+            prebake_reason=_record_text(record.get("reason")),
+            prebake_json=canonical_json(redact_data(dict(record))))
+    elif _is_prebaked_env(environment.get("import_path")):
+        out["setup_mode"] = None
+    return out
 
 
 # Secrets ----------------------------------------------------------------------
@@ -842,7 +962,7 @@ def _primary_share(usage: Mapping[str, Mapping[str, Any]]) -> float | None:
     return primary / total if total else None
 
 
-# Killed trials --------------------------------------------------------------------
+# Harness logs ---------------------------------------------------------------------
 #
 # A trial killed with the harbor process tree (a cancel or budget stop on
 # Windows) writes no result.json, so Harbor never totals its usage. The
@@ -850,9 +970,21 @@ def _primary_share(usage: Mapping[str, Mapping[str, Any]]) -> float | None:
 # call that completed before the kill. These recipes mirror the Harbor 0.25.0
 # adapters' populate_context_post_run, so a recovered figure is what Harbor
 # would have recorded, minus the call in flight: a lower bound.
+#
+# The same logs are the only record of cache writes: Harbor folds them into
+# n_input with no count of their own, and result.json keeps none. So every
+# trial, finished or not, takes its 5-minute and 1-hour write counts from the
+# rawest record its harness keeps (read_harness_log), and the checks that
+# only a log can make (attempts no usage counts, calls never saved) become
+# the trial's flags.
 
-# (model as the harness logged it or None, prompt tokens incl. cache, cache reads, output, own cost or None)
-_Call = tuple[str | None, int, int, int, float | None]
+# (model as the harness logged it or None, prompt tokens incl. cache, cache reads, output, own cost or None,
+#  5-minute cache writes, 1-hour cache writes); a write count is None when the log does not give it.
+_Call = tuple[str | None, int, int, int, float | None, int | None, int | None]
+# A computed cost this far from the harness's own (as a share of the computed) flags the trial.
+REPORTED_COST_TOLERANCE = 0.005
+# Cache writes recovered from a call's cost must come out a whole number of tokens within this.
+_WRITE_RESIDUAL = 0.01
 
 
 def _int(value: Any) -> int:
@@ -882,7 +1014,8 @@ def _jsonl(path: Path) -> list[Mapping[str, Any]]:
 
 def _pi_calls(agent: Path) -> list[_Call] | None:
     """Pi's newest session file: usage on assistant and toolResult messages,
-    and on compaction and branch_summary entries (harbor pi.py)."""
+    and on compaction and branch_summary entries (harbor pi.py). cacheWrite
+    holds every write, cacheWrite1h the 1-hour ones among them."""
     try:
         files = [(p.stat().st_mtime_ns, p.name, p) for p in (agent / "pi" / "sessions").glob("*.jsonl")]
     except OSError:
@@ -902,16 +1035,28 @@ def _pi_calls(agent: Path) -> list[_Call] | None:
         if not isinstance(usage, Mapping):
             continue
         read, write = _int(usage.get("cacheRead")), _int(usage.get("cacheWrite"))
+        hour = min(_int(usage.get("cacheWrite1h")), write)
         cost = usage.get("cost")
         calls.append((None, _int(usage.get("input")) + read + write, read, _int(usage.get("output")),
-                      _cost_or_none(cost.get("total") if isinstance(cost, Mapping) else None)))
+                      _cost_or_none(cost.get("total") if isinstance(cost, Mapping) else None), write - hour, hour))
     return calls
 
 
-def _claude_code_calls(agent: Path) -> list[_Call] | None:
-    """Claude Code's session files and subagent transcripts: the last usage
-    of each assistant message id, events deduplicated by uuid (harbor
-    claude_code.py). Every session folder is read; Harbor gives up on two."""
+def _anthropic_writes(usage: Mapping[str, Any]) -> tuple[int, int]:
+    """(5-minute, 1-hour) writes from an Anthropic usage object: the
+    cache_creation split, else the total, which is 5-minute (the default)."""
+    split = usage.get("cache_creation")
+    if isinstance(split, Mapping) and ("ephemeral_5m_input_tokens" in split or "ephemeral_1h_input_tokens" in split):
+        return _int(split.get("ephemeral_5m_input_tokens")), _int(split.get("ephemeral_1h_input_tokens"))
+    return _int(usage.get("cache_creation_input_tokens")), 0
+
+
+def _claude_code_messages(agent: Path) -> dict[str, tuple[Any, Mapping[str, Any]]] | None:
+    """{message id: (model, usage)} from Claude Code's session files and
+    subagent transcripts: the last usage of each assistant message id, events
+    deduplicated by uuid (harbor claude_code.py). A call is logged one to
+    three times, every copy with the same final usage. Every session folder
+    is read; Harbor gives up on two."""
     root = agent / "sessions" / "projects"
     try:
         files = sorted(root.rglob("*.jsonl")) if root.is_dir() else []
@@ -933,13 +1078,47 @@ def _claude_code_calls(agent: Path) -> list[_Call] | None:
                 continue
             if message.get("id") and isinstance(message.get("usage"), Mapping):
                 last[str(message["id"])] = (message.get("model"), message["usage"])
+    return last
+
+
+def _claude_code_calls(agent: Path) -> list[_Call] | None:
+    """Each assistant message's final usage: one API call per message id."""
+    last = _claude_code_messages(agent)
+    if last is None:
+        return None
     calls: list[_Call] = []
     for model, u in last.values():
         read = _int(u.get("cache_read_input_tokens"))
         calls.append((str(model) if model else None,
                       _int(u.get("input_tokens")) + read + _int(u.get("cache_creation_input_tokens")),
-                      read, _int(u.get("output_tokens")), None))
+                      read, _int(u.get("output_tokens")), None, *_anthropic_writes(u)))
     return calls
+
+
+def _claude_code_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
+    """Attempts no usage counts. A message's usage.iterations lists each
+    attempt of its request with that attempt's model; the top-level usage is
+    the attempt that produced the message, so the others (an Opus 5.5 attempt
+    its safety classifier declined before a fallback model answered) appear
+    nowhere else. Whether a declined attempt is billed depends on why it was
+    declined, so they are a flag with their tokens, not part of the cost."""
+    models: dict[str, dict[str, int]] = {}
+    count = 0
+    for model, u in (_claude_code_messages(agent) or {}).values():
+        attempts = [a for a in u.get("iterations") or [] if isinstance(a, Mapping)]
+        for attempt in attempts[:-1]:  # the last attempt is the top-level usage
+            name = str(attempt.get("model") or model or "unknown")
+            entry = models.setdefault(name, {"n_input": 0, "n_cache": 0, "n_output": 0, "n_cache_write_5m": 0,
+                                             "n_cache_write_1h": 0})
+            read, (w5, w1) = _int(attempt.get("cache_read_input_tokens")), _anthropic_writes(attempt)
+            entry["n_input"] += _int(attempt.get("input_tokens")) + read + _int(
+                attempt.get("cache_creation_input_tokens"))
+            entry["n_cache"] += read
+            entry["n_output"] += _int(attempt.get("output_tokens"))
+            entry["n_cache_write_5m"] += w5
+            entry["n_cache_write_1h"] += w1
+            count += 1
+    return {"declined_attempts": {"attempts": count, "models": models}} if count else {}
 
 
 def _strands_calls(agent: Path) -> list[_Call] | None:
@@ -948,6 +1127,11 @@ def _strands_calls(agent: Path) -> list[_Call] | None:
     path = agent / "strands-events.jsonl"
     if not path.is_file():
         return None
+    result = read_json(agent / "strands-result.json")
+    observed = result.get("observed_model") if isinstance(result, Mapping) else None
+    config = observed.get("config") if isinstance(observed, Mapping) else None
+    cache = config.get("cache_config") if isinstance(config, Mapping) else None
+    hour = cache is not None and re.search(r"ttl\W+1h", str(cache)) is not None
     calls: list[_Call] = []
     for event in _jsonl(path):
         message = event.get("message")
@@ -963,7 +1147,8 @@ def _strands_calls(agent: Path) -> list[_Call] | None:
         total = usage.get("totalTokens")
         if total is None or n_in + n_out + read + write == total:
             n_in += read + write  # cache reported apart from input
-        calls.append((None, n_in, read, n_out, None))
+        # strands drops Anthropic's 5-minute/1-hour split; its cache config says which applies.
+        calls.append((None, n_in, read, n_out, None, 0 if hour else write, write if hour else 0))
     return calls
 
 
@@ -985,11 +1170,191 @@ def _mini_swe_agent_calls(agent: Path) -> list[_Call] | None:
         if not isinstance(usage, Mapping) or not usage:
             continue
         details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}
+        details = details if isinstance(details, Mapping) else {}
+        cost = usage.get("cost") if usage.get("cost") is not None else extra.get("cost")
         calls.append((None, _int(usage.get("prompt_tokens") or usage.get("input_tokens")),
-                      _int(details.get("cached_tokens") if isinstance(details, Mapping) else None),
+                      _int(details.get("cached_tokens")),
                       _int(usage.get("completion_tokens") or usage.get("output_tokens")),
-                      _cost_or_none(usage.get("cost"))))
+                      _cost_or_none(cost), *_litellm_writes(usage, details)))
     return calls
+
+
+def _litellm_writes(usage: Mapping[str, Any], details: Mapping[str, Any]) -> tuple[int | None, int | None]:
+    """LiteLLM keeps Anthropic's write split under prompt_tokens_details and
+    the total at the top level; neither is there for a provider without them."""
+    split = details.get("cache_creation_token_details")
+    if isinstance(split, Mapping) and ("ephemeral_5m_input_tokens" in split or "ephemeral_1h_input_tokens" in split):
+        return _int(split.get("ephemeral_5m_input_tokens")), _int(split.get("ephemeral_1h_input_tokens"))
+    total = usage.get("cache_creation_input_tokens", details.get("cache_creation_tokens"))
+    return (_int(total), 0) if total is not None else (None, None)
+
+
+_MINI_STEP = re.compile(rb"mini-swe-agent \(step (\d+), \$(\d+(?:\.(\d+))?)\)")
+
+
+def _mini_swe_agent_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
+    """Calls that completed but were never saved. mini-swe-agent prints
+    'mini-swe-agent (step N, $cost so far)' after each model call and saves
+    its trajectory only after the step's command returns, so a timeout during
+    a command loses the reply that started it. The printed running cost,
+    rounded, bounds what the lost calls cost."""
+    try:
+        text = (agent / "mini-swe-agent.txt").read_bytes()
+    except OSError:
+        return {}
+    steps = [(int(m.group(1)), float(m.group(2)), len(m.group(3) or b"")) for m in _MINI_STEP.finditer(text)]
+    if not steps:
+        return {}
+    step, shown, places = max(steps)
+    missing = step - len(calls)
+    if missing <= 0:
+        return {}
+    costs = [c[4] for c in calls]
+    bound = None
+    if None not in costs:
+        bound = max(shown + 0.5 * 10 ** -places - math.fsum(c for c in costs if c is not None), 0.0)
+    return {"unsaved_calls": {"calls": missing, "cost_usd_max": bound, "source": "agent/mini-swe-agent.txt",
+                              "bound": "printed running cost"}}
+
+
+_PI_EVENT = re.compile(r'^\{"type":"message_(start|end)","message":\{"role":"assistant"')
+
+
+def _pi_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
+    """A request pi started and never finished: an assistant message_start in
+    pi.txt with no message_end, as when a kill lands mid-call. Anthropic may
+    bill such a call; nothing records its size, so its bound is the trial's
+    costliest completed call."""
+    try:
+        text = (agent / "pi.txt").read_bytes().decode("utf-8", errors="replace")
+    except OSError:
+        return {}
+    counts = Counter(m.group(1) for m in map(_PI_EVENT.match, text.splitlines()) if m)
+    missing = counts["start"] - counts["end"]
+    if missing <= 0:
+        return {}
+    costs = [c[4] for c in calls if c[4] is not None]
+    return {"unfinished_calls": {"calls": missing, "cost_usd_max": missing * max(costs) if costs else None,
+                                 "source": "agent/pi.txt", "bound": "costliest completed call"}}
+
+
+def _cline_calls(agent: Path) -> list[_Call] | None:
+    """cline.txt, the `cline --json` stream Harbor tees as it runs: one usage
+    event per model call. Cline's inputTokens hold the cache reads and writes
+    (its own cost formula subtracts both), and its outputTokens leave out the
+    reasoning tokens, which it reports apart as reasoningTokenCount and the
+    provider bills as output. The session's messages.json, which Harbor sums
+    (harbor cline.py), drops reasoningTokenCount. Cline asks for no 1-hour
+    cache, so its writes are 5-minute."""
+    path = agent / "cline.txt"
+    if not path.is_file():
+        return None
+    calls: list[_Call] = []
+    for line in _jsonl(path):
+        event = line.get("event")
+        if line.get("type") != "agent_event" or not isinstance(event, Mapping) or event.get("type") != "usage":
+            continue
+        calls.append((None, _int(event.get("inputTokens")), _int(event.get("cacheReadTokens")),
+                      _int(event.get("outputTokens")) + _int(event.get("reasoningTokenCount")),
+                      _cost_or_none(event.get("cost")), _int(event.get("cacheWriteTokens")), 0))
+    return calls
+
+
+def _step_finish_calls(path: Path) -> list[_Call] | None:
+    """A `run --format=json` stream that OpenCode or its fork Kilo writes and
+    Harbor tees as it runs: one step_finish per model call. Both split a
+    call's usage into fresh input, cache reads, cache writes, output and
+    reasoning (session.getUsage, whose output leaves the reasoning out);
+    Harbor's adapter adds the reads to the input but not the writes, and
+    leaves the reasoning out of the output. Their Anthropic cache points carry
+    no ttl, so their writes are 5-minute."""
+    if not path.is_file():
+        return None
+    calls: list[_Call] = []
+    for event in _jsonl(path):
+        part = event.get("part")
+        if event.get("type") != "step_finish" or not isinstance(part, Mapping):
+            continue
+        tokens = part.get("tokens") if isinstance(part.get("tokens"), Mapping) else {}
+        cache = tokens.get("cache") if isinstance(tokens.get("cache"), Mapping) else {}
+        read, write = _int(cache.get("read")), _int(cache.get("write"))
+        calls.append((None, _int(tokens.get("input")) + read + write, read,
+                      _int(tokens.get("output")) + _int(tokens.get("reasoning")), _cost_or_none(part.get("cost")),
+                      write, 0))
+    return calls
+
+
+def _opencode_calls(agent: Path) -> list[_Call] | None:
+    """opencode.txt, OpenCode's step_finish stream (_step_finish_calls)."""
+    return _step_finish_calls(agent / "opencode.txt")
+
+
+def _kilo_calls(agent: Path) -> list[_Call] | None:
+    """kilo.txt, Kilo Code's step_finish stream (_step_finish_calls), which
+    bench/agents/kilo.py tees under its own name. Kilo 7.8.18 reports a
+    call's cost from its own catalog, or OpenRouter's bill where it has one;
+    either may be 0, which leaves the call's own cost unknown."""
+    return _step_finish_calls(agent / "kilo.txt")
+
+
+_GOOSE_DB = Path("goose") / "xdg-data" / "goose" / "sessions" / "sessions.db"
+
+
+def _goose_ledger(db: Path) -> list[tuple[Any, ...]] | None:
+    """Goose's usage_ledger rows, read from a copy: the trial's database may
+    still have its write-ahead log beside it (a killed trial), which only a
+    writable connection replays, and the trial folder is never written."""
+    with tempfile.TemporaryDirectory(prefix="bench-goose-") as tmp:
+        for suffix in ("", "-wal", "-shm"):
+            source = db.with_name(db.name + suffix)
+            if source.is_file():
+                shutil.copyfile(source, Path(tmp) / (db.name + suffix))
+        conn = sqlite3.connect(Path(tmp) / db.name)
+        try:
+            return conn.execute("SELECT model, input_tokens, cache_read_tokens, output_tokens, cost, "
+                                "cache_write_tokens FROM usage_ledger ORDER BY id").fetchall()
+        except sqlite3.Error:
+            return None
+        finally:
+            conn.close()
+
+
+def _goose_calls(agent: Path) -> list[_Call] | None:
+    """Goose's session database (XDG_DATA_HOME is under agent/, harbor
+    goose.py): usage_ledger has a row per model call, compaction and other
+    sessions included, written as the call ends, with OpenRouter's billed cost
+    where it gave one. Goose's input_tokens hold the cache reads and writes.
+    It sends a 1-hour cache_control only when cache_ttl is set, which Harbor
+    never does, so its writes are 5-minute."""
+    db = agent / _GOOSE_DB
+    if not db.is_file():
+        return None
+    try:
+        rows = _goose_ledger(db)
+    except (sqlite3.Error, OSError):
+        return None
+    if rows is None:
+        return None
+    return [(str(model) if model else None, _int(n_in), _int(read), _int(n_out), _cost_or_none(cost), _int(write), 0)
+            for model, n_in, read, n_out, cost, write in rows]
+
+
+def _goose_complete(agent: Path) -> list[_Call] | None:
+    """Without the database (an older Goose): the stream's final `complete`
+    event, the totals Harbor records, as one call, for its cache writes."""
+    done = [e for e in _jsonl(agent / "goose.txt") if e.get("type") == "complete"]
+    if not done:
+        return None
+    e, write = done[-1], done[-1].get("cache_write_input_tokens")
+    return [(None, _int(e.get("input_tokens", e.get("total_tokens"))), _int(e.get("cache_read_input_tokens")),
+             _int(e.get("output_tokens")), _cost_or_none(e.get("cost_usd")),
+             None if write is None else _int(write), None if write is None else 0)]
+
+
+def _atif_writes(metrics: Mapping[str, Any]) -> tuple[int | None, int | None]:
+    extra = metrics.get("extra")
+    write = extra.get("cache_write_input_tokens") if isinstance(extra, Mapping) else None
+    return (_int(write), 0) if write is not None else (None, None)
 
 
 def _final_metrics(data: Any) -> _Call | None:
@@ -997,7 +1362,37 @@ def _final_metrics(data: Any) -> _Call | None:
     if not isinstance(metrics, Mapping):
         return None
     return (None, _int(metrics.get("total_prompt_tokens")), _int(metrics.get("total_cached_tokens")),
-            _int(metrics.get("total_completion_tokens")), _cost_or_none(metrics.get("total_cost_usd")))
+            _int(metrics.get("total_completion_tokens")), _cost_or_none(metrics.get("total_cost_usd")),
+            *_atif_writes(metrics))
+
+
+def _step_calls(data: Mapping[str, Any], main: _Call) -> list[_Call]:
+    """The main chat's totals as its steps' calls, plus one for whatever the
+    totals hold beyond them (a call that finished but never became a step),
+    so cache writes can be recovered call by call. The totals alone when the
+    steps do not fit inside them."""
+    steps = data.get("steps") if isinstance(data.get("steps"), list) else []
+    calls: list[_Call] = []
+    for step in steps:
+        m = step.get("metrics") if isinstance(step, Mapping) else None
+        if not isinstance(m, Mapping):
+            continue
+        name = step.get("model_name")
+        calls.append((str(name) if name else None, _int(m.get("prompt_tokens")), _int(m.get("cached_tokens")),
+                      _int(m.get("completion_tokens")), _cost_or_none(m.get("cost_usd")), *_atif_writes(m)))
+    if not calls:
+        return [main]
+    rest = [main[i] - sum(c[i] for c in calls) for i in (1, 2, 3)]  # type: ignore[misc]
+    if min(rest) < 0:
+        return [main]
+    if any(rest):
+        costs = [c[4] for c in calls]
+        cost = (None if main[4] is None or None in costs
+                else _cost_or_none(main[4] - math.fsum(c for c in costs if c is not None)))
+        writes = [c[5] for c in calls]
+        write = None if main[5] is None or None in writes else main[5] - sum(w for w in writes if w is not None)
+        calls.append((None, rest[0], rest[1], rest[2], cost, write, None if write is None else 0))
+    return calls
 
 
 def _atif_calls(agent: Path) -> list[_Call] | None:
@@ -1025,20 +1420,49 @@ def _atif_calls(agent: Path) -> list[_Call] | None:
                   main[3] - sum(_int(m.get("completion_tokens")) for m in steps))
         if not steps or (beyond[0] >= sum(c[1] for c in subagents) and beyond[1] >= sum(c[3] for c in subagents)):
             subagents = []
-    return [main, *subagents]
+    return [*_step_calls(data, main), *subagents]
 
 
 # First match wins: a harness's own log, then an ATIF trajectory, which for an
 # installed harness only Harbor's post-run step writes.
 _RECOVERY = (("agent/pi/sessions", _pi_calls), ("agent/sessions/projects", _claude_code_calls),
              ("agent/strands-events.jsonl", _strands_calls),
-             ("agent/mini-swe-agent.trajectory.json", _mini_swe_agent_calls), ("agent/trajectory.json", _atif_calls))
+             ("agent/mini-swe-agent.trajectory.json", _mini_swe_agent_calls), ("agent/cline.txt", _cline_calls),
+             ("agent/opencode.txt", _opencode_calls), ("agent/kilo.txt", _kilo_calls),
+             ("agent/" + _GOOSE_DB.as_posix(), _goose_calls),
+             ("agent/goose.txt", _goose_complete), ("agent/trajectory.json", _atif_calls))
+
+# Logs whose calls replace Harbor's usage of a finished trial, not just add its
+# cache writes: Harbor's adapter sums the same calls short (see each recipe),
+# or, for Goose, reads only the main run's final `complete` event, while the
+# database holds every call of every session.
+_REPLACES_HARBOR = frozenset({"agent/cline.txt", "agent/opencode.txt", "agent/kilo.txt",
+                              "agent/" + _GOOSE_DB.as_posix()})
 
 
-def recover_calls(trial_dir: Path) -> tuple[str, list[_Call]] | None:
-    """(where, completed calls) from the usage log the harness left in
-    trial_dir/agent, or None when it left none. Calls may be an empty list:
-    the harness started its log, but no model call completed."""
+# The checks only a harness's own log can make, by where its calls came from.
+_FLAG_READERS = {"agent/sessions/projects": _claude_code_flags,
+                 "agent/mini-swe-agent.trajectory.json": _mini_swe_agent_flags, "agent/pi/sessions": _pi_flags}
+
+
+@dataclass(frozen=True)
+class HarnessLog:
+    """What a harness's own log says about a trial: where it was read, its
+    completed calls, and the flags only the log can raise."""
+    where: str
+    calls: list[_Call]
+    flags: dict[str, Any]
+
+    @property
+    def replaces_harbor(self) -> bool:
+        """Whether its calls are the trial's usage, rather than Harbor's totals."""
+        return self.where in _REPLACES_HARBOR
+
+
+def read_harness_log(trial_dir: Path) -> HarnessLog | None:
+    """The harness's own usage log in trial_dir/agent, or None when it left
+    none. Calls may be an empty list: the harness started its log, but no
+    model call completed."""
     agent = Path(trial_dir) / "agent"
     if not agent.is_dir():
         return None
@@ -1047,9 +1471,24 @@ def recover_calls(trial_dir: Path) -> tuple[str, list[_Call]] | None:
             calls = recipe(agent)
         except (OSError, ValueError, TypeError, AttributeError):
             calls = None
-        if calls is not None:
-            return where, calls
+        if calls is None:
+            continue
+        flags: dict[str, Any] = {}
+        reader = _FLAG_READERS.get(where)
+        if reader is not None:
+            try:
+                flags = reader(agent, calls)
+            except (OSError, ValueError, TypeError, AttributeError):
+                flags = {}
+        return HarnessLog(where, calls, flags)
     return None
+
+
+def recover_calls(trial_dir: Path) -> tuple[str, list[_Call]] | None:
+    """(where, completed calls) from the usage log the harness left in
+    trial_dir/agent, or None when it left none."""
+    log = read_harness_log(trial_dir)
+    return None if log is None else (log.where, log.calls)
 
 
 def _recovered_usage(found: tuple[str, list[_Call]], ctx: RunContext, prefixes: Mapping[str, str],
@@ -1057,7 +1496,7 @@ def _recovered_usage(found: tuple[str, list[_Call]], ctx: RunContext, prefixes: 
     """The same per-model shape as _usage; every entry says where it came from."""
     where, calls = found
     usage: dict[str, dict[str, Any]] = {}
-    for reported, n_in, n_cache, n_out, cost in calls:
+    for reported, n_in, n_cache, n_out, cost, *_writes in calls:
         key = canonical_model(reported, ctx, prefixes) if reported else model
         entry = usage.setdefault(key, {"reported_as": reported, "n_input": 0, "n_cache": 0, "n_output": 0,
                                        "reported_cost_usd": None, "primary": is_primary(key, model),
@@ -1068,6 +1507,173 @@ def _recovered_usage(found: tuple[str, list[_Call]], ctx: RunContext, prefixes: 
         if cost is not None:
             entry["reported_cost_usd"] = (entry["reported_cost_usd"] or 0.0) + cost
     return usage
+
+
+def _replaced_usage(log: HarnessLog, harbor: Mapping[str, Mapping[str, Any]], ctx: RunContext,
+                    prefixes: Mapping[str, str], model: str) -> dict[str, dict[str, Any]]:
+    """A finished trial's usage from a log that replaces Harbor's (_REPLACES_HARBOR).
+    Each entry keeps what Harbor reported for its model, so the difference stays visible."""
+    usage = _recovered_usage((log.where, log.calls), ctx, prefixes, model)
+    for key, entry in usage.items():
+        theirs = harbor.get(key) or {}
+        entry["synthesized"] = False
+        entry["harbor_reported"] = {k: theirs.get(k) for k in ("n_input", "n_cache", "n_output")}
+    return usage
+
+
+def _was_replaced(usage: Any) -> bool:
+    return isinstance(usage, Mapping) and any(isinstance(u, Mapping) and "harbor_reported" in u
+                                              for u in usage.values())
+
+
+def _usage_totals(usage: Mapping[str, Mapping[str, Any]], harbor_cost: float | None
+                  ) -> tuple[int, int, int, float | None]:
+    """(input, cache, output, cost) over a replaced usage: the harness's own
+    cost where every model has one, else what Harbor reported."""
+    costs = [u.get("reported_cost_usd") for u in usage.values()]
+    cost = math.fsum(c for c in costs if c is not None) if costs and None not in costs else harbor_cost
+    return (sum(_int(u.get("n_input")) for u in usage.values()), sum(_int(u.get("n_cache")) for u in usage.values()),
+            sum(_int(u.get("n_output")) for u in usage.values()), cost)
+
+
+def _same_name(reported: str, key: str) -> bool:
+    a, b = str(reported).split("/")[-1], str(key).split("/")[-1]
+    return a == b or settings.is_variant(a, b) or settings.is_variant(b, a)
+
+
+def _entry_key(usage: Mapping[str, Mapping[str, Any]], reported: str | None, model: str) -> str | None:
+    """The usage entry a logged call belongs to: its model's, else (a log
+    without model names) the one model that used tokens, the configured one
+    among several, or none."""
+    if reported:
+        for key in usage:
+            if _same_name(reported, key):
+                return key
+    used = [k for k, u in usage.items() if u.get("n_input") or u.get("n_output")]
+    if len(used) == 1:
+        return used[0]
+    primary = [k for k in used if usage[k].get("primary")]
+    if len(primary) == 1:
+        return primary[0]
+    return model if model in usage else None
+
+
+def _writes_priced(price: settings.Price | None) -> bool:
+    return price is not None and (price.cache_write_5m is not None or price.cache_write_1h is not None)
+
+
+def _writes_from_cost(call: _Call, price: settings.Price | None) -> tuple[int, int] | None:
+    """A call's 5-minute writes from its own cost, where the harness priced it
+    at this table's rates (LiteLLM does for Anthropic; terminus-2 keeps no
+    write count): the cost left over once fresh input, reads and output are
+    priced, over the write premium. Only a whole number of tokens that fits
+    in the prompt is believed; anything else means the rates differ."""
+    _model, prompt, read, output, cost = call[:5]
+    if cost is None or price is None or price.cache_write_5m is None or price.cache_write_5m <= price.input:
+        return None
+    read_rate = price.input if price.cache_read is None else price.cache_read
+    base = (prompt - read) * price.input + read * read_rate + output * price.output
+    writes = (cost * 1e6 - base) / (price.cache_write_5m - price.input)
+    whole = round(writes)
+    if abs(writes - whole) > _WRITE_RESIDUAL or not 0 <= whole <= prompt - read:
+        return None
+    return whole, 0
+
+
+def _gap_call(usage: Mapping[str, Mapping[str, Any]], calls: Sequence[_Call], cost: float | None) -> _Call | None:
+    """What Harbor's totals hold beyond the log's calls, as one call: a call
+    that finished but that the log never recorded."""
+    rest = [sum(u.get(k) or 0 for u in usage.values()) - sum(c[i] for c in calls)  # type: ignore[misc]
+            for i, k in ((1, "n_input"), (2, "n_cache"), (3, "n_output"))]
+    if min(rest) < 0 or not any(rest):
+        return None
+    costs = [c[4] for c in calls]
+    own = None if cost is None or None in costs else _cost_or_none(cost - math.fsum(c for c in costs if c is not None))
+    return (None, rest[0], rest[1], rest[2], own, None, None)
+
+
+def assign_cache_writes(usage: dict[str, dict[str, Any]], calls: Sequence[_Call] | None, provider: str, model: str,
+                        table: Mapping[str, Mapping[str, settings.Price]], *, cost: float | None = None,
+                        missing: str = "no harness log") -> dict[str, Any]:
+    """Sets n_cache_write_5m and n_cache_write_1h on the usage entries the
+    log's calls belong to, and returns the flags this raises. A call's writes
+    come from the log, else from its own cost (_writes_from_cost); Harbor's
+    totals beyond the log (a call the log never recorded) are one more call,
+    costed from the harness's total `cost`. An entry with a call whose writes
+    stay unknown keeps the known ones; an entry the log names none for, on a
+    model whose price has write rates, is flagged cache_writes_unknown with
+    the reason (`missing` when there is no log at all)."""
+    calls = list(calls or [])
+    if calls:
+        gap = _gap_call(usage, calls, cost)
+        if gap is not None:
+            calls.append(gap)
+    sums: dict[str, list[int]] = {}
+    unknown = 0
+    for call in calls:
+        key = _entry_key(usage, call[0], model)
+        price = pricing.lookup(table, provider, key) if key is not None else None
+        writes = (call[5], call[6] or 0) if call[5] is not None else _writes_from_cost(call, price)
+        if key is None or writes is None:
+            if call[1] > call[2] and (key is None or _writes_priced(price)):
+                unknown += 1
+            continue
+        entry_sums = sums.setdefault(key, [0, 0])
+        entry_sums[0] += writes[0]
+        entry_sums[1] += writes[1]
+    flags: dict[str, Any] = {}
+    for key, (w5, w1) in sums.items():
+        entry = usage[key]
+        if w5 + w1 > (entry.get("n_input") or 0) - (entry.get("n_cache") or 0):
+            # The log and Harbor's totals disagree; writes beyond the prompt would price tokens never sent.
+            flags.setdefault("cache_writes_exceed_prompt", []).append(key)
+            continue
+        entry["n_cache_write_5m"], entry["n_cache_write_1h"] = w5, w1
+    silent = sorted(k for k, u in usage.items() if "n_cache_write_5m" not in u
+                    and (u.get("n_input") or 0) > (u.get("n_cache") or 0)
+                    and _writes_priced(pricing.lookup(table, provider, k)))
+    if unknown or silent:
+        flags["cache_writes_unknown"] = {"calls": unknown, "models": silent,
+                                         "reason": missing if not calls else "not in the harness log"}
+    return flags
+
+
+def _stored_writes(usage: dict[str, dict[str, Any]], stored: Mapping[str, Any]) -> None:
+    """The write counts an earlier parse stored, for a trial whose folder is gone."""
+    for key, entry in usage.items():
+        old = stored.get(key)
+        if isinstance(old, Mapping) and "n_cache_write_5m" in old:
+            entry["n_cache_write_5m"] = _int(old.get("n_cache_write_5m"))
+            entry["n_cache_write_1h"] = _int(old.get("n_cache_write_1h"))
+
+
+def trial_flags(flags: dict[str, Any], usage: Mapping[str, Mapping[str, Any]], provider: str, family: str,
+                table: Mapping[str, Mapping[str, settings.Price]], reported: float | None,
+                computed: float | None) -> dict[str, Any]:
+    """The flags with what the prices add: each declined attempt's cost at
+    today's rates (an upper bound: whether it was billed is unknown), and a
+    harness-reported cost more than REPORTED_COST_TOLERANCE from the computed
+    one, which is how a call the bench cannot see shows (a refused request
+    only Claude Code's own total counts), and how price drift shows."""
+    declined = flags.get("declined_attempts")
+    if isinstance(declined, dict):
+        total: float | None = 0.0
+        for name, u in (declined.get("models") or {}).items():
+            price = pricing.lookup(table, provider, name)
+            if price is None:
+                total = None
+                break
+            total += pricing.unit_cost(price, u.get("n_input") or 0, u.get("n_cache") or 0,  # type: ignore[operator]
+                                       u.get("n_output") or 0, *pricing.cache_writes(u))
+        declined["cost_usd_max"] = total
+    flags.pop("reported_cost_mismatch", None)
+    if (reported is not None and reported > 0 and computed is not None and computed > 0
+            and not reports_mispriced_cost(family, provider)):
+        diff = (reported - computed) / computed
+        if abs(diff) > REPORTED_COST_TOLERANCE:
+            flags["reported_cost_mismatch"] = {"reported_usd": reported, "computed_usd": computed,
+                                               "diff_pct": round(100 * diff, 3)}
+    return flags
 
 
 def _cautions(agent: Mapping[str, Any], kwargs: Mapping[str, Any]) -> list[str]:
@@ -1095,12 +1701,38 @@ def _first(markers: Sequence[str], text: str) -> str | None:
     return next((m for m in markers if m in text), None)
 
 
+def _priced(usage: dict[str, dict[str, Any]], provider: str, model: str, family: str,
+            log: HarnessLog | None, stored: Mapping[str, Any] | None,
+            reported: float | None) -> tuple[float | None, str | None, dict[str, Any]]:
+    """(cost, pricing sha, flags) once the usage carries its cache writes:
+    from the log, else (a re-derive whose trial folder is gone) as stored."""
+    try:
+        table = pricing.load_table()
+    except Exception:  # an invalid pricing.yaml must not stop ingestion
+        table = None
+    flags: dict[str, Any] = dict(log.flags) if log is not None else {}
+    if log is None and stored is not None:
+        _stored_writes(usage, stored.get("usage") or {})
+        flags = {k: v for k, v in (stored.get("flags") or {}).items() if k != "cache_writes_unknown"}
+        flags["trial_folder_missing"] = True
+    flags.update(assign_cache_writes(usage, log.calls if log is not None else None, provider, model, table or {},
+                                     cost=reported, missing="trial folder gone" if stored is not None
+                                     else "no harness log"))
+    if table is None:
+        return None, None, flags
+    cost, _unpriced = pricing.price_usage(usage, provider, table)
+    return cost, pricing.table_sha(), trial_flags(flags, usage, provider, family, table, reported, cost)
+
+
 def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, job_lock: Mapping | None,
            trial_dir: str, ctx: RunContext, prefixes: Mapping[str, str], job_id: str | None,
-           recovered: tuple[str, list[_Call]] | None = None) -> TrialFacts:
+           log: HarnessLog | None = None, prebake: Mapping[str, Any] | None = None,
+           stored: Mapping[str, Any] | None = None) -> TrialFacts:
     """Facts from a parsed result.json (finished) or a trial config.json
-    (result None: killed before finishing), with the usage recovered from the
-    harness's own log for a killed trial."""
+    (result None: killed before finishing). The harness's own log gives a
+    killed trial its usage, and every trial its cache writes and flags;
+    `stored` ({"usage", "flags"} as stored before) stands in for the log of
+    a finished trial whose folder is gone. prebake is the trial's prebake.json."""
     agent = trial_cfg.get("agent") if isinstance(trial_cfg.get("agent"), Mapping) else {}
     kwargs = agent.get("kwargs") if isinstance(agent.get("kwargs"), Mapping) else {}
     info = (result or {}).get("agent_info") if isinstance((result or {}).get("agent_info"), Mapping) else {}
@@ -1144,38 +1776,40 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
         n_concurrent=n_concurrent if isinstance(n_concurrent, int) else None,
         dataset=str(dataset) if dataset else None, dataset_snapshot=snapshot,
         task=task, task_digest=digest, task_source_type=source_type,
+        **setup_provenance(trial_cfg, prebake),
         parser_version=PARSER_VERSION,
         raw_lock_z=compress(scrub_lock(dict(lock))) if isinstance(lock, Mapping) else None,
     )
     if result is None:
-        usage = _recovered_usage(recovered, ctx, prefixes, model) if recovered else {}
+        usage = _recovered_usage((log.where, log.calls), ctx, prefixes, model) if log else {}
         sums = [None if not usage else sum(u[k] for u in usage.values()) for k in ("n_input", "n_cache", "n_output")]
         costs = [u["reported_cost_usd"] for u in usage.values() if u["reported_cost_usd"] is not None]
-        cost, pricing_sha = None, None
+        reported = math.fsum(costs) if costs else None
+        cost, pricing_sha, flags = None, None, dict(log.flags) if log else {}
         if usage:
-            try:
-                cost, _unpriced = pricing.price_usage(usage, provider, pricing.load_table())
-                pricing_sha = pricing.table_sha()
-            except Exception:  # an invalid pricing.yaml must not stop ingestion
-                cost, pricing_sha = None, None
+            cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, None, reported)
         return TrialFacts(
             **common, trial_uid=None, reward=None, rewards_json=None, passed=None, exception_type=None,
             exception_head=None, harbor_cause=None, cap_marker=None, setup_marker=None,
-            agent_started=int(recovered is not None),  # the harness began its log
+            agent_started=int(log is not None),  # the harness began its log
             n_input=sums[0], n_cache=sums[1], n_output=sums[2], usage_json=canonical_json(usage),
-            primary_share=_primary_share(usage), reported_cost_usd=math.fsum(costs) if costs else None,
-            cost_at_ingest_usd=cost, pricing_sha_at_ingest=pricing_sha,
+            primary_share=_primary_share(usage), reported_cost_usd=reported,
+            cost_at_ingest_usd=cost, pricing_sha_at_ingest=pricing_sha, flags_json=canonical_json(flags),
             started_at=None, finished_at=None, env_setup_sec=None, agent_setup_sec=None,
             agent_exec_sec=None, verifier_sec=None, total_sec=None, raw_result_z=None,
         )
 
     totals = token_totals(result)
     usage = _usage(result, ctx, prefixes, model, totals)
-    try:
-        cost, _unpriced = pricing.price_usage(usage, provider, pricing.load_table())
-        pricing_sha = pricing.table_sha()
-    except Exception:  # an invalid pricing.yaml must not stop ingestion
-        cost, pricing_sha = None, None
+    if log is not None and log.replaces_harbor and log.calls:
+        usage = _replaced_usage(log, usage, ctx, prefixes, model)
+        totals = _usage_totals(usage, totals[3])
+    elif log is None and stored is not None and _was_replaced(stored.get("usage")):
+        usage = json.loads(json.dumps(stored["usage"]))
+        totals = _usage_totals(usage, totals[3])
+    cost, pricing_sha, flags = None, None, dict(log.flags) if log is not None else {}
+    if usage:
+        cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, stored, totals[3])
     reward, rewards = _reward(result)
     exc = _exception(result)
     exception_type = str(exc["exception_type"]) if exc else None
@@ -1197,6 +1831,7 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
         n_input=totals[0], n_cache=totals[1], n_output=totals[2],
         usage_json=canonical_json(usage), primary_share=_primary_share(usage),
         reported_cost_usd=totals[3], cost_at_ingest_usd=cost, pricing_sha_at_ingest=pricing_sha,
+        flags_json=canonical_json(flags),
         started_at=utc_text(result.get("started_at")), finished_at=utc_text(result.get("finished_at")),
         **phases,
         raw_result_z=compress(trim_result(dict(result))),
@@ -1204,12 +1839,17 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
 
 
 def facts_from_result(result: Mapping, lock: Mapping | None, job_lock: Mapping | None, *, trial_dir: str,
-                      ctx: RunContext, prefixes: Mapping[str, str]) -> TrialFacts:
-    """Facts from an already-parsed result.json; the ledger's rederive uses
-    this on the stored copy."""
+                      ctx: RunContext, prefixes: Mapping[str, str],
+                      prebake: Mapping[str, Any] | None = None, log: HarnessLog | None = None,
+                      stored: Mapping[str, Any] | None = None) -> TrialFacts:
+    """Facts from an already-parsed result.json and prebake.json; the
+    ledger's rederive uses this on the stored copies, with the trial
+    folder's harness log, or, once the folder is gone, the stored usage
+    and flags ({"usage", "flags"}) for what only the log held."""
     trial_cfg = result.get("config") if isinstance(result.get("config"), Mapping) else {}
     return _build(result=result, trial_cfg=trial_cfg, lock=lock, job_lock=job_lock, trial_dir=trial_dir,
-                  ctx=ctx, prefixes=prefixes, job_id=trial_cfg.get("job_id"))
+                  ctx=ctx, prefixes=prefixes, job_id=trial_cfg.get("job_id"), prebake=prebake, log=log,
+                  stored=stored)
 
 
 def parse_trial(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *, root: Path | None = None,
@@ -1225,7 +1865,8 @@ def parse_trial(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *
         job_lock = read_json(trial_dir.parent / "lock.json")
     return facts_from_result(result, lock if isinstance(lock, dict) else None,
                              job_lock if isinstance(job_lock, dict) else None,
-                             trial_dir=relative_dir(trial_dir, root), ctx=ctx, prefixes=prefixes)
+                             trial_dir=relative_dir(trial_dir, root), ctx=ctx, prefixes=prefixes,
+                             prebake=read_prebake_record(trial_dir), log=read_harness_log(trial_dir))
 
 
 def parse_incomplete(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *, root: Path | None = None,
@@ -1242,4 +1883,4 @@ def parse_incomplete(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, st
     return _build(result=None, trial_cfg=cfg, lock=lock if isinstance(lock, dict) else None,
                   job_lock=job_lock if isinstance(job_lock, dict) else None,
                   trial_dir=relative_dir(trial_dir, root), ctx=ctx, prefixes=prefixes, job_id=cfg.get("job_id"),
-                  recovered=recover_calls(trial_dir))
+                  log=read_harness_log(trial_dir), prebake=read_prebake_record(trial_dir))

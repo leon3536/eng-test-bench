@@ -49,6 +49,8 @@
 #view-report .rp-strip-line { font: 12.5px/1.5 var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
 #view-report .rp-strip-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 #view-report .rp-strip-tags:empty { display: none; }
+#view-report .rp-scope { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#view-report .rp-scope-note { display: block; margin: -2px 0 6px; font-size: 11.5px; }
 #view-report .rp-strip-warn { font: 11.5px var(--font-mono); }
 #view-report .rp-fp { border-bottom: 1px dotted var(--line-3); }
 
@@ -136,6 +138,14 @@
 
 /* Report: model cards and forest plots ---------------------------------------- */
 
+/* The Harnesses | Models switch above the multiples. */
+#view-report .rp-compare-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 10px; }
+#view-report .rp-compare-bar .faint { font-size: 12px; }
+/* A ledger cost its ingest checks question (TrialRow.flags). */
+/* The trial drawer's cost checks: one sentence per row, across the drawer. */
+#view-report .rp-flags { grid-template-columns: 1fr; }
+#view-report .rp-flags dd { font: 13px/1.45 var(--font-ui); color: var(--text-2); }
+#view-report .rp-flag { margin-left: 4px; font: 600 11px var(--font-mono); color: var(--amber); cursor: help; }
 #view-report .rp-explainer { margin: 0 0 12px; padding: 9px 12px; border-left: 2px solid var(--kelly-lo); background: var(--inset); color: var(--text-2); font-size: 13px; }
 #view-report .rp-card { border: 1px solid var(--line-2); background: var(--panel); margin-bottom: 14px; }
 #view-report .rp-card:last-child { margin-bottom: 0; }

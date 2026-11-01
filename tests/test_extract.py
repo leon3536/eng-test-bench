@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import json
 import os
 import re
@@ -11,9 +12,9 @@ from pathlib import Path
 from unittest import mock
 
 from tests import ledger_fixtures as lf
-from tests.support import BenchTestCase
+from tests.support import FIXTURES, BenchTestCase, fixture_schema
 
-from bench import classify, extract, settings
+from bench import classify, estimates, extract, report, runs, settings, spec
 from bench.extract import RunContext, ScanRoot
 
 PREFIXES = {"openrouter/": "openrouter", "anthropic/": "anthropic",
@@ -575,6 +576,170 @@ class KilledTrials(BenchTestCase):
         self.assertGreaterEqual(checked, 10)
 
 
+class CacheWrites(BenchTestCase):
+    """Harbor folds cache writes into n_input and result.json keeps no count
+    of them, so each harness's own log gives them, per model, and they are
+    priced at their own rates; what only the log can see becomes a flag."""
+
+    # (fresh input, cache reads, 5-minute writes, 1-hour writes, output) per call
+    CALLS = ((2, 0, 3000, 0, 400), (3, 2900, 500, 100, 250), (4, 3500, 200, 0, 90))
+
+    def setUp(self) -> None:
+        super().setUp()
+        prices = self.tmpdir() / "pricing.yaml"
+        prices.write_text(lf.OPUS_PRICING_YAML, encoding="utf-8", newline="\n")
+        patcher = mock.patch.object(settings, "PRICING", prices)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def parse(self, harness: str, calls: tuple = CALLS, **kw: object) -> tuple[extract.TrialFacts, dict, dict]:
+        d = self.tmpdir() / "job" / "t"
+        lf.make_cache_trial(d, harness, calls, **kw)  # type: ignore[arg-type]
+        return self.facts(d)
+
+    def facts(self, d: Path) -> tuple[extract.TrialFacts, dict, dict]:
+        facts = extract.parse_trial(d, bench_ctx(provider="anthropic", prefix="anthropic/"), PREFIXES)
+        assert facts is not None
+        return facts, json.loads(facts.usage_json), json.loads(facts.flags_json)
+
+    def exact(self, calls: tuple = CALLS) -> float:
+        return sum(lf.call_cost(c) for c in calls)
+
+    def test_every_harness_log_gives_its_writes_and_the_exact_cost(self) -> None:
+        for harness in ("claude-code", "pi", "mini-swe-agent"):
+            with self.subTest(harness):
+                facts, usage, flags = self.parse(harness)
+                (entry,) = usage.values()
+                self.assertEqual((entry["n_cache_write_5m"], entry["n_cache_write_1h"]), (3700, 100))
+                self.assertAlmostEqual(facts.cost_at_ingest_usd, self.exact(), places=12)
+                self.assertEqual(flags, {})  # the harness's own figure agrees, and nothing is missing
+        # strands keeps the write total only; its cache config says 5-minute, the default.
+        calls = tuple((f, r, w5 + w1, 0, o) for f, r, w5, w1, o in self.CALLS)
+        facts, usage, flags = self.parse("strands", calls)
+        self.assertEqual((usage["claude-opus-5-5"]["n_cache_write_5m"], usage["claude-opus-5-5"]["n_cache_write_1h"]),
+                         (3800, 0))
+        self.assertAlmostEqual(facts.cost_at_ingest_usd, self.exact(calls), places=12)
+        self.assertEqual(flags, {})
+
+    def test_writes_are_priced_at_their_own_rates_not_as_fresh_input(self) -> None:
+        facts, _usage, _flags = self.parse("claude-code")
+        as_input = sum(((f + w5 + w1) * 4.0 + r * 0.2 + o * 20.0) / 1e6 for f, r, w5, w1, o in self.CALLS)
+        self.assertAlmostEqual(facts.cost_at_ingest_usd - as_input, (3700 * 1.0 + 100 * 4.0) / 1e6, places=12)
+
+    def test_strands_one_hour_cache_config_makes_its_writes_one_hour(self) -> None:
+        d = self.tmpdir() / "job" / "t"
+        calls = ((2, 0, 3000, 0, 400),)
+        lf.make_cache_trial(d, "strands", calls)
+        lf.write_json(d / "agent" / "strands-result.json", {"observed_model": {"config": {
+            "cache_config": "CacheConfig(strategy='auto', ttl='1h', system_prompt_ttl=True)"}}})
+        _facts, usage, _flags = self.facts(d)
+        self.assertEqual((usage["claude-opus-5-5"]["n_cache_write_5m"], usage["claude-opus-5-5"]["n_cache_write_1h"]),
+                         (0, 3000))
+
+    def test_claude_code_declined_attempts_are_a_flag_with_their_cost(self) -> None:
+        # The first request ran two attempts: Opus 5.5 declined, then Opus 5 answered. Only usage.iterations
+        # lists the declined one; Claude Code's own total counts a refused request the log never shows.
+        d = self.tmpdir() / "job" / "t"
+        lf.make_cache_trial(d, "claude-code", self.CALLS, model="claude-opus-5", reported=0.5)
+        log = d / "agent" / "sessions" / "projects" / "-app" / "s1.jsonl"
+        events = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        declined = {"input_tokens": 2, "output_tokens": 0, "cache_read_input_tokens": 12635,
+                    "cache_creation_input_tokens": 4699, "type": "message", "model": "claude-opus-5-5",
+                    "cache_creation": {"ephemeral_5m_input_tokens": 4699, "ephemeral_1h_input_tokens": 0}}
+        for e in events[:2]:
+            e["message"]["usage"]["iterations"] = [declined, {"type": "fallback_message", "model": "claude-opus-5"}]
+        lf._jsonl(log, events, cut=False)
+        facts, usage, flags = self.facts(d)
+        self.assertEqual(list(usage), ["claude-opus-5"])  # the cost stays the log's calls at Opus 5 rates
+        opus_5 = {"input": 5.0, "read": 0.5, "write_5m": 6.25, "write_1h": 10.0, "output": 25.0}
+        self.assertAlmostEqual(facts.cost_at_ingest_usd, sum(lf.call_cost(c, opus_5) for c in self.CALLS), places=12)
+        attempt = flags["declined_attempts"]
+        self.assertEqual(attempt["attempts"], 1)  # logged twice, counted once
+        self.assertEqual(attempt["models"]["claude-opus-5-5"], {"n_input": 17336, "n_cache": 12635, "n_output": 0,
+                                                                 "n_cache_write_5m": 4699, "n_cache_write_1h": 0})
+        self.assertAlmostEqual(attempt["cost_usd_max"], (2 * 4.0 + 12635 * 0.2 + 4699 * 5.0) / 1e6)
+        mismatch = flags["reported_cost_mismatch"]
+        self.assertEqual(mismatch["reported_usd"], 0.5)
+        self.assertAlmostEqual(mismatch["computed_usd"], facts.cost_at_ingest_usd)
+
+    def test_a_reported_cost_within_half_a_percent_is_no_flag(self) -> None:
+        for factor, flagged in ((1.004, False), (0.996, False), (1.006, True), (0.99, True)):
+            with self.subTest(factor=factor):
+                _facts, _usage, flags = self.parse("pi", reported=self.exact() * factor)
+                self.assertEqual("reported_cost_mismatch" in flags, flagged)
+
+    def test_mini_swe_agent_counts_format_error_writes_and_flags_unsaved_calls(self) -> None:
+        d = self.tmpdir() / "job" / "t"
+        lf.make_cache_trial(d, "mini-swe-agent", self.CALLS)
+        trajectory = json.loads((d / "agent" / "mini-swe-agent.trajectory.json").read_text(encoding="utf-8"))
+        trajectory["messages"][3]["role"] = "user"  # a FormatError reply is logged on the 'user' message
+        lf.write_json(d / "agent" / "mini-swe-agent.trajectory.json", trajectory)
+        steps = "".join(f"mini-swe-agent (step {n}, ${c:.2f})\n" for n, c in ((1, 0.03), (2, 0.04), (3, 0.05)))
+        (d / "agent" / "mini-swe-agent.txt").write_text(steps, encoding="utf-8")
+        _facts, usage, flags = self.facts(d)
+        self.assertEqual(usage["claude-opus-5-5"]["n_cache_write_5m"], 3700)
+        self.assertEqual(flags, {})  # three printed steps, three saved calls
+        # A timeout during the fourth step's command: its reply was printed, never saved.
+        (d / "agent" / "mini-swe-agent.txt").write_text(steps + "mini-swe-agent (step 4, $0.06)\n", encoding="utf-8")
+        _facts, _usage, flags = self.facts(d)
+        self.assertEqual(flags["unsaved_calls"]["calls"], 1)
+        self.assertAlmostEqual(flags["unsaved_calls"]["cost_usd_max"], 0.065 - self.exact())
+
+    def test_pi_flags_a_call_started_and_never_finished(self) -> None:
+        d = self.tmpdir() / "job" / "t"
+        lf.make_cache_trial(d, "pi", self.CALLS)
+        start = '{"type":"message_start","message":{"role":"assistant","content":[]}}\n'
+        end = '{"type":"message_end","message":{"role":"assistant","usage":{}}}\n'
+        (d / "agent" / "pi.txt").write_text(start + end + start + end + start, encoding="utf-8")
+        _facts, _usage, flags = self.facts(d)
+        self.assertEqual(flags["unfinished_calls"]["calls"], 1)
+        self.assertAlmostEqual(flags["unfinished_calls"]["cost_usd_max"], max(lf.call_cost(c) for c in self.CALLS))
+
+    def test_terminus_2_recovers_writes_from_each_calls_cost(self) -> None:
+        # terminus-2 keeps no write count; LiteLLM's per-call cost at these rates gives it back, whole tokens.
+        d = self.tmpdir() / "job" / "t"
+        lf.make_cache_trial(d, "terminus-2", ((2, 0, 3000, 0, 400), (3, 2900, 600, 0, 250), (4, 3500, 200, 0, 90)))
+        trajectory = json.loads((d / "agent" / "trajectory.json").read_text(encoding="utf-8"))
+        trajectory["steps"].pop()  # the last call finished but never became a step: only the totals hold it
+        lf.write_json(d / "agent" / "trajectory.json", trajectory)
+        facts, usage, flags = self.facts(d)
+        self.assertEqual((usage["claude-opus-5-5"]["n_cache_write_5m"], usage["claude-opus-5-5"]["n_cache_write_1h"]),
+                         (3800, 0))  # 1-hour writes cannot be told apart from a cost: all read as 5-minute
+        self.assertEqual(flags, {})
+        # A cost at other rates does not come out a whole number of tokens: those writes stay unknown.
+        for step in trajectory["steps"][1:]:
+            step["metrics"]["cost_usd"] *= 1.01
+        lf.write_json(d / "agent" / "trajectory.json", trajectory)
+        _facts, usage, flags = self.facts(d)
+        self.assertNotIn("n_cache_write_5m", usage["claude-opus-5-5"])
+        self.assertEqual(flags["cache_writes_unknown"]["calls"], 3)  # the step-less call's cost is off too
+
+    def test_no_log_leaves_anthropic_writes_unknown_and_open_models_unflagged(self) -> None:
+        d = self.tmpdir() / "job" / "t"
+        lf.make_trial(d, model_name="anthropic/claude-opus-5-5", tokens=(10000, 6000, 500))
+        facts, usage, flags = self.facts(d)
+        self.assertNotIn("n_cache_write_5m", usage["claude-opus-5-5"])
+        self.assertEqual(flags["cache_writes_unknown"], {"calls": 0, "models": ["claude-opus-5-5"],
+                                                         "reason": "no harness log"})
+        self.assertAlmostEqual(facts.cost_at_ingest_usd, (4000 * 4.0 + 6000 * 0.2 + 500 * 20.0) / 1e6)
+        d = self.tmpdir() / "job2" / "t"
+        lf.make_trial(d, tokens=(10000, 6000, 500))  # GLM on OpenRouter: no write premium to miss
+        facts = extract.parse_trial(d, bench_ctx(), PREFIXES)
+        assert facts is not None
+        self.assertEqual(json.loads(facts.flags_json), {})
+
+    def test_killed_trials_keep_their_writes_too(self) -> None:
+        d = self.tmpdir() / "job" / "t"
+        lf.make_trial(d, family="pi", model_name="anthropic/claude-opus-5-5", finished=False)
+        lf.write_cache_log(d, "pi", self.CALLS)
+        facts = extract.parse_incomplete(d, bench_ctx(provider="anthropic", prefix="anthropic/"), PREFIXES)
+        assert facts is not None
+        (entry,) = json.loads(facts.usage_json).values()
+        self.assertEqual((entry["n_cache_write_5m"], entry["n_cache_write_1h"]), (3700, 100))
+        self.assertAlmostEqual(facts.cost_at_ingest_usd, self.exact(), places=12)
+        self.assertAlmostEqual(facts.reported_cost_usd, self.exact(), places=12)
+
+
 class Secrets(BenchTestCase):
     def test_redact_masks_loaded_secrets_and_patterns(self) -> None:
         secret = "zq9-very-private-value-1234"
@@ -745,6 +910,246 @@ class Paths(BenchTestCase):
         (d / "pricing.yaml").write_text("providers:\n  bogus: {model_prefix: 'bogus/'}\n", encoding="utf-8")
         (d / "dev.overrides.yaml").write_text("providers:\n  other: {model_prefix: 'o/'}\n", encoding="utf-8")
         self.assertEqual(extract.provider_prefixes(d), {"fw/": "fireworks"})
+
+
+# Identity guard ------------------------------------------------------------------
+# A trial's identity must not move when it runs on a pre-baked image or with a
+# setup safety net. tests/fixtures/identity holds trials Harbor wrote: stock/
+# the 2026-10-29 Opus pilot's five arms (and fix-git from the 27-task run),
+# prebaked/ the research prototype's install_only trials of the same arms on
+# pre-baked fix-git images (environment.import_path and kwargs set).
+
+IDENTITY = FIXTURES / "identity"
+ARM_HASHES = {"claude-code": "c701410eb884a0d9", "terminus-2": "a06ee084038fa5e2",
+              "mini-swe-agent": "e6d727483679d869", "pi": "dd7f23a86e387f25", "strands": "9c7311ba1b25de57"}
+
+
+def _identity_ctx(arm: str) -> RunContext:
+    return RunContext(run_key="default/r1", profile="default", run_id="r1", source="bench", arm=arm,
+                      provider="anthropic", model_prefix="anthropic/", effort_label="medium",
+                      dataset="terminal-bench@2.0", local_snapshot="local:terminal-bench@2.0@2026-10-29T05:29:58+00:00",
+                      family=arm)
+
+
+def _read(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+class IdentityGuard(BenchTestCase):
+    def hash_of(self, trial_cfg: dict, arm: str) -> str:
+        return extract.config_identity(trial_cfg, arm, extract._implementation(trial_cfg["agent"]), "anthropic",
+                                       "claude-opus-5-5")[0]
+
+    def facts(self, folder: Path, arm: str) -> extract.TrialFacts:
+        return extract.facts_from_result(_read(folder / "result.json"), None, None, trial_dir=folder.name,
+                                         ctx=_identity_ctx(arm), prefixes=PREFIXES)
+
+    def test_the_five_arm_hashes_on_real_stock_trials(self) -> None:
+        for arm, expected in ARM_HASHES.items():
+            folder = IDENTITY / "stock" / arm
+            with self.subTest(arm=arm):
+                self.assertEqual(self.facts(folder, arm).config_hash, expected)               # as ingested
+                self.assertEqual(self.hash_of(_read(folder / "config.json"), arm), expected)  # a killed trial
+        fix_git = IDENTITY / "stock" / "claude-code-fix-git"
+        self.assertEqual(self.facts(fix_git, "claude-code").config_hash, ARM_HASHES["claude-code"])
+
+    def test_harbor_written_prebaked_trials_keep_the_hash_group_and_task(self) -> None:
+        o = report.parse_options(None, self.load_shipped_config("bench"))
+        for arm, expected in ARM_HASHES.items():
+            with self.subTest(arm=arm):
+                folder = IDENTITY / "prebaked" / arm
+                self.assertTrue(_read(folder / "config.json")["environment"]["import_path"])
+                self.assertTrue(_read(folder / "prebake.json")["used"])
+                prebaked = self.facts(folder, arm)
+                stock = self.facts(IDENTITY / "stock" / arm, arm)
+                self.assertEqual(prebaked.config_hash, expected)
+                for column in ("config_json", "config_label", "family", "implementation", "provider", "model",
+                               "effort", "options_json", "cautions_json", "dataset_snapshot"):
+                    self.assertEqual(getattr(prebaked, column), getattr(stock, column), column)
+                self.assertEqual(report.group_key(dataclasses.asdict(prebaked), o),
+                                 report.group_key(dataclasses.asdict(stock), o))
+        stock_fix_git = self.facts(IDENTITY / "stock" / "claude-code-fix-git", "claude-code")
+        prebaked_fix_git = self.facts(IDENTITY / "prebaked" / "claude-code", "claude-code")
+        self.assertEqual((prebaked_fix_git.task, prebaked_fix_git.task_digest),
+                         ("fix-git", stock_fix_git.task_digest))
+
+    def test_environment_fields_never_change_the_hash(self) -> None:
+        stock = _read(IDENTITY / "stock" / "claude-code-fix-git" / "config.json")
+        environments = [
+            {"type": None, "import_path": "bench.environments.prebaked:PrebakedDockerEnvironment",
+             "kwargs": {"prebake_harness": "claude-code", "prebake_version": "2.1.312", "prebake_recipe": "a" * 64,
+                        "prebake_prefix": "benchbake", "prebake_required": True}},
+            {"type": "docker", "import_path": None, "kwargs": {}, "extra_docker_compose": []},
+            {"type": "docker", "extra_docker_compose": ["overlay.yaml"], "force_build": False, "delete": True},
+        ]
+        for environment in environments:
+            with self.subTest(environment=environment):
+                self.assertEqual(self.hash_of({**stock, "environment": environment}, "claude-code"),
+                                 ARM_HASHES["claude-code"])
+        # The resource overrides still count: they change what the agent has to work with.
+        self.assertNotEqual(self.hash_of({**stock, "environment": {"override_cpus": 4}}, "claude-code"),
+                            ARM_HASHES["claude-code"])
+
+    def test_setup_timeout_keys_never_change_the_hash(self) -> None:
+        stock = _read(IDENTITY / "stock" / "claude-code-fix-git" / "config.json")
+        agent = stock["agent"]
+        for changed in ({**stock, "agent_setup_timeout_multiplier": 2.0},
+                        {**stock, "agent_setup_timeout_multiplier": 1.0},
+                        {**stock, "agent": {**agent, "override_setup_timeout_sec": 720}},
+                        {**stock, "agent_setup_timeout_multiplier": 2, "environment_build_timeout_multiplier": 1.5}):
+            with self.subTest(added={k: v for k, v in changed.items() if k not in stock}):
+                h, identity, label = extract.config_identity(changed, "claude-code", "builtin", "anthropic",
+                                                             "claude-opus-5-5")
+                self.assertEqual(h, ARM_HASHES["claude-code"])
+                self.assertEqual(identity["timeouts"], {})
+                self.assertNotIn("setup", label)
+        # Limits that can change a trial that ran still count.
+        for changed in ({**stock, "agent_timeout_multiplier": 2.0}, {**stock, "timeout_multiplier": 2.0},
+                        {**stock, "agent": {**agent, "override_timeout_sec": 600}}):
+            self.assertNotEqual(self.hash_of(changed, "claude-code"), ARM_HASHES["claude-code"])
+
+    def test_config_hash_for_still_predicts_the_arms(self) -> None:
+        cfg = self.load_shipped_config("bench")
+        run_spec = spec.spec_from_config(cfg, "pilot", list(ARM_HASHES))
+        for arm in run_spec.arms:
+            with self.subTest(arm=arm.name):
+                kwargs, _ = runs.agent_kwargs(cfg.run, arm, fixture_schema(arm.agent))
+                self.assertEqual(estimates.config_hash_for(arm, kwargs, cfg.run.timeout_multiplier),
+                                 ARM_HASHES[arm.family])
+
+    def test_the_identity_names_no_setup_mode_or_environment(self) -> None:
+        facts = self.facts(IDENTITY / "prebaked" / "strands", "strands")
+        identity = json.loads(facts.config_json)
+        self.assertEqual(sorted(identity), ["effort", "extras", "family", "implementation", "model", "options",
+                                            "provider", "timeouts"])
+        self.assertNotIn("prebake", facts.config_json)
+        self.assertNotIn("environment", facts.config_json)
+        from bench import reuse
+
+        for fn in (extract.config_identity, extract.task_identity, report.group_key, report._pair_key):
+            source = inspect.getsource(fn)
+            self.assertNotIn("setup_mode", source, fn.__name__)
+            self.assertNotIn("prebake_", source, fn.__name__)
+        self.assertNotIn("setup_mode", inspect.getsource(reuse))
+
+    def test_identity_fixtures_hold_no_secrets(self) -> None:
+        files = sorted(IDENTITY.rglob("*.json"))
+        self.assertEqual(len(files), 27)
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(IDENTITY).as_posix()):
+                self.assertEqual(extract.redact(text), text)
+                self.assertNotRegex(text, r'"env"\s*:\s*\{\s*"')
+
+
+# Setup provenance ------------------------------------------------------------------
+
+BAKED = "benchbake/claude-code-2.1.312-r0123456789/alexgshaw/fix-git:20251031"
+PREBAKED_ENVIRONMENT = {"import_path": extract.PREBAKED_ENV,
+                        "kwargs": {"prebake_harness": "claude-code", "prebake_version": "2.1.312",
+                                   "prebake_recipe": "0123456789" + "a" * 54, "prebake_required": False}}
+
+
+def prebake_record(used: bool = True, **kw: object) -> dict:
+    """prebake.json as PrebakedDockerEnvironment._record writes it."""
+    record = {"bake_format": 1, "status": "ready" if used else "missing", "used": used,
+              "reason": "pre-baked image verified" if used else f"no pre-baked image {BAKED}", "image": BAKED,
+              "image_id": "sha256:" + "b" * 64 if used else None, "task_image_id": "sha256:" + "c" * 64,
+              "baked_at": "2026-10-29T22:42:35.462308509Z" if used else None,
+              "recipe": "0123456789" + "a" * 54 if used else None, "noop": False, "added_layers": 7 if used else None,
+              "skip_execs": [], "skip_commands": [], "harness": "claude-code", "version": "2.1.312",
+              "wanted_recipe": "0123456789" + "a" * 54, "prefix": "benchbake", "required": False,
+              "task_image": "alexgshaw/fix-git:20251031",
+              "ran_image": BAKED if used else "alexgshaw/fix-git:20251031", "skipped_execs": [],
+              "written_at": "2026-10-29T23:32:14.648697+00:00"}
+    record.update(kw)
+    return record
+
+
+class SetupProvenance(BenchTestCase):
+    def test_the_constants_match_the_environment_class(self) -> None:
+        from bench.environments import prebaked
+
+        self.assertEqual((extract.PREBAKED_ENV, extract.PREBAKE_RECORD), (prebaked.PREBAKED_ENV, prebaked.RECORD_NAME))
+        self.assertEqual(extract.DEFAULT_SETUP_TIMEOUT_SEC, 360.0)  # Harbor 0.25.0's BaseAgent default
+
+    def test_the_four_modes(self) -> None:
+        cfg = {"agent": {"name": "claude-code"}, "environment": PREBAKED_ENVIRONMENT}
+        cases = [({"agent": {"name": "claude-code"}}, None, "stock"),
+                 ({"agent": {"name": "claude-code"}, "environment": {"type": "docker", "import_path": None}}, None,
+                  "stock"),
+                 (cfg, None, None),  # asked for an image, killed before the class wrote its record
+                 (cfg, prebake_record(), "prebaked"),
+                 (cfg, prebake_record(used=False), "fallback"),
+                 # The research prototype's class and record (no recipe, no wanted_recipe).
+                 ({"environment": {"import_path": "prebake_env:PrebakedDockerEnvironment"}}, None, None),
+                 ({}, _read(IDENTITY / "prebaked" / "strands" / "prebake.json"), "prebaked")]
+        for trial_cfg, record, mode in cases:
+            with self.subTest(trial_cfg=trial_cfg, record=bool(record)):
+                self.assertEqual(extract.setup_provenance(trial_cfg, record)["setup_mode"], mode)
+        used = extract.setup_provenance(cfg, prebake_record())
+        self.assertEqual({k: v for k, v in used.items() if k != "prebake_json"}, {
+            "setup_mode": "prebaked", "agent_setup_limit_sec": 360.0, "prebake_image": BAKED,
+            "prebake_image_id": "sha256:" + "b" * 64, "prebake_recipe": "0123456789" + "a" * 54,
+            "prebake_baked_at": "2026-10-29T22:42:35.462308Z", "prebake_reason": "pre-baked image verified"})
+        self.assertEqual(json.loads(used["prebake_json"]), prebake_record())
+        missing = extract.setup_provenance(cfg, prebake_record(used=False))
+        self.assertEqual((missing["prebake_image"], missing["prebake_image_id"], missing["prebake_baked_at"]),
+                         (BAKED, None, None))
+        self.assertEqual(missing["prebake_recipe"], "0123456789" + "a" * 54)  # what the arm asked for
+        stock = extract.setup_provenance({}, None)
+        self.assertEqual([k for k, v in stock.items() if v is not None], ["setup_mode", "agent_setup_limit_sec"])
+
+    def test_a_record_is_stored_redacted(self) -> None:
+        record = prebake_record(used=False, reason="docker said: Authorization: Bearer abc.def.ghi")
+        out = extract.setup_provenance({"environment": PREBAKED_ENVIRONMENT}, record)
+        self.assertNotIn("abc.def.ghi", out["prebake_json"])
+        self.assertNotIn("abc.def.ghi", out["prebake_reason"])
+        self.assertEqual(json.loads(out["prebake_json"])["used"], False)  # still valid JSON
+
+    def test_the_setup_limit_harbor_computes(self) -> None:
+        cases = [({}, 360.0), ({"timeout_multiplier": 2.0}, 720.0),
+                 ({"timeout_multiplier": 3.0, "agent_setup_timeout_multiplier": 2}, 720.0),
+                 ({"agent": {"override_setup_timeout_sec": 100}}, 100.0),
+                 ({"agent": {"override_setup_timeout_sec": 100}, "agent_setup_timeout_multiplier": 1.5}, 150.0),
+                 ({"agent": {"name": "hermes"}}, 1200.0), ({"agent_setup_timeout_multiplier": "x"}, None),
+                 ({"timeout_multiplier": 0}, None)]
+        for trial_cfg, expected in cases:
+            with self.subTest(trial_cfg=trial_cfg):
+                self.assertEqual(extract.agent_setup_limit(trial_cfg), expected)
+
+    def test_harbor_written_trials(self) -> None:
+        for arm in ARM_HASHES:
+            with self.subTest(arm=arm):
+                stock = extract.facts_from_result(_read(IDENTITY / "stock" / arm / "result.json"), None, None,
+                                                  trial_dir="t", ctx=_identity_ctx(arm), prefixes=PREFIXES)
+                self.assertEqual((stock.setup_mode, stock.agent_setup_limit_sec, stock.prebake_json),
+                                 ("stock", 360.0, None))
+                folder = IDENTITY / "prebaked" / arm
+                baked = extract.facts_from_result(_read(folder / "result.json"), None, None, trial_dir="t",
+                                                  ctx=_identity_ctx(arm), prefixes=PREFIXES,
+                                                  prebake=extract.read_prebake_record(folder))
+                self.assertEqual(baked.setup_mode, "prebaked")
+                self.assertTrue(baked.prebake_image.startswith(f"benchprobe/{arm}-"))
+                self.assertEqual(baked.config_hash, stock.config_hash)
+                # The prototype's class without its record: asked, but nothing says what happened.
+                unknown = extract.facts_from_result(_read(folder / "result.json"), None, None, trial_dir="t",
+                                                    ctx=_identity_ctx(arm), prefixes=PREFIXES)
+                self.assertIsNone(unknown.setup_mode)
+
+    def test_parse_trial_and_parse_incomplete_read_the_record(self) -> None:
+        job = self.tmpdir() / "job"
+        lf.make_job(job)
+        done = lf.make_trial(job / "done", environment=PREBAKED_ENVIRONMENT, prebake=prebake_record(), setup_sec=0.5)
+        killed = lf.make_trial(job / "killed", environment=PREBAKED_ENVIRONMENT, prebake=prebake_record(used=False),
+                               finished=False)
+        early = lf.make_trial(job / "early", environment=PREBAKED_ENVIRONMENT, finished=False)
+        ctx = bench_ctx()
+        facts = extract.parse_trial(done, ctx, PREFIXES)
+        self.assertEqual((facts.setup_mode, facts.prebake_image, facts.agent_setup_sec), ("prebaked", BAKED, 0.5))
+        self.assertEqual(extract.parse_incomplete(killed, ctx, PREFIXES).setup_mode, "fallback")
+        self.assertIsNone(extract.parse_incomplete(early, ctx, PREFIXES).setup_mode)
+        self.assertEqual(extract.parse_trial(lf.make_trial(job / "stock"), ctx, PREFIXES).setup_mode, "stock")
 
 
 if __name__ == "__main__":

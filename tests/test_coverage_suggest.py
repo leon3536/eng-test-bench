@@ -10,6 +10,7 @@ fixed tables. Nothing runs Harbor or Docker or touches real data.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
@@ -42,16 +43,16 @@ openrouter:
 
 REFERENCE_YAML = """\
 defaults:
-  direction: baseline_over_harness
+  direction: harness_over_baseline
   estimator: ratio_of_means
   tolerance: 1.5
   applies_to: ['anthropic:claude-*']
 consensus:
-  cost_per_trial: {low: 2.0, high: 3.0, source: "S1-S5"}
+  cost_per_trial: {low: 1/3, high: 1/2, source: "S1-S5"}
   pass_rate_delta_pp: {low: -5, high: 5, source: "S1-S5"}
 arms:
   pi:
-    tokens_per_trial: {value: 3.1, source: "S10 via S9"}
+    tokens_per_trial: {value: 1/3.1, source: "S10 via S9"}
 """
 
 CONFIG_YAML = """\
@@ -78,7 +79,8 @@ arms:
 """
 
 AGENTS = {"claude-code": "claude-code", "pi": "pi", "terminus-2": "terminus-2", "mini-swe-agent": MINI}
-# Baseline / family cost on task i, varied so the per-task log ratios have a spread.
+# Baseline / family cost on task i (a multiple, family / baseline, of 1/ratio), varied so the per-task log
+# ratios have a spread.
 RATIOS = {"pi": [3.0, 2.2, 4.1, 2.8, 3.3, 2.5, 3.9, 2.1], "terminus-2": [1.6, 2.4, 1.9, 2.0, 1.5, 2.2, 1.8, 2.6],
           "mini-swe-agent": [1.2] * 8}
 
@@ -205,7 +207,25 @@ class Coverage(PlannerCase):
                 self.assertEqual(cell["paired_with_baseline"], comp["coverage"]["pairs"])
         self.assertEqual(self.cell(cov, "pi")["paired_with_baseline"], 4)
         self.assertIsNotNone(self.cell(cov, "pi")["cost_multiple"])
+        self.assertLess(self.cell(cov, "pi")["cost_multiple"]["value"], 1.0)  # pi / claude-code: pi is cheaper
         self.assertEqual(self.cell(cov, "pi")["verdict"]["cost"], "not_applicable")  # no verdicts off Claude
+
+    def test_counts_only_the_report_tabs_task_scope(self) -> None:
+        # The assistant quotes what the REPORT tab shows, and that tab compares on the profile's task file.
+        reader = self.world.gaps_world()  # claude-code on tasks 0-3, pi on 0-5
+        full = coverage.coverage(self.cfg, reader, *GLM)
+        narrow = dataclasses.replace(self.cfg, tasks=SAMPLE[:2])
+        cov = coverage.coverage(narrow, coverage.ReadOnlyLedger(self.world.ledger, lambda: narrow), *GLM)
+        self.assertEqual((self.cell(full, "pi")["paired_with_baseline"], self.cell(cov, "pi")["paired_with_baseline"]),
+                         (4, 2))
+        self.assertEqual((cov["scope"]["kind"], cov["scope"]["tasks"]), ("scope", 2))
+        rep = report.build_report(self.world.ledger, narrow, Filters(models=("openrouter:z-ai/glm-5.3",),
+                                                                      tasks=tuple(SAMPLE[:2])),
+                                  coverage.coverage_options(narrow))
+        comp = next(c for c in rep["comparisons"] if c["group"].endswith("|pi"))
+        self.assertEqual(self.cell(cov, "pi")["trials"], next(g for g in rep["groups"]
+                                                               if g["key"] == comp["group"])["trials"]["total"])
+        self.assertLess(self.cell(cov, "pi")["trials"], self.cell(full, "pi")["trials"])
 
     def test_cells_by_configuration_match_the_report_too(self) -> None:
         reader = self.world.gaps_world()

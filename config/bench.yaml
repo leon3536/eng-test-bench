@@ -17,6 +17,12 @@ providers:
   fireworks:                       # default provider for open / third-party models: one fixed price per model (decided 2026-10-29)
     env_key: FIREWORKS_AI_API_KEY
     model_prefix: fireworks_ai/accounts/fireworks/models/
+  openai:                          # OpenAI's own API, fixed list prices (GPT-6.1 Terra, added 2026-10-31)
+    env_key: OPENAI_API_KEY
+    model_prefix: openai/
+  xai:                             # xAI's own API, fixed list prices (Grok 4.7, added 2026-10-31)
+    env_key: XAI_API_KEY
+    model_prefix: xai/
   openrouter:                      # off: routed per request, so the price varies by provider; weaker data guarantees
     env_key: OPENROUTER_API_KEY
     model_prefix: openrouter/
@@ -38,8 +44,20 @@ run:
   per_trial_cap_usd: 15      # passed to harnesses that accept a dollar cap
   max_turns: 300             # runaway guard for harnesses that only accept a turn cap
   timeout_multiplier: 1.0
+  # Harness setup. prefer runs each trial on a pre-baked image (the harness
+  # installed into the task image once; see the prebake section) and falls
+  # back to Harbor's stock install per trial where none is ready; require
+  # fails such a trial as infra instead; off always installs (stock A/B runs).
+  # None of these is part of the config hash.
+  prebake: prefer            # off | prefer | require
+  setup_timeout_multiplier: auto   # auto: 2x Harbor's 360 s for arms that may run stock setups; or a number
+  env_build_timeout_multiplier: 1.0  # task image pull/start limit (600 s); raise for first pulls of huge images
 
 baseline_arm: claude-code
+# The model REPORT compares other models with when it holds the harness fixed
+# (compare: models), as provider:model; the report's baseline.model option overrides it.
+baseline_model: anthropic:claude-opus-5-5
+
 
 # Per arm:
 #   agent    a Harbor agent name, or module.path:Class for a harness class in
@@ -104,10 +122,60 @@ arms:
         model_spec: anthropic/claude-opus-5-5   # must equal this arm's provider/model; change both together
         effort: medium         # keep in step with run.effort
 
+  # Cline, Goose and OpenCode (dev pilots 2026-10-30). Cline and Goose run as
+  # subclasses whose `version` installs exactly that release: Harbor's
+  # cline-cli installs cline@nightly unless cline_version is set, and Harbor's
+  # goose installs the latest stable release whatever version says. The
+  # OpenCode subclass keeps a finished run that Bun's late EPIPE exits 1
+  # (OpenCode 1.19.4+). Cline and OpenCode take no dollar or turn cap, so the
+  # task time limits are their only bound. See bench/agents/.
+  - name: cline
+    agent: bench.agents.cline:PinnedClineCli
+    family: cline-cli
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "3.0.74"        # npm latest; effort reaches it as --thinking medium
+
+  - name: goose
+    agent: bench.agents.goose:PinnedGoose
+    family: goose
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "1.57.0"        # release tag v1.57.0; effort reaches it as GOOSE_THINKING_EFFORT
+
+  - name: opencode
+    # OpenCode has no effort option; the model variant sets it (adaptive
+    # thinking at effort medium on Opus 5.5).
+    agent: bench.agents.opencode:OpenCodeBunEpipe
+    family: opencode
+    provider: anthropic
+    model: claude-opus-5-5
+    effort: omit
+    options:
+      version: "1.19.5"
+      variant: medium          # keep in step with run.effort
+
+  # Kilo Code 7.8.18, an OpenCode fork, run as the OpenCode subclass with Kilo's
+  # package, binary, config and --auto (bench/agents/kilo.py). Only telemetry,
+  # Claude Code config/skills and the update check are switched off. Like
+  # OpenCode it takes its effort as a model variant. Dev pilot passed 2026-10-31.
+  - name: kilo
+    agent: bench.agents.kilo:KiloCode
+    family: kilo-code
+    provider: anthropic
+    model: claude-opus-5-5
+    effort: omit
+    options:
+      version: "7.8.18"        # npm latest (rc track is 7.8.25)
+      variant: medium          # keep in step with run.effort
+
   # Example open-model arm on Fireworks. Fill in the model id from
   # fireworks.ai/models, add its price to config/pricing.yaml, then enable.
   # - name: opencode-fireworks
-  #   agent: opencode
+  #   agent: bench.agents.opencode:OpenCodeBunEpipe
+  #   family: opencode
   #   provider: fireworks
   #   model: <fireworks-model-id>
   #   enabled: false
@@ -150,13 +218,16 @@ assistant:
 
 # Limits on run designs, checked before a design can be queued.
 designs:
-  max_budget_usd: 150         # the largest budget one design may set
-  max_arms: 12
+  max_budget_usd: 1000        # the largest budget one design may set (5-model race at full cost, user OK 2026-10-31)
+  max_arms: 48                # one per-task race of 5 models x 8 harnesses + the baseline (2026-10-31)
   max_attempts: 5
   warn_containers: 8          # parallel_arms x n_concurrent above this: warning
   max_containers: 16          # above this: the design cannot run
   extra_harnesses: []         # Harbor agent names a design may use beyond the arms above
-  import_paths: {}            # module.path:Class -> {family: ...}; the arms' import paths are added
+  import_paths:                # module.path:Class -> {family: ...}; the arms' import paths are added
+    # Pi with routes to Fireworks and to GPT-6.1 Terra (bench/agents/pi.py), for the
+    # per-model designs; on Anthropic it is Harbor's pi unchanged.
+    bench.agents.pi:PiProviders: {family: pi}
 
 queue:
   on_failure: pause           # pause | skip: what the queue does after a failed run
@@ -164,3 +235,16 @@ queue:
 
 ledger:
   extra_scan_roots: []        # more Harbor jobs folders to import, relative to the project root
+
+# Pre-baked harness images (python -m bench.prebake). One image per task,
+# harness and version, named <prefix>/<harness>-<version>-r<recipe>/<task image>
+# and built FROM the local task image with Harbor's own install commands.
+prebake:
+  prefix: benchbake           # image repository prefix (benchprobe/ is the prototypes')
+  build_jobs: 4               # builds at once; Claude Code's take 7-11 min each
+  max_age_days: 14            # older images still run, with a warning: their apt lists go stale
+  keep_days: 14               # prune keeps an image no arm wants this long
+  auto_build: false           # true: the queue builds missing images before it starts an item
+  prepull: true               # a run pulls missing task images before its first arm
+  host_reserve_gb: 25         # a build leaves this much free on the drive holding Docker's disk
+  vm_reserve_gb: 50           # ... and inside Docker's VM

@@ -15,7 +15,7 @@ import yaml
 
 from tests.support import MINIMAL_YAML, BenchTestCase
 
-from bench import settings
+from bench import settings, stats
 from bench.settings import ConfigError
 
 BASE = MINIMAL_YAML
@@ -89,31 +89,47 @@ class ProfileTests(BenchTestCase):
 
 class ShippedConfigTests(BenchTestCase):
     MSA = "bench.agents.mini_swe_agent:MiniSweAgentWithMcp"
+    # Harness subclasses an arm names by import path, by arm-name prefix: (import path, family).
+    SUBCLASSES = {"mini-swe-agent": (MSA, "mini-swe-agent"),
+                  "cline": ("bench.agents.cline:PinnedClineCli", "cline-cli"),
+                  "goose": ("bench.agents.goose:PinnedGoose", "goose"),
+                  "opencode": ("bench.agents.opencode:OpenCodeBunEpipe", "opencode"),
+                  "kilo": ("bench.agents.kilo:KiloCode", "kilo-code")}
     FACTORY = {"factory": "bench_strands_factory:create_agent",
                "factory_path": "harnesses/strands_factory", "version": "1.57.2"}
 
-    def check_arms(self, cfg: settings.Config) -> None:
+    def check_arms(self, cfg: settings.Config, design_only: dict[str, str] | None = None) -> None:
+        """design_only: import paths only designs use (no config arm runs them), with their families."""
         self.assertTrue(cfg.arms)
+        used: dict[str, str] = {}
         for arm in cfg.arms:
             with self.subTest(arm=arm.name):
                 self.assertTrue(arm.family)
-                if arm.name.startswith("mini-swe-agent"):
-                    self.assertEqual((arm.agent, arm.family, arm.kind), (self.MSA, "mini-swe-agent", "import_path"))
+                prefix = next((p for p in self.SUBCLASSES if arm.name.startswith(p)), None)
+                if prefix is not None:
+                    path, family = self.SUBCLASSES[prefix]
+                    self.assertEqual((arm.agent, arm.family, arm.kind), (path, family, "import_path"))
+                    used[path] = family
+                    if prefix in ("opencode", "kilo"):
+                        # OpenCode and Kilo take their effort as a model variant, not through the run's effort.
+                        self.assertEqual(arm.effort, "omit")
+                        self.assertIn("variant", arm.options)
                 elif arm.name.startswith("strands"):
                     self.assertEqual((arm.agent, arm.family, arm.effort), ("strands", "strands", "omit"))
                     self.assertEqual({k: arm.options[k] for k in self.FACTORY}, self.FACTORY)
                     self.assertIsInstance(arm.options["factory_kwargs"], dict)
                 else:
                     self.assertEqual((arm.family, arm.kind), (arm.agent, "name"))
-        self.assertEqual(cfg.designs.import_paths, {self.MSA: "mini-swe-agent"})
+        self.assertEqual(cfg.designs.import_paths, {**used, **(design_only or {})})
         self.assertIn(cfg.baseline_arm, [a.name for a in cfg.arms])
 
     def test_bench_yaml(self) -> None:
         cfg = self.load_shipped_config("bench")
-        self.check_arms(cfg)
+        # Pi's provider routes run only in the per-model designs; Anthropic pi arms stay Harbor's pi.
+        self.check_arms(cfg, design_only={"bench.agents.pi:PiProviders": "pi"})
         self.assertEqual(cfg.arm("strands").options["factory_kwargs"],
                          {"model_spec": "anthropic/claude-opus-5-5", "effort": "medium"})
-        self.assertEqual(cfg.designs.max_budget_usd, 150)
+        self.assertEqual((cfg.designs.max_budget_usd, cfg.designs.max_arms), (1000, 48))  # the 5-model race
         self.assertEqual(cfg.assistant, settings.AssistantSettings())
         self.assertEqual(cfg.stats, settings.StatsSettings())
         self.assertEqual(cfg.queue, settings.QueueSettings())
@@ -126,7 +142,9 @@ class ShippedConfigTests(BenchTestCase):
     def test_dev_yaml(self) -> None:
         cfg = self.load_shipped_config("dev")
         self.check_arms(cfg)
-        self.assertEqual(len(cfg.arms), 10)
+        self.assertEqual(len(cfg.arms), 14)
+        for name in ("cline-deepseek", "goose-deepseek", "opencode-deepseek", "kilo-deepseek"):
+            self.assertRegex(str(cfg.arm(name).options["version"]), r"^\d+\.\d+\.\d+$")
         self.assertEqual(cfg.arm("strands-glm").options["factory_kwargs"], {})
         self.assertEqual(cfg.designs.max_budget_usd, 10)
         self.assertEqual(cfg.assistant.daily_cap_usd, 5.0)
@@ -148,12 +166,25 @@ class ShippedConfigTests(BenchTestCase):
 
     def test_reference_defaults(self) -> None:
         ref = self.load_shipped_config("bench").reference
-        self.assertEqual(ref["defaults"]["direction"], "baseline_over_harness")
+        # Published figures restated as harness / Claude Code: 2x-3x is 1/3-1/2, a published 3.1x is 1/3.1.
+        self.assertEqual(ref["defaults"]["direction"], "harness_over_baseline")
         self.assertEqual(ref["defaults"]["estimator"], "ratio_of_means")
         self.assertEqual(ref["defaults"]["applies_to"], ["anthropic:claude-*"])
-        self.assertEqual((ref["consensus"]["cost_per_trial"]["low"], ref["consensus"]["cost_per_trial"]["high"]), (2.0, 3.0))
+        read = stats.published_reference(ref)
+        self.assertEqual((read["consensus"]["cost_per_trial"]["low"], read["consensus"]["cost_per_trial"]["high"]),
+                         (1 / 3, 0.5))
+        self.assertEqual(read["arms"]["pi"]["tokens_per_trial"]["value"], 1 / 3.1)
+        self.assertEqual(read["arms"]["strands"]["cost_per_trial"]["value"], 1 / 2.1)
         self.assertEqual((ref["consensus"]["pass_rate_delta_pp"]["low"], ref["consensus"]["pass_rate_delta_pp"]["high"]), (-5, 5))
         self.assertIn("Terminal-Bench 2.1", ref["arms"]["strands"]["note"])
+
+    def test_reference_direction_must_be_known(self) -> None:
+        # A file without the key loads (read the old way, baseline / harness); a misspelt one is refused.
+        cfg = self.load_test_config(BASE, reference="consensus:\n  cost_per_trial: {low: 2, high: 3}\n")
+        self.assertEqual(stats.published_reference(cfg.reference)["consensus"]["cost_per_trial"]["low"], 1 / 3)
+        with self.assertRaises(ConfigError) as ctx:
+            self.load_test_config(BASE, reference="defaults: {direction: baseline/harness}\n")
+        self.assertIn("defaults.direction", str(ctx.exception))
 
 
 class VariantTests(BenchTestCase):
@@ -194,14 +225,25 @@ class PricingParseTests(BenchTestCase):
     def test_bad_rows(self) -> None:
         for raw in ({"a": {"m": {"input": 1}}}, {"a": {"m": {"input": -1, "output": 1}}},
                     {"a": {"m": {"input": float("nan"), "output": 1}}}, {"a": {"m": 3}}, {"a": [1]},
-                    {"a": {"m": {"input": 1, "output": 1, "cache_read": "x"}}}):
+                    {"a": {"m": {"input": 1, "output": 1, "cache_read": "x"}}},
+                    {"a": {"m": {"input": 1, "output": 1, "cache_write_5m": -1}}},
+                    {"a": {"m": {"input": 1, "output": 1, "cache_write_5min": 1.25}}}):  # a misspelt rate
             with self.subTest(raw=raw):
                 with self.assertRaises(ConfigError):
                     settings.parse_pricing(raw)
 
     def test_read_pricing_real_file(self) -> None:
         table = settings.read_pricing(settings.PRICING)
-        self.assertEqual(table["anthropic"]["claude-opus-5-5"], settings.Price(4.0, 20.0, 0.2))
+        self.assertEqual(table["anthropic"]["claude-opus-5-5"], settings.Price(4.0, 20.0, 0.2, 5.0, 8.0))
+        # Cache reads on Opus 5.5 and Sonnet 5.5 are 0.05x input (Sonnet was once mistyped at 0.1x).
+        self.assertEqual(table["anthropic"]["claude-sonnet-5-5"], settings.Price(2.0, 10.0, 0.1, 2.5, 4.0))
+        # Every Anthropic row prices 5-minute writes at 1.25x input and 1-hour writes at 2x.
+        for name, price in table["anthropic"].items():
+            with self.subTest(name):
+                self.assertAlmostEqual(price.cache_write_5m, 1.25 * price.input)
+                self.assertAlmostEqual(price.cache_write_1h, 2.0 * price.input)
+        # Open models bill no write premium: their writes stay at the input rate.
+        self.assertIsNone(table["openrouter"]["glm-5.3"].cache_write_5m)
 
 
 class EffortTests(BenchTestCase):
@@ -494,6 +536,52 @@ class SectionTests(BenchTestCase):
             with self.subTest(line=line):
                 with self.assertRaises(ConfigError):
                     self.load_test_config(BASE + line + "\n")
+
+
+class PrebakeSettingsTests(BenchTestCase):
+    def test_run_defaults_prefer_auto_and_one(self) -> None:
+        run = self.load_test_config(BASE).run
+        self.assertEqual((run.prebake, run.setup_timeout_multiplier, run.env_build_timeout_multiplier),
+                         ("prefer", "auto", 1.0))
+        for profile in ("bench", "dev"):
+            cfg = self.load_shipped_config(profile)
+            self.assertEqual((cfg.run.prebake, cfg.run.setup_timeout_multiplier), ("prefer", "auto"), profile)
+            self.assertEqual(cfg.prebake, settings.PrebakeSettings(), profile)
+
+    def test_run_values_parse(self) -> None:
+        cases = [({"prebake": "'off'"}, "prebake", "off"), ({"prebake": "off"}, "prebake", "off"),
+                 ({"prebake": "require"}, "prebake", "require"),
+                 ({"setup_timeout_multiplier": 2}, "setup_timeout_multiplier", 2.0),
+                 ({"setup_timeout_multiplier": "auto"}, "setup_timeout_multiplier", "auto"),
+                 ({"env_build_timeout_multiplier": 1.5}, "env_build_timeout_multiplier", 1.5)]
+        for fields, name, expected in cases:
+            with self.subTest(fields=fields):
+                self.assertEqual(getattr(self.load_test_config(with_run(**fields)).run, name), expected)
+
+    def test_bad_run_values_raise(self) -> None:
+        cases = [({"prebake": "maybe"}, "run.prebake must be one of off, prefer, require"),
+                 ({"prebake": "on"}, "quote the value"),
+                 ({"setup_timeout_multiplier": "fast"}, "run.setup_timeout_multiplier must be auto or a number"),
+                 ({"setup_timeout_multiplier": 0}, "run.setup_timeout_multiplier must be a finite number"),
+                 ({"env_build_timeout_multiplier": "-1"}, "run.env_build_timeout_multiplier must be a finite")]
+        for fields, message in cases:
+            with self.subTest(fields=fields), self.assertRaisesRegex(ConfigError, message):
+                self.load_test_config(with_run(**fields))
+
+    def test_prebake_section_parses_and_checks(self) -> None:
+        cfg = self.load_test_config(BASE + "prebake:\n  prefix: benchbake-test/\n  build_jobs: 2\n"
+                                           "  max_age_days: 7\n  auto_build: true\n  host_reserve_gb: 30\n")
+        self.assertEqual(cfg.prebake, settings.PrebakeSettings(prefix="benchbake-test", build_jobs=2,
+                                                               max_age_days=7, auto_build=True,
+                                                               host_reserve_gb=30.0))
+        for text, message in (("prefix: BenchBake", "prebake.prefix must be a Docker repository prefix"),
+                              ("prefix: benchprobe", "prebake.prefix 'benchprobe' is reserved"),
+                              ("prefix: benchbake-staging/x", "is reserved"),
+                              ("build_jobs: 0", "prebake.build_jobs must be"),
+                              ("prepull: 'yes'", "prebake.prepull must be true or false"),
+                              ("colour: blue", "Unknown prebake settings: colour")):
+            with self.subTest(text=text), self.assertRaisesRegex(ConfigError, message):
+                self.load_test_config(BASE + f"prebake:\n  {text}\n")
 
 
 class WriteOverridesTests(BenchTestCase):

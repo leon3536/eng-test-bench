@@ -344,9 +344,11 @@
     const taken = new Set(demo.runs().map((r) => r.id));
     let id = `${stamp(now)}-${slug(item.title, 16)}-v${item.version}`;
     for (let n = 2; taken.has(id); n++) id = `${stamp(now)}-${slug(item.title, 16)}-v${item.version}-${n}`;
-    const names = run.arms.map((a) => a.name);
+    // An arm whose every task is reused from the ledger (tasks []) runs nothing.
+    const arms = run.arms.filter((a) => !Array.isArray(a.tasks) || a.tasks.length);
+    const names = arms.map((a) => a.name);
     demo.simulateRun({
-      id, arms: run.arms.map((a) => ({name: a.name, agent: a.agent, model: a.model})), tasks: run.tasks, attempts: run.attempts,
+      id, arms: arms.map((a) => ({name: a.name, agent: a.agent, model: a.model})), tasks: run.tasks, attempts: run.attempts,
       budget: item.budget_usd, baseline: names.includes(run.baseline) ? run.baseline : names[0], failArms: item._failArms || [],
       extra: {
         source: 'design', spec_hash: item.spec_hash,

@@ -1,0 +1,358 @@
+{
+  "schema": 1,
+  "design_id": "d-new-harnesses-27-tasks-s-c4de",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T08:08:13+00:00",
+  "profile": "default",
+  "title": "New harnesses: 27 tasks, Sonnet 5.5 (full)",
+  "purpose": "Cline, Goose and OpenCode on the 27-task scope; Claude Code is the baseline (reused).",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 15.0,
+      "parallel_arms": 3,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "require"
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": null
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/openssl-selfsigned-cert__2Zuqu4e"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cobol-modernization__xrNcNvj"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/build-cython-ext__7dHsY5p"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/mteb-retrieve__uRcPVsp"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sparql-university__NxSPkEo"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-with-gcov__diHUajb"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-db-truncate__k7pwXwe"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/hf-model-inference__NCifn4b"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/db-wal-recovery__oRFThUG"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-multibranch__Uq4CQEd"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/log-summary-date-ranges__Xq75xRZ"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/nginx-request-logging__WNWWZFt"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/multi-source-data-merger__yXNbmhX"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/reshard-c4-data__xjxGCsw"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sanitize-git-repo__9nAsYrt"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/kv-store-grpc__NcvvxD2"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-git__yvZYiwW"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/mailman__pufunSf"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cancel-async-tasks__Eb8K35R"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/constraints-scheduling__3G4Gekd"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/financial-document-processor__Pp8v9ug"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-code-vulnerability__6fHftSa"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-leak-recovery__5v9eyUo"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/headless-terminal__TsoguPL"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/modernize-scientific-stack__4Lrqu4t"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/pypi-server__hqCXdY7"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/regex-log__L25bwAh"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:2deb5c9137df11995df31b722c34ae4a97686b8ca67ec95bbf865cbcb1d08db7"
+}

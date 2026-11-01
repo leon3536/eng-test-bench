@@ -25,7 +25,7 @@ from typing import Any
 
 import yaml
 
-from . import fsutil
+from . import fsutil, stats
 from .harnesses import is_import_path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -75,6 +75,23 @@ LEDGER_DB = Path(os.environ.get("BENCH_LEDGER") or ROOT / "ledger" / "bench.sqli
 
 EFFORT_INHERIT = "inherit"  # arm follows run.effort
 EFFORT_OMIT = "omit"        # pass nothing; the harness or model default applies
+DEFAULT_BASELINE_MODEL = "anthropic:claude-opus-5-5"   # baseline_model when a profile names none
+
+# run.prebake: how arms use pre-baked harness images (bench/prebake). prefer
+# falls back to Harbor's stock install per trial; require fails a trial whose
+# image is missing instead; off runs exactly the stock command.
+PREBAKE_OFF = "off"
+PREBAKE_PREFER = "prefer"
+PREBAKE_REQUIRE = "require"
+PREBAKE_MODES = (PREBAKE_OFF, PREBAKE_PREFER, PREBAKE_REQUIRE)
+SETUP_TIMEOUT_AUTO = "auto"
+# run.schedule: how a run orders its trials. tasks races every arm on one task
+# at a time (its pre-baked images built just before and removed after, so the
+# disk holds one task's images); arms runs each arm as one Harbor job over all
+# its tasks, parallel_arms at a time (the original schedule).
+SCHEDULE_ARMS = "arms"
+SCHEDULE_TASKS = "tasks"
+SCHEDULES = (SCHEDULE_ARMS, SCHEDULE_TASKS)
 
 RUN_DEFAULTS: dict[str, Any] = {
     "effort": EFFORT_OMIT,
@@ -83,6 +100,12 @@ RUN_DEFAULTS: dict[str, Any] = {
     "per_trial_cap_usd": None,
     "max_turns": None,
     "timeout_multiplier": 1.0,
+    "prebake": PREBAKE_PREFER,
+    "setup_timeout_multiplier": SETUP_TIMEOUT_AUTO,
+    "env_build_timeout_multiplier": 1.0,
+    "schedule": SCHEDULE_TASKS,
+    # Trial containers at once in a task race (schedule tasks): one per real CPU core of the bench host.
+    "max_containers": 6,
 }
 MODE_DEFAULTS: dict[str, Any] = {"n_attempts": 1}
 ARM_DEFAULTS: dict[str, Any] = {"enabled": True, "effort": EFFORT_INHERIT}
@@ -175,6 +198,13 @@ class RunSettings:
     per_trial_cap_usd: float | None
     max_turns: int | None
     timeout_multiplier: float
+    prebake: str = PREBAKE_PREFER
+    # 'auto' or a number. Harbor's setup limit is 360 s; 'auto' doubles it
+    # only for arms whose trials may run Harbor's stock install (bench.prebake.setup_timeout_multiplier).
+    setup_timeout_multiplier: str | float = SETUP_TIMEOUT_AUTO
+    env_build_timeout_multiplier: float = 1.0
+    schedule: str = SCHEDULE_TASKS
+    max_containers: int = 6           # schedule tasks only: trial containers at once in one task's race
 
 
 @dataclass(frozen=True)
@@ -182,6 +212,9 @@ class Price:
     input: float
     output: float
     cache_read: float | None
+    # None: writes of that time to live are priced at the input rate (pricing.yaml).
+    cache_write_5m: float | None = None
+    cache_write_1h: float | None = None
 
 
 @dataclass(frozen=True)
@@ -227,6 +260,20 @@ class LedgerSettings:
 
 
 @dataclass(frozen=True)
+class PrebakeSettings:
+    """Pre-baked harness images (bench/prebake): how they are named, built and kept."""
+    prefix: str = "benchbake"        # image repository prefix, apart from the probes' benchprobe/
+    build_jobs: int = 4              # builds at once
+    max_age_days: int = 14           # an older image still runs, with a warning: its apt lists go stale
+    keep_days: int = 14              # prune keeps an unwanted image this long
+    auto_build: bool = False         # the queue builds missing images before it starts an item
+    prepull: bool = True             # a run pulls missing task images before its first arm
+    host_reserve_gb: float = 25.0    # free space a build leaves on the drive holding Docker's disk
+    vm_reserve_gb: float = 50.0      # free space a build leaves inside Docker's VM
+    keep_images: bool = False        # schedule tasks: keep a task's images after its race instead of removing them
+
+
+@dataclass(frozen=True)
 class Config:
     dataset: str
     tasks: list[str]
@@ -245,6 +292,9 @@ class Config:
     queue: QueueSettings = field(default_factory=QueueSettings)
     report: dict[str, Any] = field(default_factory=dict)
     ledger: LedgerSettings = field(default_factory=LedgerSettings)
+    prebake: PrebakeSettings = field(default_factory=PrebakeSettings)
+    # The model REPORT compares other models with when it holds the harness fixed ('provider:model').
+    baseline_model: str = DEFAULT_BASELINE_MODEL
 
     def arm(self, name: str) -> Arm:
         for arm in self.arms:
@@ -487,6 +537,9 @@ def _section(raw: dict[str, Any], name: str, known: tuple[str, ...]) -> dict[str
     return spec
 
 
+_PRICE_KEYS = ("input", "output", "cache_read", "cache_write_5m", "cache_write_1h")
+
+
 def parse_pricing(raw: Mapping[str, Any]) -> dict[str, dict[str, Price]]:
     table: dict[str, dict[str, Price]] = {}
     for provider, models in (raw or {}).items():
@@ -499,10 +552,15 @@ def parse_pricing(raw: Mapping[str, Any]) -> dict[str, dict[str, Price]]:
             label = f"pricing.yaml {provider}.{model}"
             if not isinstance(p, Mapping):
                 raise ConfigError(f"{label} must be a mapping with input and output")
+            unknown = sorted(set(map(str, p)) - set(_PRICE_KEYS))
+            if unknown:
+                raise ConfigError(f"{label} has unknown rates: {', '.join(unknown)}")
+            optional = {key: None if p.get(key) is None else _rate(p[key], f"{label}.{key}")
+                        for key in ("cache_read", "cache_write_5m", "cache_write_1h")}
             rows[str(model)] = Price(
                 input=_rate(p.get("input"), f"{label}.input"),
                 output=_rate(p.get("output"), f"{label}.output"),
-                cache_read=None if p.get("cache_read") is None else _rate(p["cache_read"], f"{label}.cache_read"),
+                **optional,
             )
         table[str(provider)] = rows
     return table
@@ -510,6 +568,17 @@ def parse_pricing(raw: Mapping[str, Any]) -> dict[str, dict[str, Price]]:
 
 def read_pricing(path: Path = PRICING) -> dict[str, dict[str, Price]]:
     return parse_pricing(_read_yaml(path))
+
+
+def read_reference(path: Path = REFERENCE) -> dict[str, Any]:
+    """reference.yaml as written; a direction other than the two the report
+    can read is a config error, not a silent guess at which way it runs."""
+    reference = _read_yaml(path)
+    try:
+        stats.reference_direction(reference)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from None
+    return reference
 
 
 # Sections ------------------------------------------------------------------
@@ -625,6 +694,54 @@ def _queue(raw: dict[str, Any]) -> QueueSettings:
     )
 
 
+# Docker's repository grammar: lowercase path components joined by '/'.
+_IMAGE_PREFIX = re.compile(r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*")
+
+
+def _prebake(raw: dict[str, Any]) -> PrebakeSettings:
+    d = PrebakeSettings()
+    spec = _section(raw, "prebake", tuple(d.__dataclass_fields__))
+    prefix = spec.get("prefix", d.prefix)
+    if not isinstance(prefix, str) or not _IMAGE_PREFIX.fullmatch(prefix.strip("/")):
+        raise ConfigError("prebake.prefix must be a Docker repository prefix: lowercase letters, digits, '.', "
+                          "'_', '-' and '/'")
+    prefix = prefix.strip("/")
+    if prefix.split("/")[0] in ("benchprobe", "benchbake-staging"):
+        # The probes' images and the builder's staging tags are pruned by these names.
+        raise ConfigError(f"prebake.prefix '{prefix}' is reserved")
+    return PrebakeSettings(
+        prefix=prefix,
+        build_jobs=_number_in(spec.get("build_jobs", d.build_jobs), "prebake.build_jobs", 1, 16, kind=int),
+        max_age_days=_positive(spec.get("max_age_days", d.max_age_days), "prebake.max_age_days", int),
+        keep_days=_positive(spec.get("keep_days", d.keep_days), "prebake.keep_days", int),
+        auto_build=_flag(spec.get("auto_build"), d.auto_build, "prebake.auto_build"),
+        prepull=_flag(spec.get("prepull"), d.prepull, "prebake.prepull"),
+        host_reserve_gb=_positive(spec.get("host_reserve_gb", d.host_reserve_gb), "prebake.host_reserve_gb"),
+        vm_reserve_gb=_positive(spec.get("vm_reserve_gb", d.vm_reserve_gb), "prebake.vm_reserve_gb"),
+        keep_images=_flag(spec.get("keep_images"), d.keep_images, "prebake.keep_images"),
+    )
+
+
+def prebake_mode(value: Any, default: str, label: str) -> str:
+    """run.prebake. YAML reads an unquoted off as false, which can only mean off."""
+    if value is False:
+        return PREBAKE_OFF
+    if value is True:
+        raise ConfigError(f"{label}: quote the value, e.g. prebake: 'prefer' (YAML reads unquoted on/yes as true)")
+    return _choice(value, default, PREBAKE_MODES, label)
+
+
+def setup_timeout_multiplier(value: Any, default: str | float, label: str) -> str | float:
+    """run.setup_timeout_multiplier: 'auto' or a number greater than zero."""
+    if value is None:
+        return default
+    if value == SETUP_TIMEOUT_AUTO:
+        return SETUP_TIMEOUT_AUTO
+    if isinstance(value, str):
+        raise ConfigError(f"{label} must be auto or a number")
+    return _positive(value, label)
+
+
 def _ledger(raw: dict[str, Any]) -> LedgerSettings:
     spec = _section(raw, "ledger", tuple(LedgerSettings.__dataclass_fields__))
     roots = spec.get("extra_scan_roots") or []
@@ -682,6 +799,15 @@ def load_config(base_path: Path | None = None, overrides_path: Path | None = Non
         max_turns=_positive(run.get("max_turns", d["max_turns"]), "run.max_turns", int, allow_none=True),
         timeout_multiplier=_positive(run.get("timeout_multiplier", d["timeout_multiplier"]),
                                      "run.timeout_multiplier"),
+        prebake=prebake_mode(run.get("prebake"), d["prebake"], "run.prebake"),
+        setup_timeout_multiplier=setup_timeout_multiplier(run.get("setup_timeout_multiplier"),
+                                                          d["setup_timeout_multiplier"],
+                                                          "run.setup_timeout_multiplier"),
+        env_build_timeout_multiplier=_positive(run.get("env_build_timeout_multiplier",
+                                                       d["env_build_timeout_multiplier"]),
+                                               "run.env_build_timeout_multiplier"),
+        schedule=_choice(run.get("schedule"), d["schedule"], SCHEDULES, "run.schedule"),
+        max_containers=_positive(run.get("max_containers", d["max_containers"]), "run.max_containers", int),
     )
 
     import_paths = _import_paths(raw)
@@ -722,7 +848,16 @@ def load_config(base_path: Path | None = None, overrides_path: Path | None = Non
         raise ConfigError(f"baseline_arm '{baseline}' is not an arm")
 
     report = _mapping(raw.get("report"), "report")
+    baseline_model = raw.get("baseline_model", DEFAULT_BASELINE_MODEL)
+    provider, _, model = baseline_model.partition(":") if isinstance(baseline_model, str) else ("", "", "")
+    if not provider.strip() or not model.strip():
+        raise ConfigError(f"baseline_model must be provider:model, e.g. {DEFAULT_BASELINE_MODEL} "
+                          f"(got {baseline_model!r})")
 
+    limits = _designs(raw, import_paths, arms)
+    if settings.max_containers > limits.max_containers:
+        raise ConfigError(f"run.max_containers ({settings.max_containers}) must not be above designs.max_containers "
+                          f"({limits.max_containers})")
     return Config(
         dataset=str(raw.get("dataset") or ""),
         tasks=tasks,
@@ -730,17 +865,19 @@ def load_config(base_path: Path | None = None, overrides_path: Path | None = Non
         modes=modes,
         run=settings,
         baseline_arm=baseline,
+        baseline_model=f"{provider.strip()}:{model.strip()}",
         arms=arms,
         pricing=read_pricing(PRICING),
-        reference=_read_yaml(REFERENCE),
+        reference=read_reference(REFERENCE),
         effective=raw,
         overrides=overrides,
         assistant=_assistant(raw),
-        designs=_designs(raw, import_paths, arms),
+        designs=limits,
         stats=_stats(raw),
         queue=_queue(raw),
         report=copy.deepcopy(report),
         ledger=_ledger(raw),
+        prebake=_prebake(raw),
     )
 
 

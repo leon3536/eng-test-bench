@@ -80,9 +80,12 @@ def make_trial(trial_dir: Path, *, family: str = "pi", model_name: str = "openro
                job_id: str = "11111111-1111-4111-8111-111111111111", trial_name: str | None = None,
                task: str = "task-a", started_at: datetime | None = None, version: str = "1.0.0",
                finished: bool = True, agent_name: str | None = None, env: Mapping[str, str] | None = None,
-               task_checksum: str = "c" * 64) -> Path:
+               task_checksum: str = "c" * 64, environment: Mapping[str, Any] | None = None,
+               prebake: Mapping[str, Any] | None = None, setup_sec: float = 55.0) -> Path:
     """Write config.json, lock.json and (when finished) result.json for one
-    trial in the shape Harbor 0.25.0 writes them."""
+    trial in the shape Harbor 0.25.0 writes them. environment is the
+    trial's environment config (--env/--ek); prebake, the prebake.json the
+    pre-baked environment class writes at environment start."""
     trial_dir = Path(trial_dir)
     trial_name = trial_name or trial_dir.name
     kwargs = dict(kwargs if kwargs is not None else {"reasoning_effort": "medium", "max_turns": 150})
@@ -99,7 +102,11 @@ def make_trial(trial_dir: Path, *, family: str = "pi", model_name: str = "openro
         task_cfg = {"path": f"C:\\data\\snapshot\\{task}", "source": "bench-tests"}
     config = {"task": task_cfg, "trial_name": trial_name, "trials_dir": str(trial_dir.parent),
               "agent": {k: v for k, v in agent.items() if v is not None}, "job_id": job_id}
+    if environment:
+        config["environment"] = dict(environment)
     write_json(trial_dir / "config.json", config)
+    if prebake is not None:
+        write_json(trial_dir / "prebake.json", prebake)
     if lock_digest is not None:
         lock_task = {"name": task_cfg.get("name") or task, "type": task_type, "digest": lock_digest,
                      "source": "bench-tests"}
@@ -108,7 +115,7 @@ def make_trial(trial_dir: Path, *, family: str = "pi", model_name: str = "openro
         elif task_type == "local":
             lock_task["path"] = task_cfg["path"]
         write_json(trial_dir / "lock.json", {"schema_version": 2, "task": lock_task, "agent": config["agent"],
-                                             "environment": {"type": "docker"}})
+                                             "environment": {"type": "docker", **(environment or {})}})
     if not finished:
         return trial_dir
 
@@ -135,7 +142,8 @@ def make_trial(trial_dir: Path, *, family: str = "pi", model_name: str = "openro
         "task_checksum": task_checksum,
         "config": {**config, "timeout_multiplier": 1.0, "agent_timeout_multiplier": None,
                    "agent": {**agent, "override_timeout_sec": None, "skills": [], "mcp_servers": []},
-                   "environment": {"type": "docker", "override_cpus": None}, "extra_instructions": []},
+                   "environment": {"type": "docker", "override_cpus": None, **(environment or {})},
+                   "extra_instructions": []},
         "agent_info": {"name": family, "version": version,
                        "model_info": {"name": model_name.split("/", 1)[-1], "provider": model_name.split("/")[0]}},
         "agent_result": agent_result,
@@ -144,7 +152,7 @@ def make_trial(trial_dir: Path, *, family: str = "pi", model_name: str = "openro
         "started_at": _z(start),
         "finished_at": _z(start + timedelta(seconds=90 + exec_sec)),
         "environment_setup": _timing(start, 5),
-        "agent_setup": _timing(start + timedelta(seconds=5), 55),
+        "agent_setup": _timing(start + timedelta(seconds=5), setup_sec),
         "agent_execution": _timing(start + timedelta(seconds=60), exec_sec) if agent_started else {},
         "verifier": _timing(start + timedelta(seconds=61 + exec_sec), 20),
         "step_results": [dict(s) for s in steps] if steps is not None else None,
@@ -324,3 +332,94 @@ def make_format_error_trial(trial_dir: Path, calls: Sequence[tuple[int, int, int
     return make_trial(trial_dir, family="mini-swe-agent", model_name="anthropic/claude-opus-5-5",
                       tokens=(sum(c[0] for c in calls), sum(c[1] for c in calls), total_out),
                       usage={"anthropic/claude-opus-5-5": model_usage}, cost=instance_cost)
+
+
+# Anthropic's Opus 5.5 rates, $ per million tokens, as LiteLLM, Claude Code and pi price them.
+OPUS_RATES = {"input": 4.0, "read": 0.2, "write_5m": 5.0, "write_1h": 8.0, "output": 20.0}
+OPUS_PRICING_YAML = ("anthropic:\n"
+                     "  claude-opus-5-5: {input: 4.00, output: 20.00, cache_read: 0.20, cache_write_5m: 5.00, "
+                     "cache_write_1h: 8.00}\n"
+                     "  claude-opus-5: {input: 5.00, output: 25.00, cache_read: 0.50, cache_write_5m: 6.25, "
+                     "cache_write_1h: 10.00}\n"
+                     "openrouter:\n  glm-5.3: {input: 0.07, output: 1.40, cache_read: 0.069}\n")
+
+
+def call_cost(call: Sequence[int], rates: Mapping[str, float] = OPUS_RATES) -> float:
+    """What Anthropic bills one call of write_cache_log's shape."""
+    fresh, read, w5, w1, out = call
+    return (fresh * rates["input"] + read * rates["read"] + w5 * rates["write_5m"] + w1 * rates["write_1h"]
+            + out * rates["output"]) / 1e6
+
+
+def write_cache_log(trial_dir: Path, harness: str, calls: Sequence[Sequence[int]], *,
+                    model: str = "claude-opus-5-5", rates: Mapping[str, float] = OPUS_RATES,
+                    ) -> tuple[int, int, int, float]:
+    """A finished trial's own usage log, Anthropic-style, with its cache writes
+    where the harness keeps them: calls are (fresh input, cache reads,
+    5-minute writes, 1-hour writes, output). Returns Harbor's totals for it
+    (n_input with reads and writes folded in, n_cache, n_output, cost)."""
+    agent = Path(trial_dir) / "agent"
+    costs = [call_cost(c, rates) for c in calls]
+    if harness == "claude-code":
+        events: list[dict[str, Any]] = []
+        for i, (fresh, read, w5, w1, out) in enumerate(calls):
+            usage = {"input_tokens": fresh, "cache_read_input_tokens": read, "cache_creation_input_tokens": w5 + w1,
+                     "cache_creation": {"ephemeral_5m_input_tokens": w5, "ephemeral_1h_input_tokens": w1},
+                     "output_tokens": out}
+            message = {"id": f"msg_{i}", "model": model, "role": "assistant", "usage": usage}
+            events += [{"type": "assistant", "uuid": f"a{i}-{block}", "message": message} for block in (1, 2)]
+        _jsonl(agent / "sessions" / "projects" / "-app" / "s1.jsonl", events, cut=False)
+    elif harness == "pi":
+        events = [{"type": "session", "version": 3, "id": "s1"}]
+        for i, ((fresh, read, w5, w1, out), cost) in enumerate(zip(calls, costs)):
+            usage = {"input": fresh, "output": out, "cacheRead": read, "cacheWrite": w5 + w1, "cacheWrite1h": w1,
+                     "totalTokens": fresh + read + w5 + w1 + out, "cost": {"total": cost}}
+            events.append({"type": "message", "id": f"a{i}", "message": {"role": "assistant", "model": model,
+                                                                           "usage": usage}})
+        _jsonl(agent / "pi" / "sessions" / "2026-10-29T13-14-34-471Z_s1.jsonl", events, cut=False)
+    elif harness == "strands":
+        events = []
+        for i, (fresh, read, w5, w1, out) in enumerate(calls):
+            usage = {"inputTokens": fresh, "outputTokens": out, "cacheReadInputTokens": read,
+                     "cacheWriteInputTokens": w5 + w1, "totalTokens": fresh + out + read + w5 + w1}
+            events.append({"kind": "message", "sequence": i, "message": {"role": "assistant",
+                                                                         "metadata": {"usage": usage}}})
+        _jsonl(agent / "strands-events.jsonl", events, cut=False)
+    elif harness == "mini-swe-agent":
+        messages: list[dict[str, Any]] = [{"role": "system", "content": "..."}, {"role": "user", "content": "task"}]
+        for (fresh, read, w5, w1, out), cost in zip(calls, costs):
+            details = {"cached_tokens": read, "cache_creation_tokens": w5 + w1,
+                       "cache_creation_token_details": {"ephemeral_5m_input_tokens": w5,
+                                                        "ephemeral_1h_input_tokens": w1}}
+            usage = {"prompt_tokens": fresh + read + w5 + w1, "completion_tokens": out,
+                     "prompt_tokens_details": details, "cache_read_input_tokens": read,
+                     "cache_creation_input_tokens": w5 + w1}
+            messages.append({"role": "assistant", "content": "...",
+                             "extra": {"response": {"usage": usage}, "cost": cost}})
+        write_json(agent / "mini-swe-agent.trajectory.json", {"messages": messages})
+    elif harness == "terminus-2":
+        steps: list[dict[str, Any]] = [{"step_id": 1, "source": "user", "message": "the task"}]
+        for i, ((fresh, read, w5, w1, out), cost) in enumerate(zip(calls, costs)):
+            steps.append({"step_id": i + 2, "source": "agent", "model_name": model, "metrics": {
+                "prompt_tokens": fresh + read + w5 + w1, "completion_tokens": out, "cached_tokens": read,
+                "cost_usd": cost}})
+        totals = {"total_prompt_tokens": sum(c[0] + c[1] + c[2] + c[3] for c in calls),
+                  "total_cached_tokens": sum(c[1] for c in calls), "total_completion_tokens": sum(c[4] for c in calls),
+                  "total_cost_usd": sum(costs)}
+        write_json(agent / "trajectory.json", {"schema_version": "ATIF-v1.6", "steps": steps, "final_metrics": totals})
+    else:
+        raise ValueError(f"no cache log recipe for {harness}")
+    return (sum(c[0] + c[1] + c[2] + c[3] for c in calls), sum(c[1] for c in calls), sum(c[4] for c in calls),
+            sum(costs))
+
+
+def make_cache_trial(trial_dir: Path, harness: str, calls: Sequence[Sequence[int]], *,
+                     model: str = "claude-opus-5-5", reported: float | None = None, **kwargs: Any) -> Path:
+    """A finished Opus trial whose Harbor totals and model_usage are its log's
+    (write_cache_log); reported replaces the harness's own cost."""
+    n_in, n_cache, n_out, cost = write_cache_log(trial_dir, harness, calls, model=model)
+    cost = cost if reported is None else reported
+    usage = {f"anthropic/{model}": {"n_input_tokens": n_in, "n_cache_tokens": n_cache, "n_output_tokens": n_out,
+                                    "cost_usd": cost}}
+    return make_trial(trial_dir, family=harness, model_name=f"anthropic/{model}", tokens=(n_in, n_cache, n_out),
+                      usage=usage, cost=cost, **kwargs)

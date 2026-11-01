@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "design_id": "d-it-saas-scope-27-tasks-s-aa0f",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-30T18:11:18+00:00",
+  "profile": "default",
+  "title": "IT / SaaS scope: 27 tasks, Sonnet 5.5, 5 harnesses",
+  "purpose": "Same 27 tasks and harnesses as the Opus 5.5 design, on Sonnet 5.5 at the same effort (medium).",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 25.0,
+      "parallel_arms": 5,
+      "n_concurrent": 1,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "require"
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {},
+        "tasks": null
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": null
+      },
+      {
+        "name": "pi",
+        "agent": "pi",
+        "family": "pi",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "anthropic/claude-sonnet-5-5",
+            "effort": "medium"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:f95df442a99d8905d50ad5b43db3472ae68332989c34282e9828e5fe90170f83"
+}

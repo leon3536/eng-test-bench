@@ -46,6 +46,7 @@ GATE_REPLICATES = 400
 MAX_TRIMS = 25
 MEMORY_SHARE = 0.8          # of Docker's memory that trial containers may plan to use
 _LABEL_ORDER = {"full": 0, "staged": 1, "half_pairs": 2, "pilot": 3}
+SCOPE_LIMIT = 500           # tasks the REPORT tab sends as its scope (report.js)
 
 
 # The assistant's view of the ledger -------------------------------------------------------------
@@ -85,15 +86,16 @@ class ReadOnlyLedger:
     def report_for(self, provider: str, model: str, baseline_family: str | None = None,
                    group_by: str = "family") -> dict[str, Any]:
         """The pooled report restricted to one model, as the REPORT tab
-        computes it with these grouping and baseline options."""
+        computes it with these grouping and baseline options, on its task
+        scope (the profile's task file)."""
         cfg = self._cfg_getter()
-        return report.build_report(self._source, cfg, _model_filter(provider, model),
+        return report.build_report(self._source, cfg, _model_filter(cfg, provider, model),
                                    coverage_options(cfg, baseline_family, group_by))
 
     def coverage(self, provider: str, model: str, baseline_family: str | None = None,
                  group_by: str = "family") -> dict[str, Any]:
         cfg = self._cfg_getter()
-        return report.build_coverage(self._source, cfg, _model_filter(provider, model),
+        return report.build_coverage(self._source, cfg, _model_filter(cfg, provider, model),
                                      coverage_options(cfg, baseline_family, group_by))
 
     def summary(self) -> dict[str, Any]:
@@ -110,18 +112,26 @@ class ReadOnlyLedger:
         }
 
 
-def _model_filter(provider: str, model: str) -> Filters:
-    return Filters(models=(f"{provider}:{model}",))
+def scope_tasks(cfg: Config) -> tuple[str, ...]:
+    """The REPORT tab's default task scope: the profile's task file (cfg.tasks),
+    as many as it sends; empty means every task."""
+    return tuple(dict.fromkeys(cfg.tasks or []))[:SCOPE_LIMIT]
+
+
+def _model_filter(cfg: Config, provider: str, model: str) -> Filters:
+    return Filters(models=(f"{provider}:{model}",), tasks=scope_tasks(cfg))
 
 
 def coverage_options(cfg: Config, baseline_family: str | None = None, group_by: str = "family") -> report.Options:
     """The profile's report options with this grouping and baseline. Harness
-    versions are never split here, so groups line up with analysis rows."""
+    versions are never split here, so groups line up with analysis rows, and
+    harnesses are compared on one model whatever report.compare says."""
     if group_by not in report.GROUP_BY:
         raise ValueError(f"group_by must be one of {', '.join(report.GROUP_BY)}")
     o = report.parse_options(None, cfg)
     return dataclasses.replace(o, group_by=group_by, split_harness_versions=False, baseline_config=None,
-                               include_pairs=False, baseline_family=baseline_family or o.baseline_family)
+                               include_pairs=False, baseline_family=baseline_family or o.baseline_family,
+                               compare="harnesses")
 
 
 # Coverage ----------------------------------------------------------------------------------------
@@ -214,7 +224,9 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
              target_pairs: int | None = None, group_by: str = "family") -> dict[str, Any]:
     """Every family (or configuration, with group_by config) on one model:
     trials, pairs with the baseline, the report's multiples and verdicts,
-    pairs still needed for the precision target, and ranked gaps."""
+    pairs still needed for the precision target, and ranked gaps. Only the
+    tasks of the REPORT tab's default scope (the profile's task file) count,
+    so the assistant quotes the figures that tab shows."""
     if target_pairs is not None and (isinstance(target_pairs, bool) or not isinstance(target_pairs, int)
                                      or target_pairs < 2):
         raise ValueError("target_pairs must be a whole number of at least 2")
@@ -226,7 +238,9 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
     else:
         rep = None
     contract = rep if rep is not None else reader.coverage(provider, model, base_family, group_by)
-    rows_all = reader.rows()
+    # The REPORT tab's task scope, which the report above was computed on.
+    scope = set(scope_tasks(cfg))
+    rows_all = [r for r in reader.rows() if not scope or r.get("task") in scope]
     fingerprint = reader.fingerprint()
     on_model = [r for r in rows_all if r.get("provider") == provider and r.get("model") == model]
     rows = estimates.usable(on_model)
@@ -344,6 +358,8 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
     excluded = sum(1 for r in on_model if estimates.is_manual(r))
     return {
         "provider": provider, "model": model, "group_by": group_by,
+        # The tasks counted, as the REPORT tab's scope block says it (report.task_scope).
+        "scope": report.task_scope(cfg, Filters(tasks=scope_tasks(cfg))),
         "baseline": {"family": base_family, "key": base_key,
                      "effort": sorted({str(r.get("effort") or "default") for r in base_rows})},
         "ledger_fingerprint": fingerprint,

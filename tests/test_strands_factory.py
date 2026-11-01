@@ -234,6 +234,66 @@ class ModelMatchTests(_FactoryCase):
         self.assertIs(calls[0]["model"], harbor_model)
 
 
+class _Built:
+    """Stands in for a strands Model the runner built: its config and, for OpenAIModel, client_args."""
+
+    def __init__(self, params: dict[str, Any] | None = None, client_args: dict[str, Any] | None = None) -> None:
+        self.config = {"model_id": "m", **({"params": params} if params is not None else {})}
+        self.client_args = {} if client_args is None else client_args
+
+    def get_config(self) -> dict[str, Any]:
+        return self.config
+
+
+class OpenAIModel(_Built):
+    pass
+
+
+class LiteLLMModel(_Built):
+    pass
+
+
+class PrebuiltModelTests(_FactoryCase):
+    """Fireworks and xAI arms use the model Harbor built, with their effort in model_kwargs.params."""
+
+    def create(self, harbor_model: str, model: Any) -> list[dict[str, Any]]:
+        module, calls = _load_factory()
+        with mock.patch.dict(os.environ, {"HARBOR_MODEL": harbor_model}):
+            module.create_agent(object(), model=model)
+        return calls
+
+    def test_fireworks_and_xai_models_must_carry_an_effort(self) -> None:
+        for harbor_model, cls in (("fireworks_ai/accounts/fireworks/models/glm-5p3", LiteLLMModel),
+                                  ("xai/grok-4.7", OpenAIModel)):
+            for params in (None, {}, {"max_tokens": 10}, {"reasoning_effort": ""}):
+                with self.subTest(model=harbor_model, params=params), self.assertRaises(ValueError) as ctx:
+                    self.create(harbor_model, cls(params))
+                self.assertIn("model_kwargs.params.reasoning_effort", str(ctx.exception))
+            with self.subTest(model=harbor_model):
+                model = cls({"reasoning_effort": "high"})
+                calls = self.create(harbor_model, model)
+                self.assertIs(calls[0]["model"], model)
+                self.assertEqual(calls[0]["effort"], "auto")
+
+    def test_an_xai_openai_model_gets_xais_endpoint(self) -> None:
+        model = OpenAIModel({"reasoning_effort": "medium"}, {"api_key": "xai-test"})
+        self.create("xai/grok-4.7", model)
+        self.assertEqual(model.client_args, {"api_key": "xai-test", "base_url": "https://api.x.ai/v1"})
+        kept = OpenAIModel({"reasoning_effort": "medium"}, {"base_url": "https://example.test/v1"})
+        self.create("xai/grok-4.7", kept)
+        self.assertEqual(kept.client_args, {"base_url": "https://example.test/v1"})
+
+    def test_other_providers_are_left_alone(self) -> None:
+        for harbor_model in ("openrouter/deepseek/deepseek-v4", "openai/gpt-6.1-sol", "anthropic/claude-opus-5-5"):
+            with self.subTest(model=harbor_model):
+                model = OpenAIModel()
+                self.create(harbor_model, model)
+                self.assertEqual(model.client_args, {})
+        fireworks = LiteLLMModel({"reasoning_effort": "high"})
+        self.create("fireworks_ai/accounts/fireworks/models/kimi-k3", fireworks)
+        self.assertEqual(fireworks.client_args, {})  # LiteLLM reaches Fireworks itself
+
+
 class ProjectTests(unittest.TestCase):
     def test_pyproject_pins_strands_harness(self) -> None:
         with open(FACTORY_DIR / "pyproject.toml", "rb") as fh:

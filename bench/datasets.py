@@ -52,7 +52,7 @@ _meta_cache: dict[str, tuple[tuple[str, str], dict[str, dict[str, Any]]]] = {}
 
 _SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*([GMK])(?:I?B)?", re.IGNORECASE)
 _GB_PER_UNIT = {"G": 1.0, "M": 1 / 1024, "K": 1 / 1024 / 1024}
-_SAMPLE_HEADER = re.compile(r"#\s*Task sample for (\S+?),")
+_SAMPLE_HEADER = re.compile(r"#\s*Task (?:sample|set) for (\S+?),")  # drawn by sample_tasks, or chosen by hand
 _SAMPLE_COMMENT = re.compile(r"\s*([A-Za-z][\w-]*)\s*(?:,\s*(\d+(?:\.\d+)?)\s*s)?\s*")
 
 

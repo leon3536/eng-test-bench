@@ -49,6 +49,7 @@ run:
   budget_usd: 5
   per_trial_cap_usd: 1
   max_turns: 150
+  schedule: arms
 baseline_arm: cc-glm
 arms:
   - {name: cc-glm, agent: claude-code, provider: openrouter, model: z-ai/glm-5.3}
@@ -638,6 +639,37 @@ class WorkerTests(QueueTestCase):
                 self.assertIn("No price", held["message"])
                 self.assertEqual(q.view()["state"], state)
                 self.assertEqual(len(self.manager.started), started)
+
+    def test_a_reuse_version_the_ledger_moved_past_is_held_until_retried(self) -> None:
+        drift = ["Arm 'cc': task-b now has enough usable trials; save a new version to reuse them"]
+        asked: list[str] = []
+
+        def reuse_drift(cfg: Config, spec: dict[str, Any]) -> list[str]:
+            asked.append(spec["reuse"])
+            return list(drift)
+
+        q = self.queue(reuse_drift=reuse_drift)
+        plain = self.add(q, self.design("Plain"))  # reuses nothing: never looked up
+        gaps = self.add(q, self.design("Gaps", reuse="measured"))
+        q.start()
+        q._step()
+        self.manager.finish(self.manager.active, "done")
+        q._step()
+        held = self.item(q, gaps["id"])
+        self.assertEqual((held["status"], len(self.manager.started)), ("held", 1))
+        self.assertIn("task-b now has enough", held["message"])
+        self.assertIn("retry this item to run it as approved", held["message"])
+        q.retry(gaps["id"])
+        drift.append("Arm 'pi': task-a now has enough usable trials; save a new version to reuse them")
+        q.start()
+        q._step()
+        self.assertEqual(self.item(q, gaps["id"])["status"], "held")  # the ledger moved on again since the retry
+        q.retry(gaps["id"])
+        q.start()
+        q._step()
+        self.assertEqual([s.design_ref["queue_item"] for s in self.manager.started], [plain["id"], gaps["id"]])
+        self.assertEqual(self.manager.started[1].spec_hash, held["spec_hash"])  # exactly as approved
+        self.assertEqual(asked, ["measured"] * 3)
 
     def test_docker_down_holds_and_pauses_even_under_skip(self) -> None:
         q = self.queue()

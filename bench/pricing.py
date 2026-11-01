@@ -5,7 +5,9 @@ pricing.yaml edit changes report costs without re-reading any trial. Lookups
 follow the same rule as Config.price: a reported name matches a row exactly
 or with a date or version tag added, never by prefix, so glm-5.3-flash is
 never priced as glm-5.3. The cost formula is results._cost's, so the ledger
-and the per-run results page agree to the cent.
+and the per-run results page agree to the cent; cache writes are priced at
+their own rates where a usage entry carries their counts (n_cache_write_5m,
+n_cache_write_1h).
 """
 
 from __future__ import annotations
@@ -77,12 +79,23 @@ def lookup(table: Mapping[str, Mapping[str, Price]], provider: str, model: str) 
     return rows[max(keys, key=len)] if keys else None
 
 
-def unit_cost(price: Price, n_input: int, n_cache: int, n_output: int) -> float:
-    # Harbor counts cache reads inside n_input; writes are not reported apart
-    # from it, so they are priced at the input rate (see pricing.yaml).
-    fresh = max(n_input - n_cache, 0)
+def unit_cost(price: Price, n_input: int, n_cache: int, n_output: int, n_write_5m: int = 0,
+              n_write_1h: int = 0) -> float:
+    """Harbor counts cache reads and cache writes inside n_input, so fresh
+    input is what is left once both are taken out. Writes the harness log did
+    not give are still in fresh input, priced at the input rate."""
+    fresh = max(n_input - n_cache - n_write_5m - n_write_1h, 0)
     cache_rate = price.input if price.cache_read is None else price.cache_read
-    return (fresh * price.input + n_cache * cache_rate + n_output * price.output) / 1e6
+    rate_5m = price.input if price.cache_write_5m is None else price.cache_write_5m
+    rate_1h = price.input if price.cache_write_1h is None else price.cache_write_1h
+    return (fresh * price.input + n_cache * cache_rate + n_write_5m * rate_5m + n_write_1h * rate_1h
+            + n_output * price.output) / 1e6
+
+
+def cache_writes(entry: Mapping[str, Any]) -> tuple[int, int]:
+    """(5-minute, 1-hour) cache writes of one usage_json entry; (0, 0) when its
+    harness log gave none, which prices them at the input rate."""
+    return (int(entry.get("n_cache_write_5m") or 0), int(entry.get("n_cache_write_1h") or 0))
 
 
 def price_usage(usage: Mapping[str, Mapping[str, Any]], provider: str,
@@ -106,7 +119,7 @@ def price_usage(usage: Mapping[str, Mapping[str, Any]], provider: str,
         if price is None:
             unpriced.append(model)
             continue
-        total += unit_cost(price, n_input, n_cache, n_output)
+        total += unit_cost(price, n_input, n_cache, n_output, *cache_writes(u))
     if unpriced:
         return None, sorted(unpriced)
     return total, []

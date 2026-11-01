@@ -44,7 +44,7 @@ from typing import Any, Protocol
 
 from . import designs, fsutil
 from .designs import DesignStore, VersionConflict
-from .settings import Config, ConfigError, QueueSettings
+from .settings import PREBAKE_OFF, PREBAKE_REQUIRE, Config, ConfigError, QueueSettings
 from .spec import RunSpec, spec_from_design
 from .spec import spec_hash as hash_of
 
@@ -109,6 +109,20 @@ class Manager(Protocol):
     def list(self) -> list[dict[str, Any]]: ...
 
 
+class ImageHook(Protocol):
+    """What the queue needs from the pre-baked image builder (prebake.builder.QueueImages)."""
+
+    def check(self, cfg: Config, spec: RunSpec) -> dict[str, Any]:
+        """{todo: images to build, blocking: [why the run may not start under require]}"""
+        ...
+
+    def build(self, cfg: Config, spec: RunSpec) -> str:
+        """Starts a build of the spec's missing images, or joins the one running; returns its id."""
+        ...
+
+    def status(self, build_id: str) -> dict[str, Any] | None: ...
+
+
 class RunQueue:
     """The persisted queue and its worker thread.
 
@@ -121,14 +135,23 @@ class RunQueue:
     def __init__(self, path: Path, manager: Manager, store: DesignStore, cfg_getter: Callable[[], Config],
                  docker_ok: Callable[[], bool],
                  estimate_fn: Callable[[Config, dict[str, Any]], dict[str, Any]] | None = None,
-                 run_spend: Callable[[], list[dict[str, Any]]] | None = None) -> None:
+                 run_spend: Callable[[], list[dict[str, Any]]] | None = None,
+                 reuse_drift: Callable[[Config, dict[str, Any]], list[str]] | None = None,
+                 images: ImageHook | None = None) -> None:
         self.path = Path(path)
         self._manager = manager
         self._store = store
         self._cfg_getter = cfg_getter
         self._docker_ok = docker_ok
         self._estimate_fn = estimate_fn
+        # The pre-baked image gate (_images_ready): None runs every item without looking at its images.
+        self._images = images
         self._run_spend = run_spend if run_spend is not None else manager.list
+        # reuse.drift over the ledger: how a version that reuses trials would now run differently. An item is
+        # held for it once; a retry runs it as approved unless the ledger moves on again (kept in memory only).
+        self._reuse_drift = reuse_drift
+        self._drift_held: dict[str, tuple[str, ...]] = {}
+        self._drift_accepted: dict[str, tuple[str, ...]] = {}
         self._lock = threading.RLock()
         self._cond = threading.Condition(self._lock)
         self._wake = False
@@ -306,6 +329,8 @@ class RunQueue:
             item = self._find_locked(item_id)
             if item["status"] != "held":
                 raise RuntimeError(f"Only held items can be retried; {item_id} is {item['status']}")
+            if item_id in self._drift_held:  # held because the ledger moved on: the person runs it as approved
+                self._drift_accepted[item_id] = self._drift_held.pop(item_id)
             item.update(figures, status="waiting", message="")
             self._changed_locked()
         return self.view()
@@ -521,6 +546,16 @@ class RunQueue:
         if check.get("problems"):
             self._hold(item_id, "It no longer passes its checks: " + "; ".join(map(str, check["problems"])))
             return
+        drift = self._drift(cfg, doc["spec"], label)
+        with self._lock:
+            accepted = self._drift_accepted.get(item_id)
+            if drift and drift != accepted:
+                self._drift_held[item_id] = drift
+        if drift and drift != accepted:
+            self._hold(item_id, "The ledger changed since this version was saved, so resolving it again would run "
+                                "other tasks: " + "; ".join(drift) + ". Save a new version in DESIGNS and queue "
+                                "that, or retry this item to run it as approved.")
+            return
         if not self._docker_up():
             self._hold(item_id, f"{DOCKER_DOWN}. Start it, then retry this item and start the queue.",
                        pause=True, reason=DOCKER_DOWN)
@@ -551,6 +586,8 @@ class RunQueue:
             run_spec = spec_from_design(doc["spec"], ref)
         except Exception as exc:
             self._hold(item_id, f"The run could not be built: {_one_line(exc)}")
+            return
+        if not self._images_ready(item_id, cfg, run_spec, f"{design_id}@v{version}"):
             return
         with self._lock:
             item = self._get_locked(item_id)
@@ -583,12 +620,118 @@ class RunQueue:
                 # A run that ended before start_spec returned has been recorded already.
                 if item["status"] == "starting":
                     item["status"] = "running"
+                    item["message"] = ""  # what the gate said while it built images
                 self._changed_locked()
         if run_id:
             try:
                 self._store.record_run(design_id, version, run_id)
             except Exception as exc:  # the run is under way; the design's run list is a record, not a gate
                 _note(f"Could not record run {run_id} on {design_id} v{version}: {exc}")
+
+    def waiting_specs(self) -> list[RunSpec]:
+        """The runs the waiting and held items would start, as approved. An
+        item whose design cannot be read is left out (it cannot start as it is)."""
+        with self._lock:
+            items = [(i["design_id"], i["version"]) for i in self._items if i["status"] in OPEN]
+        out = []
+        for design_id, version in items:
+            try:
+                out.append(spec_from_design(self._store.version(design_id, version)["spec"], None))
+            except Exception:
+                continue
+        return out
+
+    def _drift(self, cfg: Config, spec: dict[str, Any], label: str) -> tuple[str, ...]:
+        """How a version that reuses trials would now run differently; empty
+        when it reuses none, or when the ledger cannot say (it then runs as
+        approved, which is still exactly what was approved)."""
+        if self._reuse_drift is None or not spec.get("reuse"):
+            return ()
+        try:
+            return tuple(self._reuse_drift(cfg, copy.deepcopy(spec)))
+        except Exception as exc:
+            _note(f"Could not check the trials {label} reuses against the ledger: {type(exc).__name__}: {exc}")
+            return ()
+
+    def _images_ready(self, item_id: str, cfg: Config, spec: RunSpec, ref: str) -> bool:
+        """The pre-baked image gate, run last before a start. With
+        prebake.auto_build the images the run is missing are built first, the
+        item 'starting' meanwhile. Under run.prebake require an item whose
+        images are still not ready is held with the reason; under prefer it
+        starts, and those trials install their harness themselves. False when
+        the item was held or went back to waiting."""
+        if self._images is None or spec.run.prebake == PREBAKE_OFF:
+            return True
+        check = self._check_images(cfg, spec)
+        for _ in range(2):  # a second round when the build it joined was someone else's
+            if not (check.get("todo") and cfg.prebake.auto_build):
+                break
+            outcome, detail = self._build_first(item_id, cfg, spec)
+            if outcome == "interrupted":
+                return False
+            if outcome == "refused":
+                if spec.run.prebake == PREBAKE_REQUIRE:
+                    self._hold(item_id, f"Its pre-baked images could not be built: {detail}. Free the cause, then "
+                                        "retry this item.")
+                    return False
+                _note(f"{ref}: its missing pre-baked images were not built ({detail}); those trials run stock setup")
+                break
+            check = self._check_images(cfg, spec)
+        blocking = check.get("blocking") or []
+        if blocking and check.get("race"):
+            # A task race builds its own images; what blocks is an arm that can never have one.
+            self._hold(item_id, "run.prebake is require, but some of its arms can never use a pre-baked image: "
+                       + "; ".join(blocking) + ". Pin their harness version or set run.prebake to prefer in a new "
+                       "version; the race builds every other image just before its task.")
+            return False
+        if blocking:
+            self._hold(item_id, "run.prebake is require and its pre-baked images are not ready: " + "; ".join(blocking)
+                       + f". Build them (Build missing on LAUNCH, or python -m bench.prebake build --design {ref}), "
+                       "then retry this item.")
+            return False
+        return True
+
+    def _check_images(self, cfg: Config, spec: RunSpec) -> dict[str, Any]:
+        try:
+            return dict(self._images.check(cfg, spec))  # type: ignore[union-attr]
+        except Exception as exc:
+            why = f"they could not be checked: {_one_line(exc)}"
+            return {"todo": 0, "blocking": [why] if spec.run.prebake == PREBAKE_REQUIRE else []}
+
+    def _build_first(self, item_id: str, cfg: Config, spec: RunSpec) -> tuple[str, str]:
+        """Builds the run's missing images and waits for the build: ('built',
+        its status), ('refused', why it could not start) or ('interrupted', '')
+        when the queue was paused or is stopping; the item then goes back to
+        waiting and the build carries on (a later start joins it)."""
+        hook = self._images
+        try:
+            build_id = hook.build(cfg, spec)  # type: ignore[union-attr]
+        except Exception as exc:
+            return "refused", _one_line(exc)
+        while True:
+            try:
+                build = hook.status(build_id) or {}  # type: ignore[union-attr]
+            except Exception as exc:
+                return "refused", f"the build's status could not be read: {_one_line(exc)}"
+            if not build or (build.get("status") != "running" and build.get("finished_at")):  # its lock is free
+                return "built", str(build.get("status") or "")
+            counts = build.get("counts") or {}
+            done = sum(counts.get(s, 0) for s in ("promoted", "failed", "cancelled"))
+            message = (f"Building its pre-baked images first: {done} of {len(build.get('items') or [])} finished "
+                       f"(build {build_id})")
+            with self._cond:
+                item = self._get_locked(item_id)
+                if item is None or item["status"] != "starting":
+                    return "interrupted", ""
+                if self._stopping or self._state != "running":
+                    item["status"] = "waiting"
+                    item["message"] = f"Paused while its pre-baked images were being built; build {build_id} goes on"
+                    self._changed_locked()
+                    return "interrupted", ""
+                if item["message"] != message:
+                    item["message"] = message
+                    self._changed_locked()
+                self._cond.wait(WAIT_SECONDS)
 
     def _hold(self, item_id: str, message: str, pause: bool | None = None, reason: str | None = None) -> None:
         """An admission failure. pause=None follows on_failure: under skip the

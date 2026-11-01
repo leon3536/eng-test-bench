@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "design_id": "d-pilot-deepseek-v4-1-flas-b855",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T20:23:21+00:00",
+  "profile": "dev",
+  "title": "Pilot: DeepSeek V4.1 Flash, 1 harnesses, openssl",
+  "purpose": "1-task pilot of the per-model design's harness arms (same arm and run settings, so the trials share their configuration), before the 27-task design runs.",
+  "rationale": "Effort high, set on each arm (low/high/max only; Fireworks turns medium into high; never their default max). How each arm sends it: terminus-2: reasoning_effort to LiteLLM; mini-swe-agent: reasoning_effort to LiteLLM; pi: --thinking; strands: model_kwargs.params.reasoning_effort on the model Harbor builds; cline: --thinking; goose: reasoning_effort in the request_params of the custom provider bench/agents/goose.py writes; opencode: the model variant, declared in its entry; kilo: the model variant, declared in its entry.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "attempts": 1,
+    "baseline_arm": null,
+    "run": {
+      "budget_usd": 0.3,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "off",
+      "setup_timeout_multiplier": 4.0
+    },
+    "arms": [
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:e683c1af87a4563613ca65c7031261785b582e32d292964849518f9361335189"
+}

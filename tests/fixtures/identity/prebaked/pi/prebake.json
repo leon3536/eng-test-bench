@@ -1,0 +1,17 @@
+{
+  "harness": "pi",
+  "version": "1.4.0",
+  "task_image": "alexgshaw/fix-git:20251031",
+  "image": "benchprobe/pi-1.4.0/alexgshaw/fix-git:20251031",
+  "used": true,
+  "candidate": "benchprobe/pi-1.4.0/alexgshaw/fix-git:20251031",
+  "reason": "pre-baked image verified",
+  "image_id": "sha256:ca8bbdbbcc3aa6dfd6f41716fe5e64a007c1b27629d3db7316a0c57917ca8e94",
+  "task_image_id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+  "added_layers": 3,
+  "baked_at": "2026-10-29T22:57:40.170317279Z",
+  "recipe": null,
+  "skip_execs": [],
+  "skipped_execs": [],
+  "written_at": "2026-10-29T23:32:07.945080+00:00"
+}

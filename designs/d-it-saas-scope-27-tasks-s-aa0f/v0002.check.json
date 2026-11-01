@@ -1,0 +1,1395 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arm 'claude-code' runs 19 of the design's 27 tasks and reuses 8 measured in earlier runs",
+      "Arm 'mini-swe-agent' runs 25 of the design's 27 tasks and reuses 2 measured in earlier runs",
+      "Arm 'pi' runs 22 of the design's 27 tasks and reuses 5 measured in earlier runs",
+      "Arm 'strands' runs 22 of the design's 27 tasks and reuses 5 measured in earlier runs"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 115,
+    "budget_usd": 25.0,
+    "worst_case_capped_usd": 660.0,
+    "uncapped_arms": [
+      "terminus-2",
+      "pi",
+      "strands"
+    ],
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 19,
+        "trials": 19,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "54ba249e1265",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name claude-code --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name mailman --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_budget_usd=\\\"15\\\" --ak max_turns=300 --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 19,
+            "ready": [
+              "openssl-selfsigned-cert",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "mailman",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T16:29:42+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          }
+        ],
+        "options_fingerprint": "44136fa355b3",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name terminus-2 --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [
+              "mteb-retrieve",
+              "multi-source-data-merger",
+              "fix-code-vulnerability"
+            ],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T19:17:54+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 25,
+        "trials": 25,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a4945e4f8e73",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name mini-swe-agent --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"15\\\" --ak version=\\\"2.4.6\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"mini-swe-agent\\\" --ek prebake_version=\\\"2.4.6\\\" --ek prebake_recipe=\\\"a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "mini-swe-agent",
+          "supported": true,
+          "reason": "",
+          "version": "2.4.6",
+          "recipe": "a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 25,
+            "ready": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T16:52:27+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi",
+        "agent": "pi",
+        "family": "pi",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 22,
+        "trials": 22,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent pi --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name pi --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 22,
+            "ready": [
+              "openssl-selfsigned-cert",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T19:06:25+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 22,
+        "trials": 22,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_kwargs",
+            "value": {
+              "model_spec": "anthropic/claude-sonnet-5-5",
+              "effort": "medium"
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "5ede18973ca2",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name strands --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak \"factory_kwargs={\\\"model_spec\\\": \\\"anthropic/claude-sonnet-5-5\\\", \\\"effort\\\": \\\"medium\\\"}\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak version=\\\"1.57.2\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"strands\\\" --ek prebake_version=\\\"1.57.2\\\" --ek prebake_recipe=\\\"08233daa357806764ba46bf0ffe5d519b6d60e810fecaf1f49c43b6919f4ace6\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "strands",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.2",
+          "recipe": "08233daa357806764ba46bf0ffe5d519b6d60e810fecaf1f49c43b6919f4ace6",
+          "variant": "strands-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 22,
+            "ready": [
+              "openssl-selfsigned-cert",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T17:10:36+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:d4c30b1771716b273e0800a150e4dbad5e60f973613e0ad7bc38ad3f8ef48ca8",
+    "warnings": [],
+    "peak_containers": 5,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "require",
+      "error": null,
+      "images": 0,
+      "build_min": 0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 4,
+      "task_images": 27,
+      "pull": [],
+      "pull_error": null
+    },
+    "image_problems": []
+  },
+  "estimate": {
+    "spec_hash": "sha256:d4c30b1771716b273e0800a150e4dbad5e60f973613e0ad7bc38ad3f8ef48ca8",
+    "ledger_fingerprint": "sha256:cdeaeb87161645fe",
+    "seed": 182959681925802,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code",
+        "cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "17369897101280de",
+          "options_fingerprint": "54ba249e1265"
+        },
+        "trials": 19,
+        "basis": "measured",
+        "basis_detail": "8 trials on 8 tasks of this configuration on anthropic:claude-sonnet-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 8,
+          "tasks": 8,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.12698,
+          "p50": 0.041768,
+          "p90": 0.289317
+        },
+        "total": {
+          "p10": 1.866544,
+          "p50": 2.443434,
+          "p90": 2.960775
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 0.81,
+          "p90": 5.05
+        },
+        "arm_minutes": {
+          "p50": 37.18,
+          "p90": 47.92
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.92,
+          "basis": "measured",
+          "trials": 21
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "terminus-2",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "bb9687e0a66c9653",
+          "options_fingerprint": "44136fa355b3"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "33 trials of terminus-2 on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 33,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261029-214900-it-saas-scope-27-v3"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.097876,
+          "p50": 0.046276,
+          "p90": 0.232458
+        },
+        "total": {
+          "p10": 0.913043,
+          "p50": 2.040458,
+          "p90": 4.436968
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.7,
+          "p90": 8.18
+        },
+        "arm_minutes": {
+          "p50": 89.51,
+          "p90": 112.63
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.0,
+          "basis": "prior",
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "6a5a6f8e1f71b7bd",
+          "options_fingerprint": "a4945e4f8e73"
+        },
+        "trials": 25,
+        "basis": "measured_any_options",
+        "basis_detail": "2 trials on 2 tasks of mini-swe-agent on anthropic:claude-sonnet-5-5, any options",
+        "confidence": "low",
+        "evidence": {
+          "trials": 2,
+          "tasks": 2,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.110031,
+          "p50": 0.04514,
+          "p90": 0.283007
+        },
+        "total": {
+          "p10": 0.985182,
+          "p50": 2.210142,
+          "p90": 5.27531
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 2.67,
+          "p90": 11.9
+        },
+        "arm_minutes": {
+          "p50": 120.24,
+          "p90": 158.14
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 5.73,
+          "basis": "measured",
+          "trials": 10
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi",
+        "cell": {
+          "family": "pi",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "3ccf0e0c8a49cbe4",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 22,
+        "basis": "measured",
+        "basis_detail": "5 trials on 5 tasks of this configuration on anthropic:claude-sonnet-5-5",
+        "confidence": "medium",
+        "evidence": {
+          "trials": 5,
+          "tasks": 5,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.045996,
+          "p50": 0.024529,
+          "p90": 0.106227
+        },
+        "total": {
+          "p10": 0.77336,
+          "p50": 1.018455,
+          "p90": 1.282224
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.22,
+          "p90": 5.04
+        },
+        "arm_minutes": {
+          "p50": 53.62,
+          "p90": 65.19
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 32.46,
+          "basis": "measured",
+          "trials": 5
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "harness default",
+          "config_hash": "47af9f1c8593bd74",
+          "options_fingerprint": "5ede18973ca2"
+        },
+        "trials": 22,
+        "basis": "measured",
+        "basis_detail": "5 trials on 5 tasks of this configuration on anthropic:claude-sonnet-5-5",
+        "confidence": "medium",
+        "evidence": {
+          "trials": 5,
+          "tasks": 5,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.060816,
+          "p50": 0.02916,
+          "p90": 0.136975
+        },
+        "total": {
+          "p10": 1.011456,
+          "p50": 1.328606,
+          "p90": 1.670693
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.86,
+          "p90": 5.13
+        },
+        "arm_minutes": {
+          "p50": 49.29,
+          "p90": 62.06
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.62,
+          "basis": "measured",
+          "trials": 13
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 7.216814,
+        "p50": 9.414458,
+        "p90": 13.542156
+      },
+      "budget_usd": 25.0,
+      "p_within_budget": 0.9965,
+      "suggested_budget_usd": 16.0,
+      "worst_case_capped_usd": 660.0,
+      "uncapped_arms": [
+        "terminus-2",
+        "pi",
+        "strands"
+      ],
+      "inflight_allowance_usd": 82.5,
+      "wall_minutes": {
+        "p50": 121.65,
+        "p90": 158.35
+      },
+      "peak_containers": 5
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.103,
+        "sd_log": 0.2986,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "mini-swe-agent",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 2,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": 3.7936,
+        "ci_factor_after": 1.103,
+        "sd_log": 0.2986,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 5,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 0.4981,
+          "ci": [
+            0.3583,
+            0.6925
+          ],
+          "n": 5
+        },
+        "ci_factor_now": 1.3903,
+        "ci_factor_after": 1.1201,
+        "sd_log": 0.3456,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 5,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 0.7092,
+          "ci": [
+            0.5627,
+            0.8939
+          ],
+          "n": 5
+        },
+        "ci_factor_now": 1.2604,
+        "ci_factor_after": 1.0829,
+        "sd_log": 0.2427,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": {
+      "tasks": 20,
+      "trials": 20,
+      "cost_avoided_usd": 1.380499,
+      "unpriced_tasks": 0,
+      "arms": [
+        {
+          "arm": "claude-code",
+          "tasks": 8,
+          "trials": 8,
+          "cost_avoided_usd": 0.703767,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.070568
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.16034
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.041768
+            },
+            {
+              "task": "fix-git",
+              "trials": 1,
+              "cost_avoided_usd": 0.044495
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.033151
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.037173
+            },
+            {
+              "task": "financial-document-processor",
+              "trials": 1,
+              "cost_avoided_usd": 0.289317
+            },
+            {
+              "task": "fix-code-vulnerability",
+              "trials": 1,
+              "cost_avoided_usd": 0.026955
+            }
+          ]
+        },
+        {
+          "arm": "mini-swe-agent",
+          "tasks": 2,
+          "trials": 2,
+          "cost_avoided_usd": 0.219799,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.195261
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.024538
+            }
+          ]
+        },
+        {
+          "arm": "pi",
+          "tasks": 5,
+          "trials": 5,
+          "cost_avoided_usd": 0.192087,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.030948
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.106227
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.012129
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.018254
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.024529
+            }
+          ]
+        },
+        {
+          "arm": "strands",
+          "tasks": 5,
+          "trials": 5,
+          "cost_avoided_usd": 0.264846,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.05461
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.136975
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.019364
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.024737
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.02916
+            }
+          ]
+        }
+      ]
+    },
+    "warnings": [],
+    "assumptions": [
+      "Harbor does not report cache writes; trial cache writes are priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 135,
+    "trials_reused": 20,
+    "trials_to_run": 115,
+    "cost_avoided_usd": 1.380499,
+    "skipped_arms": [],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "17369897101280de",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 8,
+        "tasks_to_run": 19,
+        "trials_reused": 8,
+        "cost_avoided_usd": 0.703767,
+        "skipped": false,
+        "cell_trials": 8,
+        "reused": [
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/cobol-modernization__xrNcNvj"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.070568,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/build-cython-ext__7dHsY5p"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.16034,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/db-wal-recovery__oRFThUG"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.041768,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-git",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/fix-git__yvZYiwW"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.044495,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/cancel-async-tasks__Eb8K35R"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.033151,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/constraints-scheduling__3G4Gekd"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.037173,
+            "lower_bound": 0
+          },
+          {
+            "task": "financial-document-processor",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/financial-document-processor__Pp8v9ug"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.289317,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/fix-code-vulnerability__6fHftSa"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.026955,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      },
+      {
+        "arm": "terminus-2",
+        "family": "terminus-2",
+        "config_hash": "bb9687e0a66c9653",
+        "harness_version": "harbor",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "family": "mini-swe-agent",
+        "config_hash": "6a5a6f8e1f71b7bd",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 2,
+        "tasks_to_run": 25,
+        "trials_reused": 2,
+        "cost_avoided_usd": 0.219799,
+        "skipped": false,
+        "cell_trials": 2,
+        "reused": [
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "b984c2a0-ab24-4917-840b-ef226dfe9ebe/build-cython-ext__Ugsk4e5"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.195261,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "b984c2a0-ab24-4917-840b-ef226dfe9ebe/cancel-async-tasks__5Ywrs8m"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.024538,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      },
+      {
+        "arm": "pi",
+        "family": "pi",
+        "config_hash": "3ccf0e0c8a49cbe4",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 5,
+        "tasks_to_run": 22,
+        "trials_reused": 5,
+        "cost_avoided_usd": 0.192087,
+        "skipped": false,
+        "cell_trials": 5,
+        "reused": [
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "1a83bb7f-673d-46c9-a356-9386aa6f81ed/cobol-modernization__RZyWqCx"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.030948,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "1a83bb7f-673d-46c9-a356-9386aa6f81ed/build-cython-ext__YxvUJwG"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.106227,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "1a83bb7f-673d-46c9-a356-9386aa6f81ed/db-wal-recovery__kCXY6dc"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.012129,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "1a83bb7f-673d-46c9-a356-9386aa6f81ed/cancel-async-tasks__6GgFu8q"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.018254,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "1a83bb7f-673d-46c9-a356-9386aa6f81ed/constraints-scheduling__TWJB5UQ"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.024529,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      },
+      {
+        "arm": "strands",
+        "family": "strands",
+        "config_hash": "47af9f1c8593bd74",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 5,
+        "tasks_to_run": 22,
+        "trials_reused": 5,
+        "cost_avoided_usd": 0.264846,
+        "skipped": false,
+        "cell_trials": 5,
+        "reused": [
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "775b9a85-25bc-42bc-97f8-e34a9357ec4f/cobol-modernization__WJyotQg"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.05461,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "775b9a85-25bc-42bc-97f8-e34a9357ec4f/build-cython-ext__nfbeWbL"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.136975,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "775b9a85-25bc-42bc-97f8-e34a9357ec4f/db-wal-recovery__AtS6bie"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.019364,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "775b9a85-25bc-42bc-97f8-e34a9357ec4f/cancel-async-tasks__AuYVqQr"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.024737,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "775b9a85-25bc-42bc-97f8-e34a9357ec4f/constraints-scheduling__YE8nd8D"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.02916,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-10-30T19:49:50+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:e62603f9163042d48271c0b7ec81ab38f4d9b3ecf6b5af28e286ec398c66005a",
+  "ledger_fingerprint": "sha256:cdeaeb87161645fe",
+  "reuse_fingerprint": "sha256:60e166bb38b67627"
+}

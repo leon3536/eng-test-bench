@@ -402,6 +402,9 @@ class Secrets(ToolsCase):
         out, body = self.call("estimate_cost", {"spec": SPEC}, ctx)
         self.assertEqual(body["error"], "ledger_unavailable")
         self.assertIn("The checks ran (valid", body["detail"])  # validation still works without the ledger
+        out, body = self.call("estimate_cost", {"spec": {**SPEC, "reuse": "measured"}}, ctx)
+        self.assertEqual(body["error"], "ledger_unavailable")  # the trials to reuse are looked up there too
+        self.assertNotIn(PLANTED, out.content)
         out, body = self.call("get_bench_context", {}, ctx)
         self.assertTrue(out.ok)
         self.assertIn("error", body["ledger"])

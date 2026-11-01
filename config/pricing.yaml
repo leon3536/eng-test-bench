@@ -8,32 +8,60 @@
 # (claude-haiku-5-5-20261001); glm-5.3-flash does not match glm-5.3. A model
 # with no row of its own is unpriced, so add a row before running it.
 #
-# Harbor reports cache reads but not cache writes: writes are counted in
-# n_input with the uncached input, so they are priced at the plain input rate.
-# Anthropic bills 5-minute cache writes at 1.25x input, so real bills run
-# slightly higher than computed cost.
-# cache_read: null means "price cache reads at the input rate".
+# Prompt tokens are priced by kind: fresh input at `input`, cache reads at
+# `cache_read`, and cache writes at `cache_write_5m` or `cache_write_1h` by
+# their time to live. Harbor folds writes into n_input, so the ledger reads
+# each trial's write counts from the harness's own log (bench/extract.py) and
+# keeps them per model in usage_json; fresh input is n_input - n_cache - writes.
+# Anthropic bills 5-minute writes at 1.25x input and 1-hour writes at 2x.
+# cache_read: null means "price cache reads at the input rate"; a row without
+# cache_write_5m / cache_write_1h prices writes at the input rate (open models
+# whose providers bill no write premium), as does a trial whose log gave no
+# write counts.
 
 anthropic:            # first-party API rates, as of 2026-10-06
-  claude-opus-5-5:   {input: 4.00,  output: 20.00, cache_read: 0.20}
-  claude-sonnet-5-5: {input: 2.00,  output: 10.00, cache_read: 0.20}
+  # Opus 5.5 and Sonnet 5.5 cache reads are 0.05x input (live pricing page, checked 2026-10-30; Claude
+  # Code's, pi's and LiteLLM's tables agree for Sonnet, so its old 0.20 over-priced every Sonnet trial).
+  claude-opus-5-5:   {input: 4.00,  output: 20.00, cache_read: 0.20, cache_write_5m: 5.00,  cache_write_1h: 8.00}
+  claude-sonnet-5-5: {input: 2.00,  output: 10.00, cache_read: 0.10, cache_write_5m: 2.50,  cache_write_1h: 4.00}
   # Flat <=100K-prompt rate; $0.50/$2.50 per MTok above 100K is not applied
-  # (computed cost under-counts long Haiku subagent requests).
-  claude-haiku-5-5:  {input: 0.10,  output: 0.50,  cache_read: 0.01}   # cache read from LiteLLM's table
-  claude-fable-5-1:  {input: 10.00, output: 50.00, cache_read: 0.25}
+  # (computed cost under-counts long Haiku subagent requests). Cache read from LiteLLM's table.
+  claude-haiku-5-5:  {input: 0.10,  output: 0.50,  cache_read: 0.01, cache_write_5m: 0.125, cache_write_1h: 0.20}
+  claude-fable-5-1:  {input: 10.00, output: 50.00, cache_read: 0.25, cache_write_5m: 12.50, cache_write_1h: 20.00}
   # Server-side fallback targets, used to cost the run-design assistant when a
   # fallback model answers. Input/output from the claude-api skill's model
-  # notes ($5/$25); cache_read assumed at 0.1x input. Verify on the live pricing page.
-  claude-opus-5:     {input: 5.00,  output: 25.00, cache_read: 0.50}
-  claude-opus-4-8:   {input: 5.00,  output: 25.00, cache_read: 0.50}
+  # notes ($5/$25); cache_read assumed at 0.1x input, writes at 1.25x/2x input.
+  # Verify on the live pricing page.
+  claude-opus-5:     {input: 5.00,  output: 25.00, cache_read: 0.50, cache_write_5m: 6.25,  cache_write_1h: 10.00}
+  claude-opus-4-8:   {input: 5.00,  output: 25.00, cache_read: 0.50, cache_write_5m: 6.25,  cache_write_1h: 10.00}
 
-fireworks: {}         # add models from fireworks.ai/pricing before using them
+fireworks:            # serverless list prices, as of 2026-10-31; no cache-write premium (writes bill as input)
+  # Pi's catalog (pi-ai 1.4.0) and LiteLLM 1.106.6's table agree on all three. Reasoning bills as output.
+  deepseek-v4p1-flash-1017: {input: 0.30, output: 1.20,  cache_read: 0.006}
+  deepseek-v4p1-flash:      {input: 0.30, output: 1.20,  cache_read: 0.006}   # the undated alias, same price
+  glm-5p3:                 {input: 1.40, output: 4.40,  cache_read: 0.26}
+  kimi-k3:                  {input: 3.00, output: 15.00, cache_read: 0.30}
+
+openai:               # OpenAI list prices, as of 2026-10-31 (OpenRouter's pass-through list, which matches)
+  # A prompt above 272K tokens bills 2x input/cache and 1.5x output; not applied (computed cost
+  # under-counts such calls). Cache writes bill by lifetime: 30 minutes (the default for GPT-5.6 and
+  # later) at 1.25 and 12 hours (prompt_cache_options ttl "12h") at 2.50 (model page and prompt caching
+  # guide, checked 2026-10-31). The bench files every OpenAI write as cache_write_5m, the 30-minute
+  # rate, since no harness asks for 12 hours; cache_write_1h holds the 12-hour rate for when one does.
+  # The "24h" that Terra responses echo as prompt_cache_retention is the older models' setting, which
+  # the guide gives no write charge; it is not a write lifetime, so it is not priced. Not yet checked
+  # against an invoice.
+  gpt-6.1-terra:    {input: 1.00, output: 5.00, cache_read: 0.05, cache_write_5m: 1.25, cache_write_1h: 2.50}
+
+xai:                  # xAI list prices, as of 2026-10-31 (pi-ai 1.4.0, LiteLLM 1.106.6 and OpenRouter agree)
+  # A prompt above 200K tokens bills 2x; not applied. No cache-write premium.
+  grok-4.7:         {input: 2.00, output: 6.00, cache_read: 0.50}
 
 openrouter:          # OpenRouter list prices on 2026-10-29, https://openrouter.ai/api/v1/models; they change often
   # The list price is one endpoint's (wafer/us, fp4), not what a routed request
   # is billed: per-provider rates are at /api/v1/models/{author}/{slug}/endpoints,
   # and pilot 3 (2026-10-29) was billed 1.3x-3.1x these figures. Neither model
-  # has a cache-write, per-request or reasoning rate: reasoning bills as output,
-  # and every Harbor adapter counts it in n_output.
+  # has a cache-write, per-request or reasoning rate: writes bill as input,
+  # reasoning as output, and every Harbor adapter counts it in n_output.
   deepseek-v4.1-flash: {input: 0.045,  output: 0.50, cache_read: 0.006}
   glm-5.3:             {input: 0.0699, output: 1.40, cache_read: 0.0689}

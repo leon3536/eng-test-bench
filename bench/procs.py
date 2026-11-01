@@ -366,12 +366,24 @@ def _remove(kind: str, ids: list[str], prefixes: tuple[str, ...]) -> int:
     return removed
 
 
+def _trial_dirs(job_dir: Path) -> list[Path]:
+    """The trial folders of a Harbor job, or of every per-task job under a
+    task race's arm folder."""
+    from .fsutil import harbor_jobs
+
+    return [d for job in harbor_jobs(job_dir) for d in sorted(job.iterdir()) if d.is_dir()]
+
+
 def cleanup_containers(job_dir: Path) -> int:
     """Remove the containers and networks a stopped job left behind. Returns
     how many containers were actually removed.
 
     Harbor names each trial's compose project after the trial, so they can be
-    found from the job's trial directories. Raises subprocess.SubprocessError
+    found from the job's trial directories. job_dir may also be a bench arm
+    folder of a task race (fsutil.RACE_MARKER), which holds one Harbor job
+    per task: their trial directories count, never the task folders' own
+    names, which would match other runs' containers of the same task.
+    Raises subprocess.SubprocessError
     when docker fails, cannot be started, or anything survives, so a failure
     is never reported as "nothing to remove" and callers need catch only one
     exception type.
@@ -380,7 +392,7 @@ def cleanup_containers(job_dir: Path) -> int:
     if not job_dir.is_dir():
         return 0
     try:
-        prefixes = tuple(compose_project(d.name) for d in job_dir.iterdir() if d.is_dir())
+        prefixes = tuple(compose_project(d.name) for d in _trial_dirs(job_dir))
     except OSError as exc:
         raise subprocess.SubprocessError(f"the job folder could not be listed: {exc}") from exc
     if not prefixes:

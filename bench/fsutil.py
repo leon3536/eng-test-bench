@@ -171,3 +171,33 @@ def _discard(tmp: Path) -> None:
         tmp.unlink(missing_ok=True)
     except OSError:
         pass  # a scanner may hold it for a moment; a stray *.tmp is harmless
+
+
+# Job folders -------------------------------------------------------------------
+# A bench arm's folder, jobs/<run>/<arm>/, is one Harbor job (schedule arms) or
+# holds one Harbor job per task (schedule tasks: jobs/<run>/<arm>/<task>/). A
+# task race writes RACE_MARKER into the arm folder before its first job starts,
+# so the two layouts are told apart without guessing from folder names.
+
+RACE_MARKER = "race.json"
+
+
+def harbor_jobs(arm_dir: Path) -> list[Path]:
+    """The Harbor job folders of a bench arm: the arm folder itself, or under
+    a task race (RACE_MARKER) its per-task job folders."""
+    arm_dir = Path(arm_dir)
+    if not (arm_dir / RACE_MARKER).is_file():
+        return [arm_dir]
+    try:
+        return sorted(d for d in arm_dir.iterdir() if d.is_dir())
+    except OSError:
+        return []
+
+
+def mark_race(arm_dir: Path, run_id: str, arm: str) -> None:
+    """Marks arm_dir as a task race's arm folder (one Harbor job per task)."""
+    arm_dir = Path(arm_dir)
+    arm_dir.mkdir(parents=True, exist_ok=True)
+    if not (arm_dir / RACE_MARKER).is_file():
+        atomic_write_json(arm_dir / RACE_MARKER, {"schedule": "tasks", "run": run_id, "arm": arm,
+                                                  "layout": "<arm>/<task>/<trial>"})

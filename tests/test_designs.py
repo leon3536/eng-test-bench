@@ -273,6 +273,45 @@ class NormalizeTests(DesignTestCase):
         self.assertEqual(designs.normalize(self.cfg, again), spec)
 
 
+class HarnessSetupRunFieldTests(DesignTestCase):
+    """prebake, setup_timeout_multiplier and env_build_timeout_multiplier:
+    omitted, they follow the profile; written into the spec only when they
+    differ from the code defaults, so older specs keep their hash."""
+
+    def test_omitted_fields_follow_the_profile_and_given_ones_win(self) -> None:
+        self.assertEqual(list(self.spec()["run"]), list(specs.RUN_KEYS))
+        run = self.spec(run={"budget_usd": 3, "prebake": "require", "setup_timeout_multiplier": 2,
+                             "env_build_timeout_multiplier": 1.5})["run"]
+        self.assertEqual({k: run[k] for k in specs.OPTIONAL_RUN_KEYS if k in run},
+                         {"prebake": "require", "setup_timeout_multiplier": 2.0, "env_build_timeout_multiplier": 1.5})
+        raced = self.spec(run={"budget_usd": 3, "schedule": "arms", "max_containers": 4})["run"]
+        self.assertEqual((raced["schedule"], raced["max_containers"]), ("arms", 4))
+        self.assertNotIn("setup_timeout_multiplier",
+                         self.spec(run={"budget_usd": 3, "setup_timeout_multiplier": "auto"})["run"])
+        off = self.load_test_config(DESIGN_YAML.replace("  max_turns: 150\n", "  max_turns: 150\n  prebake: 'off'\n"),
+                                    tasks=TASKS)
+        self.assertEqual(designs.normalize(off, self.spec_in())["run"]["prebake"], "off")
+        self.assertEqual(designs.normalize(off, self.spec_in(run={"budget_usd": 3, "prebake": "prefer"}))["run"],
+                         self.spec()["run"])
+
+    def test_bad_values_are_refused(self) -> None:
+        for run in ({"prebake": "sometimes"}, {"prebake": False}, {"prebake": None},
+                    {"setup_timeout_multiplier": "fast"}, {"setup_timeout_multiplier": 0},
+                    {"setup_timeout_multiplier": None}, {"env_build_timeout_multiplier": 0},
+                    {"env_build_timeout_multiplier": "2"}):
+            with self.subTest(run=run), self.assertRaises(ValidationError):
+                self.spec(run={"budget_usd": 3, **run})
+
+    def test_limits_are_problems(self) -> None:
+        for run, message in (({"setup_timeout_multiplier": 5}, "run.setup_timeout_multiplier must be auto, or above 0"),
+                             ({"env_build_timeout_multiplier": 4.5}, "run.env_build_timeout_multiplier")):
+            with self.subTest(run=run):
+                problems = self.problems(self.spec(run={"budget_usd": 3, **run}))
+                self.assertTrue(any(message in p for p in problems), problems)
+        self.assertEqual(self.problems(self.spec(run={"budget_usd": 3, "setup_timeout_multiplier": 4,
+                                                      "prebake": "off"})), [])
+
+
 class SchemaTests(BenchTestCase):
     def test_schema_matches_input_models(self) -> None:
         def shape(schema: dict[str, Any]) -> tuple[set[str], set[str]]:
@@ -485,12 +524,13 @@ class ValidateTests(DesignTestCase):
     def test_container_limits(self) -> None:
         three = [*self.spec_in()["arms"],
                  {"name": "mini", "agent": IMPORT_PATH, "provider": "openrouter", "model": "z-ai/glm-5.3"}]
-        warned = self.spec(arms=three, tasks=TASKS, run={"budget_usd": 3, "parallel_arms": 3, "n_concurrent": 4})
+        warned = self.spec(arms=three, tasks=TASKS, run={"budget_usd": 3, "parallel_arms": 3, "n_concurrent": 4,
+                                                             "schedule": "arms"})
         result = designs.validate(self.cfg, warned)
         self.assertEqual(result["status"], "valid")
         self.assertTrue(any("Up to 12 task containers" in w for w in result["warnings"]))
         blocked = self.spec(arms=three, tasks=TASKS, attempts=3,
-                            run={"budget_usd": 3, "parallel_arms": 3, "n_concurrent": 8})
+                            run={"budget_usd": 3, "parallel_arms": 3, "n_concurrent": 8, "schedule": "arms"})
         self.assertTrue(any("Up to 24 task containers" in p for p in self.problems(blocked)))
         # Only containers that can exist count: one trial needs one, however wide the settings.
         small = self.spec(tasks=["task-a"], arms=three[:1], run={"budget_usd": 3, "parallel_arms": 12,
@@ -1145,6 +1185,11 @@ class HarnessAndFingerprintTests(DesignTestCase):
         prices = {"openrouter": {"z-ai/glm-5.3": settings.Price(1.0, 2.0, None)}}
         repriced = dataclasses.replace(self.cfg, pricing=prices)
         self.assertNotEqual(designs.config_fingerprint(repriced), fp)
+        # A check's estimate quotes multiples and plans from published figures: either changing makes it stale.
+        restated = dataclasses.replace(self.cfg, reference={**(self.cfg.reference or {}), "arms": {"pi": {}}})
+        self.assertNotEqual(designs.config_fingerprint(restated), fp)
+        with mock.patch.object(designs.stats, "DIRECTION", "baseline_over_harness"):
+            self.assertNotEqual(designs.config_fingerprint(self.cfg), fp)
 
 
 if __name__ == "__main__":

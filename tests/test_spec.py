@@ -8,10 +8,12 @@ import dataclasses
 import datetime
 import hashlib
 import json
+import re
 from typing import Any
 
 from tests.support import MINIMAL_YAML, BenchTestCase
 
+from bench import settings
 from bench import spec as specs
 from bench.settings import ConfigError, RunSettings
 
@@ -213,6 +215,78 @@ class DesignSpecTests(BenchTestCase):
                 with self.assertRaises(ConfigError):
                     specs.spec_from_design(spec, None)  # type: ignore[arg-type]
         self.assertTrue(specs.plain_json({"a": [1, 2.5, None, True, {"b": "c"}]}))
+
+
+class OptionalRunKeyTests(BenchTestCase):
+    """prebake, setup_timeout_multiplier and env_build_timeout_multiplier
+    are written only when they differ from RUN_DEFAULTS, so no spec stored
+    before they existed changes its hash."""
+
+    def test_every_stored_design_keeps_its_spec_hash(self) -> None:
+        roots = [settings.ROOT / "designs", *sorted((settings.ROOT / "profiles").glob("*/designs"))]
+        files = sorted(f for root in roots if root.is_dir() for f in root.glob("*/v*.json")
+                       if re.fullmatch(r"v\d{4,}\.json", f.name))
+        self.assertTrue(files, "no stored design version to check")
+        for path in files:
+            with self.subTest(path=path.relative_to(settings.ROOT).as_posix()):
+                stored = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(specs.spec_hash(stored["spec"]), stored["spec_hash"])
+                self.assertEqual(specs.structure_problems(stored["spec"]), [])
+                rs = specs.spec_from_design(stored["spec"], None)
+                self.assertEqual(rs.spec_hash, stored["spec_hash"])
+                written = {k: stored["spec"]["run"][k] for k in specs.OPTIONAL_RUN_KEYS if k in stored["spec"]["run"]}
+                # A version saved before the keys existed, or with their defaults, reads as the defaults.
+                defaults = ("prefer", "auto", 1.0)
+                self.assertEqual((rs.run.prebake, rs.run.setup_timeout_multiplier, rs.run.env_build_timeout_multiplier),
+                                 tuple(written.get(k, d) for k, d in zip(specs.OPTIONAL_RUN_KEYS, defaults)))
+                self.assertEqual(specs.run_dict(rs.run), stored["spec"]["run"])
+
+    def test_defaults_are_left_out_and_others_written(self) -> None:
+        base = dict(effort="medium", n_concurrent=2, parallel_arms=1, budget_usd=5, per_trial_cap_usd=None,
+                    max_turns=None, timeout_multiplier=1.0)
+        self.assertEqual(list(specs.run_dict(RunSettings(**base))), list(specs.RUN_KEYS))
+        changed = specs.run_dict(RunSettings(**base, prebake="off", setup_timeout_multiplier=2,
+                                             env_build_timeout_multiplier=1.5))
+        self.assertEqual({k: changed[k] for k in specs.OPTIONAL_RUN_KEYS if k in changed},
+                         {"prebake": "off", "setup_timeout_multiplier": 2.0, "env_build_timeout_multiplier": 1.5})
+        # The schedule: tasks (a series of task races) and 6 containers are the defaults, left out.
+        raced = specs.run_dict(RunSettings(**base, schedule="arms", max_containers=4))
+        self.assertEqual((raced["schedule"], raced["max_containers"]), ("arms", 4))
+        self.assertNotIn("schedule", specs.run_dict(RunSettings(**base, schedule="tasks", max_containers=6)))
+        self.assertNotIn("setup_timeout_multiplier",
+                         specs.run_dict(RunSettings(**base, setup_timeout_multiplier="auto")))
+        # 1 is a number, not auto: it means "never a safety net", so it is written.
+        self.assertEqual(specs.run_dict(RunSettings(**base, setup_timeout_multiplier=1))["setup_timeout_multiplier"],
+                         1.0)
+
+    def test_a_spec_with_them_round_trips_and_hashes_apart(self) -> None:
+        cfg = self.load_test_config(MINIMAL_YAML)
+        spec = specs.normalized_from_config(cfg, "pilot", ["claude-code"])
+        changed = copy.deepcopy(spec)
+        changed["run"].update(prebake="require", setup_timeout_multiplier=1.5, env_build_timeout_multiplier=2.0)
+        self.assertEqual(specs.structure_problems(changed), [])
+        rs = specs.spec_from_design(changed, None)
+        self.assertEqual((rs.run.prebake, rs.run.setup_timeout_multiplier, rs.run.env_build_timeout_multiplier),
+                         ("require", 1.5, 2.0))
+        self.assertEqual(specs.run_dict(rs.run), changed["run"])
+        self.assertNotEqual(specs.spec_hash(changed), specs.spec_hash(spec))
+        off = self.load_test_config(MINIMAL_YAML.replace("  budget_usd: 10\n", "  budget_usd: 10\n  prebake: 'off'\n"))
+        self.assertEqual(specs.normalized_from_config(off, "pilot", ["claude-code"])["run"]["prebake"], "off")
+        self.assertEqual(specs.spec_from_config(off, "pilot", ["claude-code"]).run, off.run)
+
+    def test_bad_values_are_structure_problems(self) -> None:
+        cfg = self.load_test_config(MINIMAL_YAML)
+        spec = specs.normalized_from_config(cfg, "pilot", ["claude-code"])
+        for key, value, message in (("prebake", "sometimes", "spec.run.prebake must be one of off, prefer, require"),
+                                    ("setup_timeout_multiplier", "fast",
+                                     "spec.run.setup_timeout_multiplier must be auto or a number"),
+                                    ("env_build_timeout_multiplier", True,
+                                     "spec.run.env_build_timeout_multiplier must be a number"),
+                                    ("colour", "blue", "spec.run has an unknown field 'colour'")):
+            bad = copy.deepcopy(spec)
+            bad["run"][key] = value
+            with self.subTest(key=key):
+                self.assertIn(message, specs.structure_problems(bad))
 
 
 if __name__ == "__main__":

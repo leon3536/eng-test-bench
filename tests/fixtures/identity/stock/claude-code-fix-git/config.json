@@ -1,0 +1,19 @@
+{
+    "task": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git",
+        "source": "terminal-bench"
+    },
+    "trial_name": "fix-git__HvfSQNN",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\jobs\\20261029-143816-it-saas-scope-27-v1\\claude-code",
+    "agent": {
+        "name": "claude-code",
+        "model_name": "anthropic/claude-opus-5-5",
+        "kwargs": {
+            "reasoning_effort": "medium",
+            "max_budget_usd": "15",
+            "max_turns": 300,
+            "version": "2.1.312"
+        }
+    },
+    "job_id": "d309475d-bab6-4926-8b20-fed72f869083"
+}

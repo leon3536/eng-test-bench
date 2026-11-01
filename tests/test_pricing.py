@@ -48,6 +48,23 @@ class Cost(unittest.TestCase):
         self.assertEqual(pricing.unit_cost(*args), results._cost(*args))
         self.assertAlmostEqual(pricing.unit_cost(*args), 0.0419, places=4)
 
+    def test_cache_writes_are_priced_at_their_own_rates(self) -> None:
+        price = Price(4.0, 20.0, 0.2, 5.0, 8.0)
+        cost = pricing.unit_cost(price, 10000, 6000, 100, 3000, 500)
+        self.assertAlmostEqual(cost, (500 * 4.0 + 6000 * 0.2 + 3000 * 5.0 + 500 * 8.0 + 100 * 20.0) / 1e6)
+        self.assertAlmostEqual(results._cost(price, 10000, 6000, 100, 3000, 500), cost)
+        usage = {"claude-opus-5-5": {"n_input": 10000, "n_cache": 6000, "n_output": 100, "n_cache_write_5m": 3000,
+                                     "n_cache_write_1h": 500}}
+        self.assertAlmostEqual(pricing.price_usage(usage, "anthropic", {"anthropic": {"claude-opus-5-5": price}})[0],
+                               cost)
+        # A row without write rates (an open model) prices writes as input, as does an entry without counts.
+        plain = Price(4.0, 20.0, 0.2)
+        self.assertAlmostEqual(pricing.unit_cost(plain, 10000, 6000, 100, 3000, 500),
+                               pricing.unit_cost(plain, 10000, 6000, 100))
+        del usage["claude-opus-5-5"]["n_cache_write_5m"], usage["claude-opus-5-5"]["n_cache_write_1h"]
+        self.assertAlmostEqual(pricing.price_usage(usage, "anthropic", {"anthropic": {"claude-opus-5-5": price}})[0],
+                               pricing.unit_cost(price, 10000, 6000, 100))
+
     def test_cache_read_null_prices_cache_at_input(self) -> None:
         self.assertAlmostEqual(pricing.unit_cost(Price(1.0, 2.0, None), 1_000_000, 400_000, 0), 1.0)
 

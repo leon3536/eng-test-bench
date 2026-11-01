@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "d-kilo-code-27-tasks-opus-d52d",
+  "title": "Kilo Code: 27 tasks, Opus 5.5",
+  "created_at": "2026-10-31T10:37:15+00:00",
+  "updated_at": "2026-10-31T11:37:35+00:00",
+  "latest_version": 2,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T10:37:15+00:00",
+      "spec_hash": "sha256:582ceb865ca1bbab94106a34993d9fe8cfbaae4e39251a35c385bc1c27388abe",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T11:37:27+00:00",
+      "spec_hash": "sha256:00d3440ab82ebbbea4d279935b36bb55ccf3ef796390df944035aec94cd95060",
+      "change_note": "Prefer pre-baked images; 2 Kilo tasks have none (disk full) and install normally with a 4x setup limit.",
+      "approved_at": "2026-10-31T11:37:29+00:00",
+      "runs": [
+        "20261031-043735-kilo-code-27-tas-v2"
+      ]
+    }
+  }
+}

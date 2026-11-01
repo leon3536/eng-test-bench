@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-pilot-grok-4-7-8-harness-f327",
+  "title": "Pilot: Grok 4.7, 8 harnesses, openssl",
+  "created_at": "2026-10-31T20:32:05+00:00",
+  "updated_at": "2026-10-31T20:58:11+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T20:32:05+00:00",
+      "spec_hash": "sha256:1ccdeed8ae3b89374a0c7c057742926bd1dd46112b86a6abe26992816e186191",
+      "change_note": "",
+      "approved_at": "2026-10-31T20:32:08+00:00",
+      "runs": [
+        "20261031-135811-pilot-grok-4-7-8-v1"
+      ]
+    }
+  }
+}

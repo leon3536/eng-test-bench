@@ -13,10 +13,21 @@ equal the frozen output except for the documented changes:
   jobs\\RUN_ID (finding 13), and import-path agents use --agent-import-path;
 - an unpriced model is a problem (finding 18);
 - arm options are applied in name order, because the normalized spec stores
-  them sorted (Harbor reads --ak flags into a mapping, so order is cosmetic).
+  them sorted (Harbor reads --ak flags into a mapping, so order is cosmetic);
+- per arm, a prebake key, and at the end of the command the harness setup
+  flags of run.prebake (default prefer): --env/--ek for the pre-baked image
+  environment and --agent-setup-timeout-multiplier. Both are stripped before
+  comparing; PrebakeCommandTests below pin them, and mode off with
+  the default limits gives the frozen command byte for byte;
+- the pre-baked image readiness: top-level prebake and image_problems, and
+  per arm the warnings about trials that install their harness themselves
+  (PREBAKE_WARNING), stripped before comparing; PrebakeReadinessTests pin them;
+- schedule and race (run.schedule). The default is now tasks (a series of
+  task races), which the frozen planner never knew, so the parity tests plan
+  under schedule arms; RaceTests below pin the race plan.
 
 Schemas come from tests/fixtures/schemas, the dataset snapshot is fixed, and
-Docker is never asked anything.
+Docker is never asked anything: its image listing is empty here.
 """
 
 from __future__ import annotations
@@ -24,21 +35,32 @@ from __future__ import annotations
 import copy
 import dataclasses
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import yaml
+
 from tests.support import BenchTestCase, fixture_schema
 
-from bench import checks, datasets, keys, runs, schemas, settings, spec
+from bench import checks, datasets, keys, prebake, runs, schemas, settings, spec
+from bench.environments.prebaked import PREBAKED_ENV
 from bench.harnesses import is_import_path
+from bench.prebake import adapters, inventory, recorder
 from bench.settings import EFFORT_INHERIT, EFFORT_OMIT, ROOT, ConfigError
 
 SNAPSHOT = ROOT / "datasets" / "terminal-bench@2.0" / "terminal-bench"
-ADDED_TOP = ("source", "label", "spec_hash", "warnings", "peak_containers")
-ADDED_ARM = ("family", "kind", "tasks", "options_fingerprint", "reserve_note")
+ADDED_TOP = ("source", "label", "spec_hash", "warnings", "peak_containers", "skipped_arms", "prebake",
+             "image_problems", "schedule", "race")
+ADDED_ARM = ("family", "kind", "tasks", "options_fingerprint", "reserve_note", "prebake", "setup_warnings")
+# Arm warnings about trials that install their harness themselves (runs._prebake_issues).
+PREBAKE_WARNING = re.compile(r"pre-baked image|installs itself in \d+ trial")
+# The harness setup flags runs.prebake_flags appends to a command.
+PREBAKE_FLAGS = re.compile(r"(?: --env \S+(?: --ek prebake_\w+=\S+)*)?(?: --agent-setup-timeout-multiplier \S+)?"
+                           r"(?: --environment-build-timeout-multiplier \S+)?$")
 
 
 # The pre-change planner, frozen -------------------------------------------------
@@ -185,6 +207,7 @@ run:
   budget_usd: 20
   per_trial_cap_usd: 2.5
   max_turns: 100
+  schedule: arms
 baseline_arm: claude-code
 arms:
   - {name: claude-code, agent: claude-code, provider: anthropic, model: claude-opus-5-5}
@@ -299,8 +322,16 @@ def expected_from_frozen(cfg: settings.Config, old: dict[str, Any]) -> dict[str,
 
 def without_additions(plan: dict[str, Any]) -> dict[str, Any]:
     out = {k: v for k, v in plan.items() if k not in ADDED_TOP}
-    out["arms"] = [{k: v for k, v in a.items() if k not in ADDED_ARM} for a in plan["arms"]]
+    out["arms"] = [{k: PREBAKE_FLAGS.sub("", v) if k == "command" else v for k, v in a.items() if k not in ADDED_ARM}
+                   for a in plan["arms"]]
+    for arm in out["arms"]:
+        arm["warnings"] = [w for w in arm["warnings"] if not PREBAKE_WARNING.search(w)]
     return out
+
+
+def arms_schedule(cfg: settings.Config) -> settings.Config:
+    """cfg under run.schedule arms: the schedule the frozen planner knew (the default is now tasks)."""
+    return dataclasses.replace(cfg, run=dataclasses.replace(cfg.run, schedule="arms"))
 
 
 class PlanTestCase(BenchTestCase):
@@ -312,13 +343,18 @@ class PlanTestCase(BenchTestCase):
                 (datasets, "info", lambda dataset: None),
                 (datasets, "task_meta", lambda dataset: {}),
                 (checks, "docker_capacity", lambda: None),
+                (inventory, "local_images", lambda refresh=False: {}),
                 (runs, "_long_paths_enabled", lambda: True)):
             patcher = mock.patch.object(target, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
 
     def golden_config(self) -> settings.Config:
-        return self.load_test_config(GOLDEN_YAML, tasks=GOLDEN_TASKS)
+        # The golden was captured while config/pricing.yaml priced no Fireworks model, so its
+        # pi-fireworks arm (glm-5p3) stays unpriced here now that the shipped table has a row for it.
+        table = yaml.safe_load(settings.PRICING.read_text(encoding="utf-8"))
+        table["fireworks"] = {}
+        return self.load_test_config(GOLDEN_YAML, tasks=GOLDEN_TASKS, pricing=yaml.safe_dump(table))
 
     def config(self, arms: str, run: str = "", modes: str = "pilot: {n_tasks: 1}") -> settings.Config:
         text = (
@@ -328,6 +364,7 @@ class PlanTestCase(BenchTestCase):
             "  openrouter: {env_key: OPENROUTER_API_KEY, model_prefix: openrouter/}\n"
             f"modes:\n  {modes}\n"
             "run:\n  effort: medium\n  budget_usd: 20\n" + "".join(f"  {line}\n" for line in run.splitlines() if line)
+            + ("" if "schedule:" in run else "  schedule: arms\n")
             + "arms:\n" + "".join(f"  {line}\n" for line in arms.splitlines() if line)
         )
         return self.load_test_config(text, tasks=GOLDEN_TASKS)
@@ -362,7 +399,7 @@ class GoldenParityTests(PlanTestCase):
 
     def test_shipped_profiles_match_the_frozen_planner(self) -> None:
         for profile in ("bench", "dev"):
-            cfg = self.load_shipped_config(profile)
+            cfg = arms_schedule(self.load_shipped_config(profile))
             arms = [a.name for a in cfg.arms if a.enabled]
             for mode in cfg.modes:
                 with self.subTest(profile=profile, mode=mode):
@@ -382,10 +419,16 @@ class GoldenParityTests(PlanTestCase):
                         self.assertEqual(entry["tasks"], cfg.modes[mode].n_tasks)
                         self.assertRegex(entry["options_fingerprint"], r"^[0-9a-f]{12}$")
                         self.assertTrue(entry["reserve_note"])
+                        self.assertEqual(entry["prebake"]["mode"], "prefer")
+                        if profile == "bench":
+                            # Every arm pins its version, so each can be pre-baked and gets the class.
+                            self.assertTrue(entry["prebake"]["supported"], entry["prebake"])
+                            self.assertIn(" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek ",
+                                          entry["command"])
 
     def test_shipped_mini_swe_agent_arms_run_by_import_path(self) -> None:
         for profile in ("bench", "dev"):
-            cfg = self.load_shipped_config(profile)
+            cfg = arms_schedule(self.load_shipped_config(profile))
             mini = [a for a in cfg.arms if a.family == "mini-swe-agent"]
             self.assertTrue(mini)
             p = runs.plan(cfg, "pilot", [a.name for a in mini])
@@ -613,3 +656,136 @@ class PlanRuleTests(PlanTestCase):
         cc, pi = runs.plan(cfg, "pilot", ["cc", "pi"])["arms"]
         self.assertIn("at most $15 (its dollar cap)", cc["reserve_note"])
         self.assertIn("no dollar cap", pi["reserve_note"])
+
+
+# Harness setup flags --------------------------------------------------------------
+
+
+class PrebakeCommandTests(PlanTestCase):
+    CC = "- {name: cc, agent: claude-code, provider: anthropic, model: claude-opus-5-5, options: {version: '2.1.312'}}"
+
+    def command(self, cfg: settings.Config, name: str = "cc", dry_run: bool = False) -> list[str]:
+        run_spec = spec.spec_from_config(cfg, "pilot", [name])
+        arm = run_spec.arms[0]
+        kwargs, _ = runs.agent_kwargs(cfg.run, arm, fixture_schema(arm.agent))
+        arm_prebake = prebake.resolve(cfg, cfg.run, arm, kwargs)
+        return runs.build_command(cfg, run_spec, arm, Path("jobs") / "x", kwargs, Path("datasets") / "d",
+                                  dry_run=dry_run, arm_prebake=arm_prebake)
+
+    def test_off_gives_the_frozen_command_byte_for_byte(self) -> None:
+        cfg = self.load_test_config(GOLDEN_YAML.replace("  max_turns: 100\n", "  max_turns: 100\n  prebake: 'off'\n"),
+                                    tasks=GOLDEN_TASKS)
+        self.assertEqual(cfg.run.prebake, "off")
+        names = [a.name for a in cfg.arms]
+        for mode in cfg.modes:
+            with self.subTest(mode=mode):
+                new = runs.plan(cfg, mode, names)
+                expected = expected_from_frozen(cfg, frozen_plan(sorted_options(cfg), mode, names))
+                self.assertEqual([a["command"] for a in new["arms"]], [a["command"] for a in expected["arms"]])
+                self.assertEqual([a["prebake"]["mode"] for a in new["arms"]], ["off"] * len(names))
+        sorted_cfg = sorted_options(cfg)
+        run_spec = spec.spec_from_config(cfg, "sample", ["terminus-2"])
+        arm = run_spec.arms[0]
+        kwargs, _ = runs.agent_kwargs(cfg.run, arm, fixture_schema(arm.agent))
+        frozen_kwargs, _ = _frozen_agent_kwargs(sorted_cfg, sorted_cfg.arm("terminus-2"), fixture_schema("terminus-2"))
+        for dry_run in (False, True):
+            self.assertEqual(
+                runs.build_command(cfg, run_spec, arm, Path("jobs") / "x", kwargs, SNAPSHOT, dry_run=dry_run,
+                                   arm_prebake=prebake.resolve(cfg, cfg.run, arm, kwargs)),
+                _frozen_build_command(sorted_cfg, sorted_cfg.arm("terminus-2"), list(run_spec.tasks),
+                                      cfg.modes["sample"], Path("jobs") / "x", frozen_kwargs, SNAPSHOT, dry_run))
+
+    def test_prefer_adds_the_environment_class_and_its_kwargs(self) -> None:
+        cfg = self.config(self.CC)
+        cmd = self.command(cfg, dry_run=True)
+        recipe = recorder.arm_recipe(adapters.adapter_for("claude-code", "claude-code", {"version": "2.1.312"},
+                                                          "anthropic/claude-opus-5-5")).sha256  # type: ignore
+        tail = ["--env", "bench.environments.prebaked:PrebakedDockerEnvironment",
+                "--ek", 'prebake_harness="claude-code"', "--ek", 'prebake_version="2.1.312"',
+                "--ek", f'prebake_recipe="{recipe}"', "--ek", 'prebake_prefix="benchbake"',
+                "--ek", "prebake_required=false", "--agent-setup-timeout-multiplier", "2", "--dry-run"]
+        self.assertEqual(cmd[-len(tail):], tail)
+        self.assertEqual(cmd[: cmd.index("--env")][-2:], ["--ak", 'version="2.1.312"'])
+        # Harbor's own CLI parsers turn the flags into this class and these kwargs.
+        from harbor.cli.utils import parse_kwargs, resolve_environment_spec
+        from harbor.models.trial.config import EnvironmentConfig
+
+        env_type, import_path = resolve_environment_spec(cmd[cmd.index("--env") + 1])
+        ek = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--ek"]
+        config = EnvironmentConfig(type=env_type, import_path=import_path, kwargs=parse_kwargs(ek))
+        self.assertEqual((config.type, config.import_path), (None, PREBAKED_ENV))
+        self.assertEqual(config.kwargs, {"prebake_harness": "claude-code", "prebake_version": "2.1.312",
+                                         "prebake_recipe": recipe, "prebake_prefix": "benchbake",
+                                         "prebake_required": False})
+
+    def test_require_passes_required_and_needs_no_setup_net(self) -> None:
+        cfg = self.config(self.CC, run="prebake: require")
+        cmd = self.command(cfg)
+        self.assertIn("prebake_required=true", cmd)
+        self.assertNotIn("--agent-setup-timeout-multiplier", cmd)
+
+    def test_numbers_apply_to_every_arm_in_every_mode(self) -> None:
+        for mode in ("'off'", "prefer", "require"):
+            with self.subTest(mode=mode):
+                cmd = self.command(self.config(self.CC, run=f"prebake: {mode}\nsetup_timeout_multiplier: 1.5\n"
+                                                            "env_build_timeout_multiplier: 2"))
+                self.assertEqual(cmd[cmd.index("--agent-setup-timeout-multiplier") + 1], "1.5")
+                self.assertEqual(cmd[-2:], ["--environment-build-timeout-multiplier", "2"])
+        cmd = self.command(self.config(self.CC, run="setup_timeout_multiplier: 1"))
+        self.assertNotIn("--agent-setup-timeout-multiplier", cmd)
+        self.assertNotIn("--environment-build-timeout-multiplier", cmd)
+
+    def test_auto_doubles_the_limit_only_where_stock_setups_are_expected(self) -> None:
+        run = self.config(self.CC).run
+        arm = prebake.ArmPrebake(mode="prefer", family="claude-code", supported=True, version="2.1.312",
+                                 recipe="a" * 64)
+        cases = [
+            (None, None),                                                          # off
+            (arm, 2.0),                                                            # prefer, inventory unknown
+            (dataclasses.replace(arm, expect_stock=False), None),                  # prefer, every image ready
+            (dataclasses.replace(arm, mode="require"), None),                      # a missing image fails fast
+            (dataclasses.replace(arm, supported=False, reason="x"), 2.0),          # always stock
+            (dataclasses.replace(arm, mode="require", supported=False, reason="x"), 2.0),
+        ]
+        for arm_prebake, expected in cases:
+            with self.subTest(arm_prebake=arm_prebake):
+                self.assertEqual(prebake.setup_timeout_multiplier(run, arm_prebake), expected)
+
+    def test_an_unpinned_arm_runs_stock_with_the_net_and_require_refuses_it(self) -> None:
+        cc = "- {name: cc, agent: claude-code, provider: anthropic, model: claude-opus-5-5}"
+        entry = runs.plan(self.config(cc), "pilot", ["cc"])["arms"][0]
+        self.assertEqual((entry["prebake"]["supported"], entry["prebake"]["setup_timeout_multiplier"]), (False, 2.0))
+        self.assertIn("no pinned version", entry["prebake"]["reason"])
+        self.assertNotIn("--env ", entry["command"])
+        self.assertTrue(entry["command"].endswith(" --agent-setup-timeout-multiplier 2"), entry["command"])
+        self.assertEqual(entry["problems"], [])
+        required = runs.plan(self.config(cc, run="prebake: require"), "pilot", ["cc"])
+        self.assertEqual(len(required["problems"]), 1)
+        self.assertIn("run.prebake is require, but this arm cannot use pre-baked images: no pinned version",
+                      required["problems"][0])
+
+    def test_the_plan_and_run_json_record_the_arms_setup(self) -> None:
+        cfg = self.config(self.CC)
+        entry = runs.plan(cfg, "pilot", ["cc"])["arms"][0]
+        self.assertEqual({k: entry["prebake"][k] for k in ("mode", "family", "supported", "version", "variant",
+                                                           "prefix", "expect_stock", "setup_timeout_multiplier",
+                                                           "env_build_timeout_multiplier")},
+                         {"mode": "prefer", "family": "claude-code", "supported": True, "version": "2.1.312",
+                          "variant": "plain", "prefix": "benchbake", "expect_stock": True,
+                          "setup_timeout_multiplier": 2.0, "env_build_timeout_multiplier": 1.0})
+        resolved = runs.resolve_arms(cfg, spec.spec_from_config(cfg, "pilot", ["cc"]), "20261029-120000-pilot")
+        self.assertEqual(resolved[0]["prebake"], entry["prebake"])
+        self.assertIn(" --env bench.environments.prebaked:PrebakedDockerEnvironment ", resolved[0]["command"])
+
+    def test_harbor_has_the_flags_and_bench_is_first_on_its_path(self) -> None:
+        import inspect
+
+        from harbor.cli import jobs
+
+        source = inspect.getsource(jobs)
+        for flag in ('"--env"', '"--ek"', '"--agent-setup-timeout-multiplier"',
+                     '"--environment-build-timeout-multiplier"'):
+            self.assertIn(flag, source)
+        self.assertEqual(keys.child_env(None)["PYTHONPATH"].split(os.pathsep)[0], str(settings.ROOT))
+        module = PREBAKED_ENV.split(":")[0].replace(".", os.sep) + ".py"
+        self.assertTrue((settings.ROOT / module).is_file())

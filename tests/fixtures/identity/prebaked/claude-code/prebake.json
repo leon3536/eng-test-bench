@@ -1,0 +1,17 @@
+{
+  "harness": "claude-code",
+  "version": "2.1.312",
+  "task_image": "alexgshaw/fix-git:20251031",
+  "image": "benchprobe/claude-code-2.1.312/alexgshaw/fix-git:20251031",
+  "used": true,
+  "candidate": "benchprobe/claude-code-2.1.312/alexgshaw/fix-git:20251031",
+  "reason": "pre-baked image verified",
+  "image_id": "sha256:77ec331ca30aac4ccf2692c8014a4eb59c418628ec25f9753de1bb5138fae09f",
+  "task_image_id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+  "added_layers": 2,
+  "baked_at": null,
+  "recipe": null,
+  "skip_execs": [],
+  "skipped_execs": [],
+  "written_at": "2026-10-29T23:32:07.084698+00:00"
+}

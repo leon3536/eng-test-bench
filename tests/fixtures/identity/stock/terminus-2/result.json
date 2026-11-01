@@ -1,0 +1,146 @@
+{
+    "id": "9b953a97-3ace-41de-a277-cfb736c8f933",
+    "task_name": "adaptive-rejection-sampler",
+    "trial_name": "adaptive-rejection-sampler__RHyN59U",
+    "trial_uri": "file:///C:/Git/EngineeringTestBench/jobs/20261029-122236-pilot/terminus-2/adaptive-rejection-sampler__RHyN59U",
+    "task_id": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "4fde6e809c475b000ae3ea4135f906ffe4775bccae7dafd0b123f4ecc9fcf697",
+    "config": {
+        "task": {
+            "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "adaptive-rejection-sampler__RHyN59U",
+        "trials_dir": "C:\\Git\\EngineeringTestBench\\jobs\\20261029-122236-pilot\\terminus-2",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "terminus-2",
+            "import_path": null,
+            "model_name": "anthropic/claude-opus-5-5",
+            "base_url": null,
+            "model_api_key_name": null,
+            "model_api_format": null,
+            "skip_model_parsing": false,
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {
+                "reasoning_effort": "medium",
+                "max_turns": 300
+            },
+            "mcp_servers": []
+        },
+        "user_agent": null,
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "stream": false,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "extra_instructions": [],
+        "job_id": "e339b17c-12dd-4e26-8fe9-e8415fd5a2be",
+        "source_trial": null
+    },
+    "agent_info": {
+        "name": "terminus-2",
+        "version": "2.0.0",
+        "model_info": {
+            "name": "claude-opus-5-5",
+            "provider": "anthropic"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 83723,
+        "n_cache_tokens": 63755,
+        "n_output_tokens": 14343,
+        "cost_usd": 0.399419,
+        "model_usage": {
+            "claude-opus-5-5": {
+                "n_input_tokens": 83723,
+                "n_cache_tokens": 63755,
+                "n_output_tokens": 14343,
+                "cost_usd": 0.399419
+            }
+        },
+        "rollout_details": [],
+        "metadata": {
+            "n_episodes": 8,
+            "api_request_times_msec": [
+                1859.1690063476562,
+                1916.3024425506592,
+                1454.0178775787354,
+                101880.41400909424,
+                7185.239791870117,
+                4434.615850448608,
+                3743.769884109497,
+                2823.5244750976562
+            ],
+            "summarization_count": 0
+        }
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.0
+        }
+    },
+    "verifier_environment_mode": "shared",
+    "exception_info": null,
+    "started_at": "2026-10-29T19:29:22.496502Z",
+    "finished_at": "2026-10-29T19:35:36.751519Z",
+    "environment_setup": {
+        "started_at": "2026-10-29T19:29:22.548675Z",
+        "finished_at": "2026-10-29T19:29:25.136032Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-10-29T19:29:25.136079Z",
+        "finished_at": "2026-10-29T19:29:42.206417Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-10-29T19:29:42.206631Z",
+        "finished_at": "2026-10-29T19:35:11.243213Z"
+    },
+    "verifier": {
+        "started_at": "2026-10-29T19:35:11.968765Z",
+        "finished_at": "2026-10-29T19:35:32.133900Z"
+    },
+    "step_results": null
+}

@@ -1,0 +1,17 @@
+{
+  "harness": "mini-swe-agent",
+  "version": "2.4.6",
+  "task_image": "alexgshaw/fix-git:20251031",
+  "image": "benchprobe/mini-swe-agent-2.4.6/alexgshaw/fix-git:20251031",
+  "used": true,
+  "candidate": "benchprobe/mini-swe-agent-2.4.6/alexgshaw/fix-git:20251031",
+  "reason": "pre-baked image verified",
+  "image_id": "sha256:8bfa6fe61b2d25f9f6e276410afe1eb256e628ce6c8ae7ff1a049903714beae2",
+  "task_image_id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+  "added_layers": 4,
+  "baked_at": "2026-10-29T22:43:32.132250483Z",
+  "recipe": null,
+  "skip_execs": [],
+  "skipped_execs": [],
+  "written_at": "2026-10-29T23:32:07.681614+00:00"
+}

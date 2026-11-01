@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from tests import ledger_fixtures as lf
 from tests.support import BenchTestCase
 
 from bench import results, settings
@@ -30,19 +31,23 @@ openrouter:
 
 REFERENCE = """\
 defaults:
-  direction: baseline_over_harness
+  direction: harness_over_baseline
   estimator: ratio_of_means
   tolerance: 1.5
   applies_to: ['anthropic:claude-*']
 consensus:
-  cost_per_trial: {low: 2.0, high: 3.0, source: consensus}
+  cost_per_trial: {low: 1/3, high: 1/2, source: consensus}
 arms:
   pi:
-    tokens_per_trial: {value: 3.1, source: S10}
+    tokens_per_trial: {value: 1/3.1, source: S10}
   strands:
     tolerance: 1.1
-    cost_per_trial: {value: 2.1, source: S8}
+    cost_per_trial: {value: 1/2.1, source: S8}
 """
+# The same figures as written before multiples were harness / baseline.
+REFERENCE_BASELINE_OVER_HARNESS = (REFERENCE.replace("harness_over_baseline", "baseline_over_harness")
+                                   .replace("{low: 1/3, high: 1/2,", "{low: 2.0, high: 3.0,")
+                                   .replace("{value: 1/3.1,", "{value: 3.1,").replace("{value: 1/2.1,", "{value: 2.1,"))
 
 YAML = """\
 dataset: terminal-bench@2.0
@@ -257,6 +262,24 @@ class SpendTests(ResultsTestCase):
         self.assertAlmostEqual(results._cost(price, 1000, 400, 10), (600 * 4 + 400 * 4 + 10 * 20) / 1e6)
         self.assertAlmostEqual(results._cost(price, 100, 400, 0), (400 * 4) / 1e6)  # fresh never negative
 
+    def test_cache_writes_from_the_harness_log_are_priced_at_their_rates(self) -> None:
+        # result.json holds no write counts; the trial folder's harness log does, as for the ledger.
+        cfg = self.load_test_config(YAML, pricing=lf.OPUS_PRICING_YAML, reference=REFERENCE)
+        calls = ((2, 0, 3000, 0, 400), (3, 2900, 500, 100, 250))
+        a = arm("cc", "claude-code", "anthropic", "claude-opus-5-5")
+        path = self.jobs / "cc" / "trial-w" / "result.json"
+        n_in, n_cache, n_out, exact = lf.write_cache_log(path.parent, "claude-code", calls)
+        path.write_text(json.dumps(trial(n_in=n_in, n_cache=n_cache, n_out=n_out, cost_usd=exact, model_usage={
+            "claude-opus-5-5": usage(n_in, n_cache, n_out, exact)})), encoding="utf-8", newline="\n")
+        row = results.read_trial(path, cfg, a)
+        assert row is not None
+        self.assertAlmostEqual(row["computed_cost"], exact, places=12)
+        self.assertAlmostEqual(results.spend(row), exact, places=12)
+        price = cfg.price("anthropic", "claude-opus-5-5")
+        assert price is not None
+        self.assertAlmostEqual(results._cost(price, 10000, 6000, 100, 3000, 500),
+                               (500 * 4.0 + 6000 * 0.2 + 3000 * 5.0 + 500 * 8.0 + 100 * 20.0) / 1e6)
+
 
 class RewardTests(ResultsTestCase):
     def test_sandbox_failure_reward_is_invalid(self) -> None:
@@ -424,8 +447,8 @@ class CompareTests(ResultsTestCase):
                               family="pi"), 1_000_000, failures=3)
         (row,) = results.compare(self.cfg, [base, pi], "claude-code")
         self.assertEqual(row["family"], "pi")
-        self.assertAlmostEqual(row["tokens_multiple"], 3.1)   # setup failures do not inflate it
-        self.assertEqual(row["published_tokens"]["value"], 3.1)
+        self.assertAlmostEqual(row["tokens_multiple"], 1 / 3.1)   # pi / claude-code; setup failures do not shrink it
+        self.assertEqual(row["published_tokens"]["value"], 1 / 3.1)
         self.assertEqual(row["tokens_verdict"], "in line")
         self.assertEqual(row["excluded"], 3)
         self.assertEqual(row["baseline_excluded"], 0)
@@ -435,14 +458,26 @@ class CompareTests(ResultsTestCase):
         base = self.summary(arm("claude-code", "claude-code", "anthropic", "claude-opus-5-5"), 3_000_000)
         strands = self.summary(arm("strands", "strands", "anthropic", "claude-opus-5-5"), 1_250_000)
         (row,) = results.compare(self.cfg, [base, strands], "claude-code")
-        self.assertAlmostEqual(row["cost_multiple"], 2.4)
-        self.assertEqual(row["cost_verdict"], "higher")       # 2.4 > 2.1 * 1.1
+        self.assertAlmostEqual(row["cost_multiple"], 1 / 2.4)
+        self.assertEqual(row["cost_verdict"], "lower")        # 1/2.4 < (1/2.1) / 1.1: relatively cheaper
+
+    def test_a_reference_written_baseline_over_harness_reads_the_same(self) -> None:
+        old = self.load_test_config(YAML, pricing=PRICING, reference=REFERENCE_BASELINE_OVER_HARNESS)
+        base = self.summary(arm("claude-code", "claude-code", "anthropic", "claude-opus-5-5"), 3_000_000)
+        others = [self.summary(arm("strands", "strands", "anthropic", "claude-opus-5-5"), 1_250_000),
+                  self.summary(arm("pi", "pi", "anthropic", "claude-opus-5-5"), 1_000_000),
+                  self.summary(arm("t2", "terminus-2", "anthropic", "claude-opus-5-5"), 2_500_000)]
+        new_rows = results.compare(self.cfg, [base, *others], "claude-code")
+        self.assertEqual(results.compare(old, [base, *others], "claude-code"), new_rows)
+        t2 = next(r for r in new_rows if r["family"] == "terminus-2")
+        self.assertEqual((t2["published_cost"]["low"], t2["published_cost"]["high"]), (1 / 3, 0.5))
+        self.assertEqual(t2["cost_verdict"], "higher")  # 2.5/3 against the published 0.333-0.5
 
     def test_verdicts_withheld_for_non_claude_models(self) -> None:
         base = self.summary(arm("claude-code", "claude-code", "openrouter", DEEPSEEK), 3_100_000)
         pi = self.summary(arm("pi", "pi", "openrouter", DEEPSEEK), 1_000_000)
         (row,) = results.compare(self.cfg, [base, pi], "claude-code")
-        self.assertAlmostEqual(row["tokens_multiple"], 3.1)
+        self.assertAlmostEqual(row["tokens_multiple"], 1 / 3.1)
         self.assertIsNone(row["tokens_verdict"])
         self.assertIsNone(row["cost_verdict"])
         self.assertIn("Claude models", row["verdict_note"])

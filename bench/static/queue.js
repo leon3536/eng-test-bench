@@ -316,7 +316,8 @@
     const spend = run && isNum(run.spend_usd) ? run.spend_usd : a.spend_usd;
     const budget = run && isNum(run.budget_usd) ? run.budget_usd : a.budget_usd;
     const floor = spendFloor(run);
-    if (!changed('queue:live', [a.id, a.status, run && run.status, spend, budget, arms]) && box.firstChild) return;
+    const sig = [a.id, a.status, a.message, run && run.status, spend, budget, arms];
+    if (!changed('queue:live', sig) && box.firstChild) return;
     const done = sum(arms, (x) => x.trials_done);
     const total = sum(arms, (x) => x.trials_total);
     const inFlight = arms.some((x) => isNum(x.trials_running)) ? sum(arms, (x) => x.trials_running) : null;
@@ -343,8 +344,12 @@
         x.trials_unmeasured > 0 && h('small', {class: 'warn-text'}, `${x.trials_unmeasured} without usage (spend not counted)`),
         x.cleanup_pending && tag('containers may remain', 'warn')))),
       !run && note(a.status === 'starting'
-        ? 'Starting: the queue checks this version once more before its run begins.'
-        : 'The run shows here with the next poll.'));
+        // While it builds the run's missing pre-baked images first (prebake.auto_build), the item says how far it is.
+        ? a.message || 'Starting: the queue checks this version once more before its run begins.'
+        : 'The run shows here with the next poll.'),
+      !run && a.status === 'starting' && /pre-baked images/.test(a.message || '') && h('div', {class: 'actions'},
+        h('button', {type: 'button', class: 'btn ghost small', onclick: () => openDrawer('images')},
+          'IMAGES ', h('span', {class: 'arrow'}, '›'))));
   }
 
   async function cancelActive(button) {

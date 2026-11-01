@@ -33,18 +33,22 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from . import fsutil, settings
+from . import fsutil, settings, stats
 from .harnesses import is_import_path
-from .settings import Config, ConfigError, RunSettings
+from .settings import PREBAKE_MODES, SCHEDULE_TASKS, SCHEDULES, SETUP_TIMEOUT_AUTO, Config, ConfigError, RunSettings
 from .spec import (
     ARM_KEYS,
+    OPTIONAL_RUN_KEYS,
     RUN_KEYS,
     normalized_from_config,
     plain_json,
+    race_peak,
+    reused_tasks,
     run_dict,
     spec_from_design,
     spec_hash,
     structure_problems,
+    unresolved,
 )
 
 RUN_EFFORTS = ("low", "medium", "high", "xhigh", "max", "omit")
@@ -128,13 +132,27 @@ class RunIn(_Strict):
     per_trial_cap_usd: float | None = Field(default=None, gt=0)
     max_turns: int | None = Field(default=None, ge=1)
     timeout_multiplier: float | None = Field(default=None, gt=0)
+    prebake: Literal["off", "prefer", "require"] | None = None
+    setup_timeout_multiplier: Literal["auto"] | float | None = None
+    env_build_timeout_multiplier: float | None = Field(default=None, gt=0)
+    schedule: Literal["arms", "tasks"] | None = None
+    max_containers: int | None = Field(default=None, ge=1)
 
-    @field_validator("parallel_arms", "n_concurrent", "effort", "timeout_multiplier", mode="before")
+    @field_validator("parallel_arms", "n_concurrent", "effort", "timeout_multiplier", "prebake",
+                     "setup_timeout_multiplier", "env_build_timeout_multiplier", "schedule", "max_containers",
+                     mode="before")
     @classmethod
     def _not_null(cls, value: Any) -> Any:
         # For the two caps null means "none"; for these it would mean nothing.
         if value is None:
             raise ValueError("leave this field out to use the profile default; null is not a value here")
+        return value
+
+    @field_validator("setup_timeout_multiplier")
+    @classmethod
+    def _positive_multiplier(cls, value: Any) -> Any:
+        if value != SETUP_TIMEOUT_AUTO and not value > 0:
+            raise ValueError("must be auto or a number above 0")
         return value
 
 
@@ -144,6 +162,7 @@ class DesignSpecIn(_Strict):
     baseline_arm: str | None = None
     run: RunIn
     arms: list[ArmIn]
+    reuse: Literal["off", "measured"] = "off"
 
 
 class DesignMetaIn(BaseModel):
@@ -189,12 +208,14 @@ DESIGN_SPEC_SCHEMA: dict[str, Any] = {
                 },
                 "parallel_arms": {
                     "type": "integer",
-                    "description": "Arms (Harbor jobs) running at once, 1-12. Omit for the profile default.",
+                    "description": "schedule arms: arms (Harbor jobs) running at once, 1-12. Omit for the profile "
+                                   "default.",
                 },
                 "n_concurrent": {
                     "type": "integer",
-                    "description": "Trials at once inside each arm, 1-8. Omit for the profile default. "
-                                   "parallel_arms x n_concurrent is the peak Docker container count.",
+                    "description": "Trials at once inside each arm's Harbor job, 1-8. Omit for the profile "
+                                   "default. Under schedule arms, parallel_arms x n_concurrent is the peak Docker "
+                                   "container count.",
                 },
                 "effort": {
                     "type": "string", "enum": list(RUN_EFFORTS),
@@ -213,6 +234,37 @@ DESIGN_SPEC_SCHEMA: dict[str, Any] = {
                 "timeout_multiplier": {
                     "type": "number",
                     "description": "Task timeout multiplier, normally 1.0. Omit for the profile default.",
+                },
+                "prebake": {
+                    "type": "string", "enum": list(PREBAKE_MODES),
+                    "description": "How arms use pre-baked harness images (the harness installed in the task image "
+                                   "once, so trials skip a 0.5-9 minute setup). prefer: use them, stock setup "
+                                   "where one is missing; require: a trial without its image fails as infra; off: "
+                                   "always stock setup. Not part of what is measured. Omit for the profile "
+                                   "default.",
+                },
+                "setup_timeout_multiplier": {
+                    "type": ["string", "number"],
+                    "description": "auto, or a multiplier for Harbor's 360 s harness setup limit. auto doubles it "
+                                   "only for arms that may run stock setups. Omit for the profile default.",
+                },
+                "env_build_timeout_multiplier": {
+                    "type": "number",
+                    "description": "Multiplier for the task image pull/build limit, normally 1.0. Omit for the "
+                                   "profile default.",
+                },
+                "schedule": {
+                    "type": "string", "enum": list(SCHEDULES),
+                    "description": "tasks: one task at a time, every arm racing on it at once (its pre-baked "
+                                   "images built just before and removed after, so the disk holds one task's "
+                                   "images); arms: each arm as one Harbor job over all its tasks, parallel_arms at "
+                                   "a time. Not part of what is measured. Omit for the profile default.",
+                },
+                "max_containers": {
+                    "type": "integer",
+                    "description": "schedule tasks: trial containers at once in a task's race (more arms race as "
+                                   "this many, then the rest). At most design_limits.max_containers. Omit for the "
+                                   "profile default.",
                 },
             },
         },
@@ -257,6 +309,15 @@ DESIGN_SPEC_SCHEMA: dict[str, Any] = {
                     },
                 },
             },
+        },
+        "reuse": {
+            "type": "string", "enum": ["off", "measured"],
+            "description": "measured: each arm skips every task the ledger already holds `attempts` usable trials "
+                           "of for the same configuration (same cell, harness version pinned to an exact release or "
+                           "bundled with Harbor, same task content), so the run only fills gaps. Saving lists what "
+                           "each arm runs and the trials it reuses. Default off. In a saved version an arm's tasks "
+                           "leave out those in spec.reused; for a new version list every task you want measured, "
+                           "as asked for.",
         },
     },
 }
@@ -311,7 +372,8 @@ def normalize(cfg: Config, spec_in: DesignSpecIn | Mapping[str, Any]) -> dict[st
         spec_in = DesignSpecIn.model_validate(spec_in)
     families = _families(cfg)
     given = spec_in.run.model_fields_set
-    run = run_dict(RunSettings(**{k: getattr(spec_in.run if k in given else cfg.run, k) for k in RUN_KEYS}))
+    run = run_dict(RunSettings(**{k: getattr(spec_in.run if k in given else cfg.run, k)
+                                  for k in RUN_KEYS + OPTIONAL_RUN_KEYS}))
     arms = []
     for arm in spec_in.arms:
         family = families.get(arm.agent)
@@ -331,7 +393,7 @@ def normalize(cfg: Config, spec_in: DesignSpecIn | Mapping[str, Any]) -> dict[st
             "options": {k: copy.deepcopy(arm.options[k]) for k in sorted(arm.options)},
             "tasks": None if arm.tasks is None else _in_order(arm.tasks, spec_in.tasks),
         })
-    return {
+    spec = {
         "dataset": cfg.dataset,
         "tasks": list(spec_in.tasks),
         "attempts": spec_in.attempts,
@@ -339,6 +401,21 @@ def normalize(cfg: Config, spec_in: DesignSpecIn | Mapping[str, Any]) -> dict[st
         "run": run,
         "arms": arms,
     }
+    # Unresolved: reuse.resolve fills spec.reused from the ledger before it is saved or checked.
+    return with_reuse(spec, spec_in.reuse)
+
+
+def with_reuse(spec: Mapping[str, Any], mode: str) -> dict[str, Any]:
+    """spec as asked for, with reuse set to mode ("off" or "measured") and
+    nothing reused yet."""
+    out = unresolved(spec)
+    out.pop("reuse", None)
+    out.pop("reused", None)
+    if mode == "measured":
+        out.update(reuse="measured", reused={})
+    elif mode != "off":
+        raise ValueError("reuse must be off or measured")
+    return out
 
 
 def _without_prefix(cfg: Config, provider: str, model: str) -> str:
@@ -361,26 +438,32 @@ def _in_order(subset: list[str], tasks: list[str]) -> list[str]:
 
 def to_input(spec: Mapping[str, Any]) -> dict[str, Any]:
     """A NormalizedSpec in DesignSpecIn form (no dataset, no derived family),
-    for editors and for handing a stored or suggested spec back as input."""
+    for editors and for handing a stored or suggested spec back as input.
+    Reused tasks go back into their arms, so saving resolves them afresh."""
     run = dict(spec["run"])
     if run.get("effort") not in RUN_EFFORTS:
         # A profile may run an effort the design input cannot name (validate
         # allows the profile's own); left out, normalize fills it back in.
         run.pop("effort", None)
-    return {
+    out = {
         "tasks": list(spec["tasks"]),
         "attempts": spec["attempts"],
         "baseline_arm": spec["baseline_arm"],
         "run": run,
-        "arms": [{k: copy.deepcopy(a[k]) for k in ARM_KEYS if k != "family"} for a in spec["arms"]],
+        "arms": [{k: copy.deepcopy(a[k]) for k in ARM_KEYS if k != "family"} for a in unresolved(spec)["arms"]],
     }
+    if spec.get("reuse"):
+        out["reuse"] = spec["reuse"]
+    return out
 
 
-def design_from_config(cfg: Config, mode_name: str, arm_names: list[str] | None) -> dict[str, Any]:
-    """A LAUNCH-tab selection as a design spec; None picks the enabled arms."""
+def design_from_config(cfg: Config, mode_name: str, arm_names: list[str] | None,
+                       reuse: str = "off") -> dict[str, Any]:
+    """A LAUNCH-tab selection as a design spec; None picks the enabled arms.
+    With reuse "measured", reuse.resolve still has to fill in the trials."""
     if arm_names is None:
         arm_names = [a.name for a in cfg.arms if a.enabled]
-    return normalized_from_config(cfg, mode_name, arm_names)
+    return with_reuse(normalized_from_config(cfg, mode_name, arm_names), reuse)
 
 
 def design_from_run(run: Mapping[str, Any]) -> dict[str, Any]:
@@ -487,12 +570,22 @@ def validate(cfg: Config, spec: Any) -> dict[str, Any]:
 
 
 def peak_containers(spec: Mapping[str, Any]) -> int:
-    """The most trial containers that can run at once: the parallel_arms
-    busiest arms, each running min(n_concurrent, its trials)."""
+    """The most trial containers that can run at once: under schedule tasks,
+    the busiest task's race (at most run.max_containers); under arms, the
+    parallel_arms busiest arms, each running min(n_concurrent, its trials)."""
     run = spec["run"]
+    if run.get("schedule", settings.RUN_DEFAULTS["schedule"]) == SCHEDULE_TASKS:
+        return race_peak(run["n_concurrent"], run.get("max_containers", settings.RUN_DEFAULTS["max_containers"]),
+                         spec["attempts"], [_arm_tasks(spec, a) for a in spec["arms"]])
     per_arm = sorted((min(run["n_concurrent"], len(_arm_tasks(spec, a)) * spec["attempts"])
                       for a in spec["arms"]), reverse=True)
     return sum(per_arm[: max(0, run["parallel_arms"])])
+
+
+def _peak_rule(run: Mapping[str, Any]) -> str:
+    if run.get("schedule", settings.RUN_DEFAULTS["schedule"]) == SCHEDULE_TASKS:
+        return "the arms racing on one task, at most run.max_containers"
+    return "parallel_arms x n_concurrent"
 
 
 def trial_count(spec: Mapping[str, Any]) -> int:
@@ -546,6 +639,14 @@ def _check(cfg: Config, spec: Mapping[str, Any], problems: list[str], warnings: 
         problems.append("run.max_turns must be 1 or more, or null for none")
     if not 0 < run["timeout_multiplier"] <= MAX_TIMEOUT_MULTIPLIER:
         problems.append(f"run.timeout_multiplier must be above 0 and at most {MAX_TIMEOUT_MULTIPLIER:g}")
+    setup = run.get("setup_timeout_multiplier", SETUP_TIMEOUT_AUTO)
+    if setup != SETUP_TIMEOUT_AUTO and not 0 < setup <= MAX_TIMEOUT_MULTIPLIER:
+        problems.append(f"run.setup_timeout_multiplier must be auto, or above 0 and at most "
+                        f"{MAX_TIMEOUT_MULTIPLIER:g}")
+    if not 0 < run.get("env_build_timeout_multiplier", 1.0) <= MAX_TIMEOUT_MULTIPLIER:
+        problems.append(f"run.env_build_timeout_multiplier must be above 0 and at most {MAX_TIMEOUT_MULTIPLIER:g}")
+    if not 1 <= run.get("max_containers", settings.RUN_DEFAULTS["max_containers"]) <= limits.max_containers:
+        problems.append(f"run.max_containers must be from 1 to {limits.max_containers} (designs.max_containers)")
 
     if spec["dataset"] != cfg.dataset:
         problems.append(f"The design is for {spec['dataset']}, but this profile runs {cfg.dataset}")
@@ -586,7 +687,8 @@ def _check(cfg: Config, spec: Mapping[str, Any], problems: list[str], warnings: 
                 settings.check_model_spec(name, arm["options"], provider.model_prefix + arm["model"])
             except ConfigError as exc:
                 problems.append(str(exc))
-        if arm["tasks"] is not None:
+        # An empty list is an arm whose every task is reused, which runs nothing on purpose.
+        if arm["tasks"] is not None and (arm["tasks"] or not reused_tasks(spec, name)):
             _check_arm_tasks(label, list(arm["tasks"]), tasks, problems)
         denied = _denied_options(arm["options"])
         if denied:
@@ -603,17 +705,43 @@ def _check(cfg: Config, spec: Mapping[str, Any], problems: list[str], warnings: 
     baseline = spec["baseline_arm"]
     if baseline is not None and baseline not in {a["name"] for a in arms}:
         problems.append(f"baseline_arm '{baseline}' is not one of the design's arms")
+    if spec.get("reuse"):
+        _check_reused(spec, problems)
+        if arms and tasks and trial_count(spec) == 0:
+            problems.append("Nothing to run: the ledger already holds enough usable trials of every task for "
+                            "every arm")
+            plannable = False
 
     if arms and tasks:
         peak = peak_containers(spec)
         if peak > limits.max_containers:
-            problems.append(f"Up to {peak} task containers would run at once (parallel_arms x n_concurrent); "
+            problems.append(f"Up to {peak} task containers would run at once ({_peak_rule(run)}); "
                             f"designs.max_containers is {limits.max_containers}")
         elif peak > limits.warn_containers:
             warnings.append(f"Up to {peak} task containers would run at once. Above {limits.warn_containers}, "
                             "Docker Desktop may run short of memory and fail trials as infrastructure errors")
     _design_warnings(cfg, spec, warnings, unknown=set(unknown))
     return plannable
+
+
+def _check_reused(spec: Mapping[str, Any], problems: list[str]) -> None:
+    """spec.reused against the arms: a task is either run or reused, never both."""
+    by_name = {a["name"]: a for a in spec["arms"]}
+    for name in spec["reused"]:
+        arm = by_name.get(name)
+        if arm is None:
+            problems.append(f"spec.reused names an arm the design does not have: {name}")
+            continue
+        reused = reused_tasks(spec, name)
+        outside = [t for t in reused if t not in spec["tasks"]]
+        if outside:
+            problems.append(f"Arm '{name}': reused tasks that are not in the design's task list: {_short(outside)}")
+        both = [t for t in reused if t in _arm_tasks(spec, arm)]
+        if both:
+            problems.append(f"Arm '{name}': tasks both reused and run: {_short(both)}")
+        repeated = _duplicates(reused)
+        if repeated:
+            problems.append(f"Arm '{name}': tasks reused more than once: {_short(repeated)}")
 
 
 def _check_arm_tasks(label: str, subset: list[str], tasks: list[str], problems: list[str]) -> None:
@@ -648,7 +776,14 @@ def _design_warnings(cfg: Config, spec: Mapping[str, Any], warnings: list[str],
         warnings.append(f"Arms use {len(models)} models ({', '.join(models)}). Pairs form only within one model "
                         "and provider, so each comparison needs its baseline on the same model")
     for arm in arms:
-        if arm["tasks"] is not None:
+        reused = reused_tasks(spec, arm["name"])
+        if reused and not _arm_tasks(spec, arm):
+            warnings.append(f"Arm '{arm['name']}' is skipped: the ledger already holds enough usable trials of "
+                            f"all {len(reused)} of its tasks")
+        elif reused:
+            warnings.append(f"Arm '{arm['name']}' runs {len(_arm_tasks(spec, arm))} of the design's {len(tasks)} "
+                            f"tasks and reuses {len(reused)} measured in earlier runs")
+        elif arm["tasks"] is not None:
             warnings.append(f"Arm '{arm['name']}' runs {len(arm['tasks'])} of the design's {len(tasks)} tasks")
     position = {t: i for i, t in enumerate(cfg.tasks)}
     seeded = [position[t] for t in tasks if t in position]
@@ -669,8 +804,15 @@ def _plan(cfg: Config, spec: Mapping[str, Any], problems: list[str], warnings: l
     except Exception as exc:
         problems.append(f"The run could not be planned: {exc}")
         return None
+    # Pre-baked images that are not ready under run.prebake require block a launch, not a design: the queue
+    # holds such an item until they are built (or builds them first with prebake.auto_build).
+    held = set(plan.get("image_problems") or [])
     for p in plan.get("problems") or []:
-        if p not in problems:
+        if p in held:
+            text = f"{p}. The queue holds this design until they are ready"
+            if text not in warnings:
+                warnings.append(text)
+        elif p not in problems:
             problems.append(p)
     for w in plan.get("warnings") or []:
         if w not in warnings:
@@ -786,12 +928,14 @@ def _diff(a: Any, b: Any, path: str) -> list[dict[str, Any]]:
 
 
 def config_fingerprint(cfg: Config) -> str:
-    """Changes whenever the effective config or the prices change, so a cached
-    design check can be shown as stale."""
+    """Changes whenever the effective config, the prices or the published
+    figures change, the way multiples read (a check's estimate quotes them)
+    or the task scope its pairs are counted on, so a cached design check can
+    be shown as stale."""
     pricing = {p: {m: dataclasses.asdict(price) for m, price in models.items()} for p, models in cfg.pricing.items()}
     # default=str: YAML turns an unquoted date into a date object.
-    text = json.dumps([cfg.effective, pricing], sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-                      default=str)
+    text = json.dumps([cfg.effective, pricing, cfg.reference, stats.DIRECTION, list(cfg.tasks or [])], sort_keys=True,
+                      separators=(",", ":"), ensure_ascii=False, default=str)
     return "sha256:" + fsutil.sha256_hex(text)
 
 
@@ -1252,6 +1396,9 @@ def check_figures(check: Mapping[str, Any] | None) -> dict[str, Any]:
         "checked_at": check.get("checked_at"),
         "config_fingerprint": check.get("config_fingerprint"),
         "ledger_fingerprint": check.get("ledger_fingerprint"),
+        "reuse_fingerprint": check.get("reuse_fingerprint"),
+        # An estimate from before task races (no schedule in it): shown as stale, see server._stale.
+        "estimate_before_races": isinstance(estimate.get("run"), Mapping) and "schedule" not in estimate["run"],
     }
 
 
@@ -1357,10 +1504,11 @@ class DraftWriter:
     draft versions, always as author "assistant", and reads designs. It has
     no way to approve, queue, archive or record runs."""
 
-    __slots__ = ("_store", "_cfg_getter", "_conversation_id", "_queue_status")
+    __slots__ = ("_store", "_cfg_getter", "_conversation_id", "_queue_status", "_rows")
 
     def __init__(self, store: DesignStore, cfg_getter: Callable[[], Config], conversation_id: str,
-                 queue_status: Callable[[], Mapping[tuple[str, int], str]] | None = None) -> None:
+                 queue_status: Callable[[], Mapping[tuple[str, int], str]] | None = None,
+                 rows: Callable[[], list[dict[str, Any]]] | None = None) -> None:
         # Required: a draft without its conversation loses where it came from.
         if not (isinstance(conversation_id, str) and _CONVERSATION_ID.fullmatch(conversation_id)):
             raise ValueError("Not a conversation id")
@@ -1368,6 +1516,7 @@ class DraftWriter:
         self._cfg_getter = cfg_getter
         self._conversation_id = conversation_id
         self._queue_status = queue_status
+        self._rows = rows  # the ledger's analysis rows, for drafts that reuse measured trials
 
     @property
     def conversation_id(self) -> str:
@@ -1376,15 +1525,23 @@ class DraftWriter:
     def create_draft(self, meta_in: DesignMetaIn | Mapping[str, Any],
                      spec_in: DesignSpecIn | Mapping[str, Any]) -> dict[str, Any]:
         cfg = self._cfg_getter()
-        spec = normalize(cfg, spec_in)
+        spec = self._resolved(cfg, normalize(cfg, spec_in))
         return self._store.create(cfg, meta_in, spec, "assistant", self._conversation_id)
 
     def add_draft_version(self, design_id: str, base_version: int, meta_in: DesignMetaIn | Mapping[str, Any],
                           spec_in: DesignSpecIn | Mapping[str, Any]) -> dict[str, Any]:
         cfg = self._cfg_getter()
-        spec = normalize(cfg, spec_in)
+        spec = self._resolved(cfg, normalize(cfg, spec_in))
         return self._store.add_version(cfg, design_id, base_version, meta_in, spec, "assistant",
                                        self._conversation_id)
+
+    def _resolved(self, cfg: Config, spec: dict[str, Any]) -> dict[str, Any]:
+        if not spec.get("reuse"):
+            return spec
+        if self._rows is None:
+            raise ValueError("Reusing measured trials needs the ledger, and this draft writer cannot read it")
+        from . import reuse  # imported here: reuse imports estimates, which imports this module
+        return reuse.resolve(cfg, spec, self._rows())
 
     def list(self, include_archived: bool = False) -> list[dict[str, Any]]:
         return self._store.list(include_archived, self._queue())

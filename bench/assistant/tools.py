@@ -30,7 +30,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from .. import coverage, datasets, designs, estimates, harnesses, schemas, settings
+from .. import coverage, datasets, designs, estimates, harnesses, reuse, schemas, settings
 from ..designs import DESIGN_SPEC_SCHEMA, DesignNotFound, DesignSpecIn, VersionConflict
 from ..fsutil import canonical_json, sha256_hex
 from ..spec import run_dict
@@ -95,11 +95,13 @@ TOOL_DEFS: list[dict[str, Any]] = [
     ),
     _tool(
         "get_coverage",
-        "Coverage of one model across every stored run, however it was launched: for each harness family, its "
+        "Coverage of one model across every stored run, however it was launched, on the REPORT tab's task scope "
+        "(the profile's task file; scope says which): for each harness family, its "
         "cost-valid trials, distinct tasks, tasks paired with the baseline, infrastructure failures, pass rate with "
-        "interval, the cost and token multiples against the baseline (baseline divided by arm; 2.0 means the arm "
-        "uses half) with 90% intervals, the published figure and a verdict, and the paired tasks still needed for "
-        "the precision target. Also returns ranked gaps. Call it before proposing any run.",
+        "interval, the cost and token multiples against the baseline (arm divided by baseline; 0.5 means the arm "
+        "uses half, 2.0 twice as much) with 90% intervals, the published figure in the same terms and a verdict, and "
+        "the paired tasks still needed for the precision target. Also returns ranked gaps. Call it before proposing "
+        "any run.",
         {"provider": {"type": "string"},
          "model": {"type": "string", "description": "Model id as configured, e.g. deepseek/deepseek-v4.1-flash."},
          "baseline_family": {"type": "string", "description": "Default: the family of the profile's baseline arm."},
@@ -627,6 +629,12 @@ def _estimate_cost(ctx: ToolContext, args: EstimateCostIn) -> _Result:
             spec = designs.normalize(cfg, args.spec)
         except ValueError as exc:
             raise ToolError("invalid_design", str(exc)) from None
+        try:
+            # Reuse resolved as saving would resolve it, so the estimate covers only the trials that would run.
+            spec = reuse.materialize(cfg, spec, ctx.ledger.rows)
+        except Exception as exc:
+            raise ToolError("ledger_unavailable", f"The trials to reuse could not be looked up in the ledger, so "
+                                                  f"there is no estimate: {exc}") from None
         label = "the spec"
     else:
         try:

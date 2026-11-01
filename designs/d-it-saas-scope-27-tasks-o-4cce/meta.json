@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "id": "d-it-saas-scope-27-tasks-o-4cce",
+  "title": "IT / SaaS scope: 27 tasks, Opus 5.5, 5 harnesses",
+  "created_at": "2026-10-29T21:38:06+00:00",
+  "updated_at": "2026-10-30T21:55:38+00:00",
+  "latest_version": 5,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-29T21:38:06+00:00",
+      "spec_hash": "sha256:d1795cd2708441ca920460908687a894487cbe730b3737f7ac7909475a6ae4af",
+      "change_note": "",
+      "approved_at": "2026-10-29T21:38:16+00:00",
+      "runs": [
+        "20261029-143816-it-saas-scope-27-v1"
+      ]
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T03:00:12+00:00",
+      "spec_hash": "sha256:5333478c7bd8eb1ca6af2b288699ec06ea1b4405eaa34f64aad3d02742b1f424",
+      "change_note": "Reuse on. 4 harnesses fill their gaps now (4 x 2 at once). Claude Code: only its 14 measured tasks, all reused; its other 13 run later on pre-baked images.",
+      "approved_at": "2026-10-30T03:00:17+00:00",
+      "runs": [
+        "20261029-200017-it-saas-scope-27-v2"
+      ]
+    },
+    "3": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T03:05:56+00:00",
+      "spec_hash": "sha256:c690622442db45e00c721901720f7875ed3bf0ee902018e475b0878f236bd36d",
+      "change_note": "Terminus-2 only: its preflight failed in v2 because Docker had just restarted. Reuse on; 4 at once.",
+      "approved_at": "2026-10-30T03:05:57+00:00",
+      "runs": [
+        "20261029-214900-it-saas-scope-27-v3"
+      ]
+    },
+    "4": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T16:28:12+00:00",
+      "spec_hash": "sha256:534f68e6be81b565cf61e6a4a9a3d9cf0ef7a7f45374b61164b911cc189fe0be",
+      "change_note": "Rerun the 29 setup timeouts (Claude Code 13, mini-swe-agent 8, Strands 8) on pre-baked images, require mode. Reuse on.",
+      "approved_at": "2026-10-30T17:17:16+00:00",
+      "runs": [
+        "20261030-101721-it-saas-scope-27-v4"
+      ]
+    },
+    "5": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T21:32:48+00:00",
+      "spec_hash": "sha256:537c90b9d7ca0404025588690dce74614f78145f48004ceb98f21ef3421821c3",
+      "change_note": "Rerun the 4 timed-out trials (excluded by policy: a timeout is not a result), on pre-baked images.",
+      "approved_at": "2026-10-30T21:32:48+00:00",
+      "runs": [
+        "20261030-145538-it-saas-scope-27-v5"
+      ]
+    }
+  }
+}

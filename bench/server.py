@@ -49,26 +49,32 @@ from fastapi.responses import (
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 
-from . import checks, designs, estimates, extract, keys, report, results, schemas, settings
+from . import checks, designs, estimates, extract, keys, report, results, reuse, runs, schemas, settings
 from .assistant.types import SAVES_PER_TURN, ToolContext
+from .prebake import builder as prebake_builder
 from .coverage import ReadOnlyLedger
-from .designs import DesignNotFound, DesignStore, DraftWriter
+from .designs import DesignNotFound, DesignStore, DraftWriter, VersionConflict
 from .ledger import EXPORT_COLUMNS, Ledger, LedgerUnavailable
 from .runqueue import RunQueue
-from .runs import RunManager, plan
+from .runs import RunManager, plan, plan_spec
 from .settings import Config, ConfigError
-from .spec import structure_problems
+from .spec import RunSpec, normalized_from_config, spec_from_launch, structure_problems
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "bench_session"  # the cookie is COOKIE + "_" + port
 RUN_FIELDS = {"effort", "n_concurrent", "parallel_arms", "budget_usd", "per_trial_cap_usd",
-              "max_turns", "timeout_multiplier"}
+              "max_turns", "timeout_multiplier", "prebake", "setup_timeout_multiplier", "env_build_timeout_multiplier",
+              "schedule", "max_containers"}
 MODE_FIELDS = {"n_tasks", "n_attempts"}
 ARM_FIELDS = {"enabled", "provider", "model", "effort", "family"}
 
 BUSY = "A config file is busy (another program has it open). Try again."
 LEDGER_BUSY = "The ledger is busy or locked by another program; try again"
 QUEUE_ACTIVE = "The queue is active; pause it or add this run to the queue"
+BUILD_QUEUE_ACTIVE = ("The queue is active, and images are not built while it may start a run. Pause it first; "
+                      "with prebake.auto_build it builds what its next design needs by itself.")
+BUILD_RUN_ACTIVE = "A run is in progress. Images are not built during a run: a build slows its trials' containers."
+SELECTION_FIELDS = {"mode", "arms", "reuse", "design", "run", "tasks"}
 DESIGN_FILTERS = {"all": None, "draft": ("draft",), "approved": ("approved",),
                   "queued": ("queued", "running"), "ran": ("ran",), "archived": None}
 # TrialRow as the trials list returns it; a single trial adds usage and the raw JSON.
@@ -140,11 +146,21 @@ class State:
             raise
         self.reader = ReadOnlyLedger(self.ledger, lambda: self.cfg)
         self.designs = DesignStore(settings.DESIGNS_DIR)
+        # Pre-baked image builds: never during a run (this bench's, or any profile's holding its run lock).
+        self.builds = prebake_builder.BuildManager(run_active=lambda: not self.manager.is_idle())
+        self.builds.add_listener(lambda _build: checks.forget("prebake:"))
         # Lambdas, not the functions themselves, so a config reload and test
         # patches reach the queue too.
         self.queue = RunQueue(settings.QUEUE_FILE, self.manager, self.designs, lambda: self.cfg,
                               lambda: checks.docker_ok(), estimate_fn=self._queue_estimate,
-                              run_spend=lambda: self.manager.list())
+                              run_spend=lambda: self.manager.list(),
+                              reuse_drift=lambda cfg, spec: reuse.drift(cfg, spec, self.reader.rows()),
+                              images=prebake_builder.QueueImages(self.builds))
+        if isinstance(self.manager, RunManager):
+            # A task race builds through the IMAGES panel's manager, and keeps the images a waiting queue item
+            # will look for without building them itself (runs.images_needed).
+            self.manager.builds = self.builds
+            self.manager.keep_images = lambda cfg: runs.images_needed(cfg, self.queue.waiting_specs())
         # The queue registers its own listener; this one keeps a design's run
         # list right for any run that carries a design_ref.
         self.manager.add_listener(self._record_design_run)
@@ -241,7 +257,8 @@ class State:
             active_run=active_run,
             queue_snapshot=lambda: queue.view(),
             ledger=self.reader,
-            drafts=DraftWriter(self.designs, lambda: self.cfg, cid, queue_status=queue.version_statuses),
+            drafts=DraftWriter(self.designs, lambda: self.cfg, cid, queue_status=queue.version_statuses,
+                               rows=self.reader.rows),
             conversation_id=cid,
             spend=lambda: {},
             saves_left=[SAVES_PER_TURN],
@@ -255,19 +272,37 @@ class State:
         except Exception:  # an unavailable ledger: staleness then follows the config alone
             return None
 
+    def materialize(self, cfg: Config, spec: dict[str, Any], mode: str | None = None) -> dict[str, Any]:
+        """spec with its trials to reuse resolved against the ledger now
+        (reuse.resolve); the ledger is read only when reuse is on."""
+        return reuse.materialize(cfg, spec, self.reader.rows, mode)
+
+    def launch_spec(self, cfg: Config, mode_name: str, arm_names: list[str],
+                    reuse_mode: str) -> tuple[RunSpec, dict[str, Any] | None]:
+        """A LAUNCH-tab run as it would start now, and what it reuses."""
+        spec = normalized_from_config(cfg, mode_name, arm_names)
+        if reuse.check_mode(reuse_mode) == "off":
+            return spec_from_launch(spec, mode_name), None
+        rows = self.reader.rows()
+        spec = reuse.resolve(cfg, spec, rows, reuse_mode)
+        return spec_from_launch(spec, mode_name), reuse.summary(cfg, spec, rows)
+
     def check_spec(self, cfg: Config, spec: Any) -> dict[str, Any]:
-        """CheckResult: validation and plan, and the estimate when the ledger
-        can be read. Writes nothing."""
+        """CheckResult: validation and plan, and the estimate (and, for a
+        spec that reuses measured trials, what it reuses) when the ledger can
+        be read. Writes nothing."""
         validation = designs.validate(cfg, spec)
         out: dict[str, Any] = {
             "validation": {k: validation[k] for k in ("status", "problems", "warnings")},
             "plan": validation.get("plan"),
             "estimate": None,
             "estimate_note": None,
+            "reuse": None,
             "checked_at": _now(),
             "stale": False,
             "config_fingerprint": designs.config_fingerprint(cfg),
             "ledger_fingerprint": None,
+            "reuse_fingerprint": None,
         }
         if structure_problems(spec):
             out["estimate_note"] = "No estimate: the spec is not complete."
@@ -278,6 +313,16 @@ class State:
             out["estimate"] = estimates.estimate(cfg, spec, rows, validation.get("plan"))
         except Exception as exc:  # validation stands; only the figures need the ledger
             out["estimate_note"] = f"No estimate: {type(exc).__name__}: {exc}"
+        if spec.get("reuse"):
+            try:
+                rows = self.reader.rows()
+                out["reuse"] = reuse.summary(cfg, spec, rows)
+                out["reuse_fingerprint"] = reuse.fingerprint(rows)
+                # Advice, not a problem: the version still runs exactly what was approved.
+                out["validation"]["warnings"] += out["reuse"]["changes"]
+            except Exception as exc:
+                out["validation"]["warnings"].append(f"What this design reuses could not be checked against the "
+                                                     f"ledger: {type(exc).__name__}: {exc}")
         return out
 
     def record_check(self, cfg: Config, design_id: str, version: int, spec: Any) -> dict[str, Any]:
@@ -288,12 +333,29 @@ class State:
             _note(f"Could not save the check of {design_id} v{version}: {exc}")
         return check
 
-    def _stale(self, check: Any, cfg_fp: str, ledger_fp: str | None) -> bool:
+    def reuse_fingerprint(self) -> str | None:
+        try:
+            return reuse.fingerprint(self.reader.rows())
+        except Exception:  # an unavailable ledger, as for ledger_fingerprint
+            return None
+
+    def _stale(self, check: Any, cfg_fp: str, ledger_fp: str | None,
+               reuse_fp: Callable[[], str | None] = lambda: None) -> bool:
         if not isinstance(check, Mapping) or not check.get("checked_at"):
             return True
         if check.get("config_fingerprint") != cfg_fp:
             return True
-        return ledger_fp is not None and check.get("ledger_fingerprint") != ledger_fp
+        if ledger_fp is not None and check.get("ledger_fingerprint") != ledger_fp:
+            return True
+        # An estimate from before task races: the spec hash of a version without 'schedule' is unchanged, but it now
+        # runs as a task race, so that estimate's wall time is the arms schedule's.
+        if check.get("estimate_before_races") or designs.check_figures(check)["estimate_before_races"]:
+            return True
+        # A check of a spec that reuses trials also goes stale on an exclusion or an outcome change.
+        if check.get("reuse_fingerprint") is None:
+            return False
+        now = reuse_fp()
+        return now is not None and check["reuse_fingerprint"] != now
 
     def version_detail(self, design_id: str, version: int | None = None) -> dict[str, Any]:
         """VersionDetail, with a check that matches today's config and ledger:
@@ -301,7 +363,7 @@ class State:
         cfg = self.cfg
         doc = self.designs.version(design_id, version, self.queue.version_statuses())
         check = doc.get("check")
-        if self._stale(check, designs.config_fingerprint(cfg), self.ledger_fingerprint()):
+        if self._stale(check, designs.config_fingerprint(cfg), self.ledger_fingerprint(), self.reuse_fingerprint):
             check = self.record_check(cfg, doc["design_id"], doc["version"], doc["spec"])
         else:
             check = {**check, "stale": False}
@@ -325,6 +387,8 @@ class State:
         listed = self.designs.list(include_archived=which == "archived",
                                    queue_status=self.queue.version_statuses())
         cfg_fp, ledger_fp = designs.config_fingerprint(self.cfg), self.ledger_fingerprint()
+        # Read only when a listed check reuses trials.
+        reuse_now = self.reuse_fingerprint() if any(s.get("reuse_fingerprint") for s in listed) else None
         wanted = DESIGN_FILTERS[which]
         out = []
         for summary in listed:
@@ -335,7 +399,9 @@ class State:
             summary = dict(summary)
             summary["check_stale"] = summary.get("status") == "unreadable" or self._stale(
                 {"checked_at": summary.get("checked_at"), "config_fingerprint": summary.get("config_fingerprint"),
-                 "ledger_fingerprint": summary.get("ledger_fingerprint")}, cfg_fp, ledger_fp)
+                 "ledger_fingerprint": summary.get("ledger_fingerprint"),
+                 "reuse_fingerprint": summary.get("reuse_fingerprint"),
+                 "estimate_before_races": summary.get("estimate_before_races")}, cfg_fp, ledger_fp, lambda: reuse_now)
             out.append(summary)
         return out
 
@@ -344,12 +410,14 @@ class State:
     def shutdown(self) -> None:
         """Stop in order: the queue admits nothing more, the assistant's turn
         stops, the run manager stops a run in progress and removes its
-        containers, then the ledger closes. Safe to call again: a step that
+        containers, a pre-baked image build is cancelled (its staging tags
+        removed), then the ledger closes. Safe to call again: a step that
         finished is not repeated, and one a second Ctrl+C interrupted is."""
         steps: list[tuple[str, Callable[[], Any]]] = [
             ("queue", lambda: self.queue.shutdown()),
             ("assistant", lambda: self.assistant.shutdown() if self.assistant is not None else None),
             ("runs", lambda: self.manager.shutdown()),
+            ("builds", lambda: self.builds.shutdown()),
             ("ledger", lambda: self.ledger.close()),
         ]
         with self._stop_lock:
@@ -376,12 +444,16 @@ def config_view(cfg: Config) -> dict[str, Any]:
         "profile": settings.PROFILE_NAME,
         "dataset": cfg.dataset,
         "tasks": cfg.tasks,
+        # Where the task scope comes from: the REPORT tab compares on these tasks unless told otherwise.
+        "tasks_file": report.tasks_file(cfg),
         "providers": [asdict(p) for p in cfg.providers.values()],
         "modes": {k: asdict(m) for k, m in cfg.modes.items()},
         "run": asdict(cfg.run),
         "run_overridden": sorted((cfg.overrides.get("run") or {}).keys()),
         "modes_overridden": sorted((cfg.overrides.get("modes") or {}).keys()),
         "baseline_arm": cfg.baseline_arm,
+        # The REPORT tab's baseline model when it compares models (options.baseline.model overrides it).
+        "baseline_model": cfg.baseline_model,
         "arms": [
             {**asdict(a), "kind": a.kind, "overridden": a.name in arm_over,
              "model_warnings": schemas.model_warnings(a)}
@@ -638,6 +710,7 @@ def create_app(state: State) -> FastAPI:
     _report_routes(app, state)
     _design_routes(app, state)
     _queue_routes(app, state)
+    _prebake_routes(app, state)
     _assistant_routes(app, state)
     return app
 
@@ -693,8 +766,14 @@ def _safely(fn: Callable[[], Any], what: str) -> Any:
 
 def _ledger_block(state: State) -> dict[str, Any]:
     status = state.ledger.status()
+    try:
+        # Changes with every new trial, outcome and exclusion: what a LAUNCH plan that reuses trials depends on.
+        version = ".".join(str(v) for v in state.ledger.version()) if status["available"] else None
+    except Exception:  # busy for a moment: the plan is still checked again at launch (spec_hash)
+        version = None
     return {"available": status["available"], "error": status["error"], "trials": status["trials"],
-            "last_ingest_at": status["last_ingest_at"], "rescan_running": status["rescan"]["running"]}
+            "last_ingest_at": status["last_ingest_at"], "rescan_running": status["rescan"]["running"],
+            "version": version}
 
 
 def _assistant_block(state: State) -> dict[str, Any]:
@@ -704,6 +783,22 @@ def _assistant_block(state: State) -> dict[str, Any]:
     status = state.assistant.status()
     return {k: status.get(k) for k in ("enabled", "available", "reason", "today_usd", "daily_cap_usd",
                                        "active_turn")}
+
+
+def _prebake_block(state: State) -> dict[str, Any]:
+    """Builds for the dashboard's poll: the active one (this bench's, or
+    another process's holding the build lock), the latest, and a version that
+    changes when a build starts or ends, so LAUNCH plans again."""
+    builds = state.builds
+    elsewhere = builds.active_id is None and prebake_builder.build_active()
+    if elsewhere:
+        builds.refresh()  # a CLI build: its record shows its progress
+    latest = builds.summaries(limit=1)
+    active = next((b for b in latest if b["status"] == "running"), None)
+    last = latest[0] if latest else None
+    version = f"{last['id']}:{last['status']}:{last['finished_at']}" if last else ""
+    return {"active": active, "last": last, "elsewhere": elsewhere, "version": version,
+            "prefix": state.cfg.prebake.prefix, "auto_build": state.cfg.prebake.auto_build}
 
 
 def _state_routes(app: FastAPI, state: State) -> None:
@@ -720,6 +815,7 @@ def _state_routes(app: FastAPI, state: State) -> None:
             "ledger": _safely(lambda: _ledger_block(state), "ledger"),
             "queue": _safely(state.queue.summary, "queue"),
             "assistant": _safely(lambda: _assistant_block(state), "assistant"),
+            "prebake": _safely(lambda: _prebake_block(state), "prebake"),
         }
 
     @app.get("/api/schemas/{agent:path}")
@@ -847,8 +943,13 @@ def _run_routes(app: FastAPI, state: State) -> None:
         return [a.name for a in state.cfg.arms if a.enabled]
 
     @app.get("/api/plan")
-    def get_plan(mode: str, arms: str | None = None):
-        return plan(state.cfg, mode, arm_names(arms))
+    def get_plan(mode: str, arms: str | None = None,
+                 reuse_mode: Annotated[str, Query(alias="reuse")] = "off"):
+        if reuse_mode == "off":
+            return plan(state.cfg, mode, arm_names(arms))
+        cfg = state.cfg
+        run_spec, reused = state.launch_spec(cfg, mode, arm_names(arms), reuse_mode)
+        return {"mode": mode, **plan_spec(cfg, run_spec), "reuse": reused}
 
     @app.post("/api/runs")
     def start_run(body: Body):
@@ -866,7 +967,19 @@ def _run_routes(app: FastAPI, state: State) -> None:
         names = body.get("arms") or arm_names(None)
         if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
             raise ValueError("arms must be a list of arm names")
-        return state.manager.start(cfg, str(body.get("mode", "")), list(names))
+        reuse_mode = reuse.check_mode(body.get("reuse", "off"))
+        if reuse_mode == "off":
+            return state.manager.start(cfg, str(body.get("mode", "")), list(names))
+        # Resolved again now, so it must still be the plan the person confirmed.
+        expected = body.get("spec_hash")
+        if not isinstance(expected, str):
+            raise ValueError("spec_hash is required with reuse: send the spec_hash of the plan (GET /api/plan "
+                             "with reuse) that was confirmed")
+        run_spec, _reused = state.launch_spec(cfg, str(body.get("mode", "")), list(names), reuse_mode)
+        if run_spec.spec_hash != expected:
+            raise VersionConflict("The ledger changed since that plan was made, so the tasks to reuse differ. "
+                                  "Review the new plan and launch again.")
+        return state.manager.start_spec(cfg, run_spec)
 
     @app.post("/api/runs/{run_id}/cancel")
     def cancel_run(run_id: str):
@@ -939,13 +1052,16 @@ def _ledger_routes(app: FastAPI, state: State) -> None:
     def ledger_export(body: Body):
         _only(body, {"filters", "format"})
         fmt = body.get("format", "csv")
-        # Validated and queried here, before the response starts.
-        chunks = state.ledger.export_rows(report.parse_filters(body.get("filters")), fmt)
+        f = report.parse_filters(body.get("filters"))
+        # Validated and queried here, before the response starts. As the report export: the file name says
+        # which tasks it covers (the REPORT tab sends its task scope) and every row carries the filters.
+        chunks = state.ledger.export_rows(f, fmt, filters=report.filters_text(f))
+        name = f"ledger-{report.scope_label(report.task_scope(state.cfg, f))}-{_stamp()}"
         if fmt == "jsonl":
             return StreamingResponse(chunks, media_type="application/x-ndjson",
-                                     headers={"Content-Disposition": f'attachment; filename="ledger-{_stamp()}.jsonl"'})
+                                     headers={"Content-Disposition": f'attachment; filename="{name}.jsonl"'})
         return StreamingResponse(chunks, media_type="text/csv; charset=utf-8",
-                                 headers={"Content-Disposition": f'attachment; filename="ledger-{_stamp()}.csv"'})
+                                 headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
 
 
 def _report_routes(app: FastAPI, state: State) -> None:
@@ -970,10 +1086,13 @@ def _report_routes(app: FastAPI, state: State) -> None:
         f, o = _report_args(state, body, ("level",))
         level = body.get("level", "comparisons")
         rows = list(report.export_rows(state.ledger, state.cfg, f, o, level))
-        fingerprint = report.build_report(state.ledger, state.cfg, f, o)["provenance"]["fingerprint"]
-        short = str(fingerprint).split(":", 1)[-1][:8]
+        built = report.build_report(state.ledger, state.cfg, f, o)
+        short = str(built["provenance"]["fingerprint"]).split(":", 1)[-1][:8]
+        # The file name says which tasks it covers; every row carries the filters themselves.
+        tasks = report.scope_label(built["scope"])
         return Response(_csv_text(rows), media_type="text/csv; charset=utf-8",
-                        headers={"Content-Disposition": f'attachment; filename="bench-report-{short}-{level}.csv"'})
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="bench-report-{short}-{tasks}-{level}.csv"'})
 
     @app.post("/api/report/snapshots")
     def save_snapshot(body: Body):
@@ -991,7 +1110,10 @@ def _report_routes(app: FastAPI, state: State) -> None:
 
     @app.get("/api/report/snapshots/{snapshot_id}")
     def get_snapshot(snapshot_id: str):
-        return state.ledger.snapshot(snapshot_id)
+        # One saved before multiples were harness / baseline comes back converted, and says so.
+        saved = state.ledger.snapshot(snapshot_id)
+        saved["response"] = report.saved_report(saved["response"], saved["request"], state.cfg)
+        return saved
 
 
 def _design_routes(app: FastAPI, state: State) -> None:
@@ -1012,7 +1134,8 @@ def _design_routes(app: FastAPI, state: State) -> None:
     def create_design(body: Body):
         _only(body, {*META_FIELDS, "spec"})
         meta_in = _meta_in(body)
-        return save_new(meta_in, designs.normalize(state.cfg, _spec_input(body.get("spec"))))
+        cfg = state.cfg
+        return save_new(meta_in, state.materialize(cfg, designs.normalize(cfg, _spec_input(body.get("spec")))))
 
     @app.post("/api/designs/check")
     def check_design(body: Body):
@@ -1025,22 +1148,29 @@ def _design_routes(app: FastAPI, state: State) -> None:
         except ValueError as exc:
             problems = [str(exc)]
         else:
-            return state.check_spec(cfg, spec)
+            try:
+                spec = state.materialize(cfg, spec)
+            except Exception as exc:  # the spec parses; the trials to reuse could not be looked up
+                problems = [f"The trials to reuse could not be looked up in the ledger: {type(exc).__name__}: {exc}"]
+            else:
+                return state.check_spec(cfg, spec)
         # A live check of a half-filled form: say what is wrong, not 400.
         return {"validation": {"status": "invalid", "problems": problems, "warnings": []}, "plan": None,
-                "estimate": None, "estimate_note": "No estimate: the spec is not complete.", "checked_at": _now(),
-                "stale": False, "config_fingerprint": designs.config_fingerprint(cfg), "ledger_fingerprint": None}
+                "estimate": None, "estimate_note": "No estimate: the spec is not complete.", "reuse": None,
+                "checked_at": _now(), "stale": False, "config_fingerprint": designs.config_fingerprint(cfg),
+                "ledger_fingerprint": None, "reuse_fingerprint": None}
 
     @app.post("/api/designs/from-config")
     def design_from_config(body: Body):
-        _only(body, {"mode", "arms", "title"})
+        _only(body, {"mode", "arms", "title", "reuse"})
         mode = _text(body.get("mode"), "mode")
         arms = body.get("arms")
         if arms is not None and (not isinstance(arms, list) or not all(isinstance(a, str) for a in arms)):
             raise ValueError("arms must be a list of arm names, or null for the enabled arms")
-        spec = designs.design_from_config(state.cfg, mode, arms)
+        cfg = state.cfg
+        spec = designs.design_from_config(cfg, mode, arms, reuse.check_mode(body.get("reuse", "off")))
         title = body.get("title") or f"{mode} from config"
-        return save_new(designs.DesignMetaIn(title=title), spec)
+        return save_new(designs.DesignMetaIn(title=title), state.materialize(cfg, spec))
 
     @app.post("/api/designs/from-run/{run_id}")
     def design_from_run(run_id: str, body: Body):
@@ -1064,7 +1194,7 @@ def _design_routes(app: FastAPI, state: State) -> None:
         _only(body, {*META_FIELDS, "spec", "base_version"})
         base = _whole(body.get("base_version"), "base_version", 1)
         cfg = state.cfg
-        spec = designs.normalize(cfg, _spec_input(body.get("spec")))
+        spec = state.materialize(cfg, designs.normalize(cfg, _spec_input(body.get("spec"))))
         doc = state.designs.add_version(cfg, design_id, base, _meta_in(body), spec, "user")
         state.record_check(cfg, doc["design_id"], doc["version"], doc["spec"])
         return created(state.version_detail(design_id, doc["version"]))
@@ -1130,6 +1260,182 @@ def _queue_routes(app: FastAPI, state: State) -> None:
     def queue_settings(body: Body):
         _only(body, {"global_cap_usd", "reset_cap", "on_failure"})
         return state.queue.update_settings(**body)
+
+
+def _selection(cfg: Config, raw: Mapping[str, Any]) -> prebake_builder.Selection:
+    """A build selection from a request: a config mode and arms (LAUNCH's), a
+    design version (id or id@vN) or what remains of a run; the config's
+    largest mode with its enabled arms when none is named."""
+    def names(value: Any, name: str) -> tuple[str, ...]:
+        if value is None or value == "":
+            return ()
+        if isinstance(value, str):
+            value = value.split(",")
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ValueError(f"{name} must be a list of names")
+        return tuple(dict.fromkeys(v.strip() for v in value if v.strip()))
+
+    mode, design, run = (raw.get(k) or None for k in ("mode", "design", "run"))
+    for key, value in (("mode", mode), ("design", design), ("run", run)):
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"{key} must be text")
+    if mode is None and design is None and run is None:
+        if not cfg.modes:
+            raise ConfigError("The config has no modes; name a design or a run")
+        mode = max(cfg.modes, key=lambda m: cfg.modes[m].n_tasks)
+    reuse_mode = raw.get("reuse")
+    return prebake_builder.Selection(mode=mode, arms=names(raw.get("arms"), "arms"), design=design, run=run,
+                                     reuse=None if reuse_mode in (None, "") else reuse.check_mode(reuse_mode),
+                                     tasks=names(raw.get("tasks"), "tasks"))
+
+
+def _prebake_routes(app: FastAPI, state: State) -> None:
+    """The IMAGES panel and LAUNCH's Pull and Build missing buttons. Reads
+    are GETs; a build, a pull, a cancel, a prune and a disk measurement are
+    writes (X-Bench). Nothing starts a build or a pull while a run is in
+    progress or the queue is active."""
+    from .prebake import inventory, prune, pull
+
+    def plan_for(sel: prebake_builder.Selection, refresh: bool = False, rebuild: bool = False) -> Any:
+        cfg = state.cfg
+        spec = prebake_builder.selection_spec(cfg, sel, rows=state.reader.rows)
+        return spec, prebake_builder.plan_builds(cfg, spec, label=sel.label(), refresh=refresh, rebuild=rebuild)
+
+    def missing_task_images(spec: Any) -> list[str]:
+        images = inventory.task_images(spec.dataset, (t for a in spec.arms for t in a.tasks))
+        return pull.missing([i for i in images.values() if i], refresh=False)
+
+    def may_start() -> str:
+        if not state.manager.is_idle():
+            return BUILD_RUN_ACTIVE
+        if state.queue.is_active():
+            return BUILD_QUEUE_ACTIVE
+        if state.builds.active_id is not None or prebake_builder.build_active():
+            return "A build is already running (here or from python -m bench.prebake)."
+        return ""
+
+    def host_disk() -> dict[str, Any]:
+        path, source = prebake_builder.docker_disk()
+        out: dict[str, Any] = {"path": str(path) if path else None, "source": source, "free_gb": None,
+                               "reserve_gb": state.cfg.prebake.host_reserve_gb,
+                               "vm_free_gb": prebake_builder.last_vm.get("free_gb"),
+                               "vm_checked_at": prebake_builder.last_vm.get("at"),
+                               "vm_reserve_gb": state.cfg.prebake.vm_reserve_gb}
+        if path is not None:
+            try:
+                out["free_gb"] = round(prebake_builder.host_free_gb(path), 1)
+            except OSError:
+                pass
+        return out
+
+    @app.get("/api/prebake/status")
+    def prebake_status(mode: str | None = None, arms: str | None = None,
+                       reuse_mode: Annotated[str | None, Query(alias="reuse")] = None,
+                       design: str | None = None, run: str | None = None, refresh: bool = False):
+        cfg = state.cfg
+        sel = _selection(cfg, {"mode": mode, "arms": arms, "reuse": reuse_mode, "design": design, "run": run})
+        spec, plan = plan_for(sel, refresh=refresh)
+        out = plan.to_dict(cfg.prebake.build_jobs)
+        try:
+            out["pull"], out["pull_error"] = missing_task_images(spec), None
+        except Exception as exc:  # Docker not answering: the plan's notes say so too
+            out["pull"], out["pull_error"] = [], f"{type(exc).__name__}: {exc}"
+        state.builds.refresh()
+        out.update(mode=spec.run.prebake, prefix=cfg.prebake.prefix, max_age_days=cfg.prebake.max_age_days,
+                   builds=state.builds.summaries(), active=state.builds.active_id, blocked=may_start(),
+                   disk=_safely(host_disk, "disk"))
+        return out
+
+    @app.get("/api/prebake/builds")
+    def list_builds():
+        state.builds.refresh()
+        return {"builds": state.builds.summaries(), "active": state.builds.active_id}
+
+    @app.get("/api/prebake/builds/{build_id}")
+    def get_build(build_id: str):
+        state.builds.refresh()
+        return state.builds.status(build_id)
+
+    @app.get("/api/prebake/builds/{build_id}/log/{item}")
+    def build_log(build_id: str, item: int, lines: int = 200):
+        return PlainTextResponse(state.builds.log_tail(build_id, item, max(1, min(lines, 2000))))
+
+    @app.post("/api/prebake/build")
+    def start_build(body: Body):
+        _only(body, SELECTION_FIELDS | {"jobs", "rebuild"})
+        blocked = may_start()
+        if blocked:
+            raise RuntimeError(blocked)
+        cfg = state.cfg
+        jobs = None if body.get("jobs") is None else _whole(body.get("jobs"), "jobs", 1, 16)
+        rebuild = _flag(body.get("rebuild", False), "rebuild")
+        _spec, plan = plan_for(_selection(cfg, body), refresh=True, rebuild=rebuild)
+        return JSONResponse(state.builds.start(cfg, plan, jobs=jobs), 201)
+
+    @app.post("/api/prebake/builds/{build_id}/cancel")
+    def cancel_build(build_id: str):
+        state.builds.cancel(build_id)
+        return {"ok": True}
+
+    @app.post("/api/prebake/pull")
+    def start_pull(body: Body):
+        _only(body, SELECTION_FIELDS)
+        blocked = may_start()
+        if blocked:
+            raise RuntimeError(blocked)
+        cfg = state.cfg
+        sel = _selection(cfg, body)
+        spec = prebake_builder.selection_spec(cfg, sel, rows=state.reader.rows)
+        images = missing_task_images(spec)
+        if not images:
+            raise RuntimeError("Every task image this selection needs is on this machine already")
+        return JSONResponse(state.builds.start_pull(cfg, images, label=f"pull: {sel.label()}"), 201)
+
+    @app.post("/api/prebake/prune")
+    def prune_images(body: Body):
+        """Without refs: the dry run, what prune would remove. With refs (the
+        dry run's list, as confirmed): removes those that are still candidates."""
+        _only(body, {"refs"})
+        cfg = state.cfg
+        found, notes = prune.candidates(cfg)
+        refs = body.get("refs")
+        if refs is None:
+            return {"dry_run": True, "candidates": [c.to_dict() for c in found], "notes": notes}
+        if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
+            raise ValueError("refs must be the list of image names the dry run showed")
+        blocked = may_start()
+        if blocked:
+            raise RuntimeError(blocked)
+        chosen = [c for c in found if c.ref in set(refs)]
+        result = prune.prune(chosen, dry_run=False, run_active=lambda: not state.manager.is_idle())
+        result["skipped"] = sorted(set(refs) - {c.ref for c in chosen})  # no longer candidates: left alone
+        result["notes"] = notes
+        checks.forget("prebake:")
+        return result
+
+    @app.post("/api/prebake/disk")
+    def measure_disk():
+        """The drive holding Docker's disk image, and Docker's own free space,
+        measured with df in a throwaway container of a local task image."""
+        out = host_disk()
+        cfg = state.cfg
+        probe = None
+        try:
+            local = inventory.local_images()
+            images = inventory.task_images(cfg.dataset, cfg.tasks).values()
+            probe = next((i for i in images if i and inventory.normalize_ref(i) in local), None)
+        except inventory.DockerError as exc:
+            out["vm_error"] = str(exc)
+        if probe is not None:
+            try:
+                prebake_builder.vm_free_gb(probe)
+            except inventory.DockerError as exc:
+                out["vm_error"] = str(exc)
+        elif "vm_error" not in out:
+            out["vm_error"] = "no task image is on this machine to measure it with"
+        checks.forget("docker_disk:")
+        return {**out, "vm_free_gb": prebake_builder.last_vm.get("free_gb"),
+                "vm_checked_at": prebake_builder.last_vm.get("at")}
 
 
 def _assistant_routes(app: FastAPI, state: State) -> None:

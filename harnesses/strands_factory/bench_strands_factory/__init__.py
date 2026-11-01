@@ -18,6 +18,15 @@ model_spec must name the arm's own model (the runner's HARBOR_MODEL): Harbor,
 the ledger and the run budget price the trial at that model, so a stale
 model_spec copied from another arm would be billed at the wrong rates.
 
+strands-harness has no Fireworks or xAI provider, so arms on those use the
+model Harbor built (a LiteLLMModel for fireworks_ai, an OpenAIModel for xai)
+and set the effort in the arm's model_kwargs.params.reasoning_effort. Two
+checks guard that route before any model call: such a model must carry a
+reasoning_effort (these models' own default is their costliest level, max
+on DeepSeek, GLM and Kimi), and an xai OpenAIModel gets xAI's endpoint, which
+Harbor's runner leaves unset, so the client would otherwise send the xAI key
+to api.openai.com.
+
 This file runs inside the task container under Harbor's Python, never in the
 bench's own venv, which has no strands packages.
 """
@@ -45,6 +54,28 @@ logger = logging.getLogger(__name__)
 # their files here instead.
 STATE_DIR = "/tmp/bench-strands-harness"
 
+# Providers (HARBOR_MODEL's prefix) whose prebuilt model must carry params.reasoning_effort.
+EFFORT_PARAM_PROVIDERS = ("fireworks_ai", "xai")
+# OpenAI-compatible endpoints for an OpenAIModel the runner built without a base_url.
+OPENAI_COMPATIBLE_ENDPOINTS = {"xai": "https://api.x.ai/v1"}
+
+
+def _prepare_prebuilt(model: Any, provider: str) -> None:
+    """Checks and the endpoint for a model Harbor built (see the module docstring)."""
+    get_config = getattr(model, "get_config", None)
+    config = get_config() if callable(get_config) else None
+    params = config.get("params") if isinstance(config, dict) else None
+    if provider in EFFORT_PARAM_PROVIDERS and not (isinstance(params, dict) and params.get("reasoning_effort")):
+        raise ValueError(
+            f"bench_strands_factory: a {provider} model needs model_kwargs.params.reasoning_effort; "
+            "without it the model runs at its own default effort, which is its costliest."
+        )
+    endpoint = OPENAI_COMPATIBLE_ENDPOINTS.get(provider)
+    client_args = getattr(model, "client_args", None)
+    is_openai = type(model).__name__ == "OpenAIModel"  # strands.models.openai; LiteLLM finds its own endpoint
+    if endpoint and is_openai and isinstance(client_args, dict) and not client_args.get("base_url"):
+        client_args["base_url"] = endpoint
+
 
 def create_agent(
     sandbox: Sandbox,
@@ -62,7 +93,9 @@ def create_agent(
         when it differs from the arm's model (HARBOR_MODEL), before any model call.
     effort: a strands-harness level: "auto", "off", "minimal", "low", "medium",
         "high", "xhigh" or "max". "auto" is the provider's recommended level,
-        which is "high" on Anthropic.
+        which is "high" on Anthropic. A model Harbor built takes its effort from
+        the arm's model_kwargs instead; on fireworks_ai or xai it must have
+        params.reasoning_effort, or ValueError before any model call.
     harness_kwargs: any other create_harness() argument, such as builtin_tools.
     """
     # YAML 1.1 reads a bare `off` as false; JSON null means "not set".
@@ -83,6 +116,8 @@ def create_agent(
         )
     if model_spec:
         return create_harness(model=model_spec, effort=effort, sandbox=sandbox, **harness_kwargs)
+    if model is not None:
+        _prepare_prebuilt(model, harbor_model.partition("/")[0] if "/" in harbor_model else "")
     if effort != "auto":
         logger.warning(
             "bench_strands_factory: effort=%r is not applied to the model Harbor built, "

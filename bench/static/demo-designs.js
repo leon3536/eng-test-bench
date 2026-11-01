@@ -10,8 +10,10 @@
    this copy answers for it. Reads of other designs, and every live check, go
    to the real server; the checks come back with the missing-key problems
    taken out, as if the provider keys were set, so a demo version can be valid.
-   Two demo designs are added to the list: a user design with two versions
-   and an assistant draft.
+   Three demo designs are added to the list: a user design with two versions,
+   an assistant draft, and a design that reuses measured trials. A reuse spec
+   is resolved from the real check's reuse summary, so what a demo version
+   reuses is what the real ledger holds for it.
 
    benchDemo.store.designs is for the other demo files (QUEUE shows matching
    titles from it):
@@ -28,6 +30,7 @@
   const demo = window.benchDemo;
 
   const RUN_KEYS = ['budget_usd', 'parallel_arms', 'n_concurrent', 'effort', 'per_trial_cap_usd', 'max_turns', 'timeout_multiplier'];
+  const OPTIONAL_RUN = {prebake: 'prefer', setup_timeout_multiplier: 'auto', env_build_timeout_multiplier: 1};
   const RUN_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'omit'];
   const KEY_PROBLEM = /\b[A-Z][A-Z0-9_]*_API_KEY is not set\b/;
   const META_LIMITS = {title: 80, purpose: 1000, rationale: 1500, change_note: 200};
@@ -87,11 +90,16 @@
 
   // Specs ------------------------------------------------------------------
 
-  /** The server's DesignSpecIn -> NormalizedSpec, closely enough for the demo. */
+  /** The server's DesignSpecIn -> NormalizedSpec, closely enough for the demo. Reuse is resolved by resolved(). */
   function normalize(cfg, s) {
     const families = Object.fromEntries(cfg.arms.map((a) => [a.agent, a.family || a.agent]));
     const run = {};
     for (const k of RUN_KEYS) run[k] = s.run && k in s.run ? s.run[k] : cfg.run[k];
+    // As spec.OPTIONAL_RUN_KEYS: written only when they differ from the defaults, so older specs keep their hash.
+    for (const [k, plain] of Object.entries(OPTIONAL_RUN)) {
+      const v = s.run && k in s.run ? s.run[k] : cfg.run[k];
+      if (v !== undefined && v !== plain) run[k] = v;
+    }
     const tasks = [...(s.tasks || [])];
     return {
       dataset: cfg.dataset,
@@ -106,7 +114,32 @@
         return {name: a.name, agent: a.agent, family: families[a.agent] || a.agent, provider: a.provider, model,
           effort: a.effort || 'inherit', options: sortKeys(a.options || {}), tasks: subset};
       }),
+      ...(s.reuse === 'measured' ? {reuse: 'measured', reused: {}} : {}),
     };
+  }
+
+  /** A reuse spec as the server saves it (reuse.resolve), from the real server's check of it: each arm's reused
+      tasks leave its task list and are listed in spec.reused with their trials and runs. */
+  function resolved(spec, check) {
+    if (!spec.reuse) return spec;
+    const out = clone(spec);
+    for (const a of (check.reuse && check.reuse.arms) || []) {
+      const arm = out.arms.find((x) => x.name === a.arm);
+      if (!arm || !(a.reused || []).length) continue;
+      const gone = new Set(a.reused.map((e) => e.task));
+      arm.tasks = (arm.tasks || out.tasks).filter((t) => !gone.has(t));
+      out.reused[a.arm] = a.reused.map((e) => ({task: e.task, trials: [...e.trials], runs: [...e.runs]}));
+    }
+    return out;
+  }
+
+  /** An arm's tasks as asked for, its reused tasks put back in the design's order (the server's asked_tasks). */
+  function askedTasks(spec, arm) {
+    const reused = ((spec.reused || {})[arm.name] || []).map((e) => e.task);
+    if (!reused.length) return arm.tasks === null ? null : [...arm.tasks];
+    const wanted = new Set([...(arm.tasks || spec.tasks), ...reused]);
+    const asked = spec.tasks.filter((t) => wanted.has(t));
+    return asked.length === spec.tasks.length ? null : asked;
   }
 
   /** A NormalizedSpec as DesignSpecIn, the way the server's to_input does it. */
@@ -115,7 +148,8 @@
     if (!RUN_EFFORTS.includes(run.effort)) delete run.effort;
     return {
       tasks: [...spec.tasks], attempts: spec.attempts, baseline_arm: spec.baseline_arm, run,
-      arms: spec.arms.map(({family, ...arm}) => clone(arm)),
+      arms: spec.arms.map(({family, ...arm}) => ({...clone(arm), tasks: askedTasks(spec, arm)})),
+      ...(spec.reuse ? {reuse: spec.reuse} : {}),
     };
   }
 
@@ -168,7 +202,7 @@
     if (!check.plan && !check.estimate && /not complete/.test(check.estimate_note || '')) {
       throw new Refusal(400, check.validation.problems.join('; ') || 'The spec is not complete.');
     }
-    const spec = normalize(cfg, specIn);
+    const spec = resolved(normalize(cfg, specIn), check);
     return {spec, check, hash: (check.plan && check.plan.spec_hash) || fakeHash(canon(spec))};
   }
 
@@ -362,7 +396,7 @@
     return true;
   }
 
-  // Two demo designs: a user design with a second version, and an assistant draft.
+  // Three demo designs: a user design with a second version, an assistant draft, and one that reuses measured trials.
   async function seed() {
     const cfg = await config();
     const tasks = cfg.tasks.length ? cfg.tasks : Array.from({length: 10}, (_, i) => `task-${i + 1}`);
@@ -392,6 +426,16 @@
         + 'Running them pairs every one, which narrows the cost interval for that comparison.\n\n'
         + '- Budget is the p90 estimate plus 15%.\n- One attempt each: more tasks beat more attempts.',
     }, draft, {author: 'assistant', conversationId: 'c-20261029-101500-a1b2', at: Date.now() - 3 * 3600e3, tag: 'c3f7'});
+    // Reuse measured trials: the real server resolves it against the ledger, so each arm skips the tasks the ledger
+    // already has for its exact configuration (options copied, so a pinned version counts) and may be skipped whole.
+    const pinned = cfg.arms.filter((a) => a !== baseline && a.kind !== 'import_path'
+      && Object.keys(a.options || {}).every((k) => k === 'version')).slice(0, 2);
+    const withOptions = (a) => armIn(a, {options: clone(a.options || {})});
+    await create({
+      title: 'Fill the gaps on block 1 (demo)',
+      purpose: 'Pair every harness with Claude Code on the first four seeded tasks, running only what the ledger lacks.',
+    }, {tasks: tasks.slice(0, 4), attempts: 1, baseline_arm: baseline.name, run: {budget_usd: 15, n_concurrent: 2},
+      arms: [withOptions(baseline), ...pinned.map(withOptions)], reuse: 'measured'}, {at: Date.now() - 2 * 3600e3, tag: 'e5d1'});
   }
 
   const ready = () => {
@@ -435,10 +479,12 @@
       if (!a) throw new Refusal(400, `Unknown arm '${n}'`);
       return {name: a.name, agent: a.agent, provider: a.provider, model: a.model, effort: a.effort, options: clone(a.options || {})};
     });
+    if (![undefined, 'off', 'measured'].includes(body.reuse)) throw new Refusal(400, 'reuse must be one of off, measured');
     const run = {...cfg.run};
     if (!RUN_EFFORTS.includes(run.effort)) delete run.effort;
     const spec = {tasks: cfg.tasks.slice(0, mode.n_tasks), attempts: mode.n_attempts,
-      baseline_arm: names.includes(cfg.baseline_arm) ? cfg.baseline_arm : null, run, arms};
+      baseline_arm: names.includes(cfg.baseline_arm) ? cfg.baseline_arm : null, run, arms,
+      ...(body.reuse === 'measured' ? {reuse: 'measured'} : {})};
     return created(await create({title: body.title || `${body.mode} from config`}, spec));
   }));
 

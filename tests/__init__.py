@@ -42,6 +42,9 @@ os.environ["BENCH_ENV_FILE"] = str(ENV_FILE)
 os.environ["BENCH_DATA_DIR"] = str(TEST_ROOT / "data")
 os.environ["BENCH_LEDGER"] = str(TEST_ROOT / "ledger" / "bench.sqlite")
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+# Recording a harness's install (bench.prebake) imports LiteLLM through Harbor's
+# agents; with network blocked it would retry its price-list download for seconds.
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 os.environ.pop("BENCH_PROFILE", None)
 
 atexit.register(shutil.rmtree, TEST_ROOT, ignore_errors=True)

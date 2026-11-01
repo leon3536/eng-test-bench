@@ -27,11 +27,17 @@
   // Design statuses are derived by the server. The word is always shown; the colour only adds to it.
   const DESIGN_TAG = {draft: '', approved: 'ok', queued: 'warn', running: 'run', ran: 'ok', archived: '', unreadable: 'bad', unsaved: 'warn'};
   const RUN_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'omit'];
-  const RUN_FIELDS = ['budget_usd', 'parallel_arms', 'n_concurrent', 'effort', 'per_trial_cap_usd', 'max_turns', 'timeout_multiplier'];
+  const RUN_FIELDS = ['budget_usd', 'parallel_arms', 'n_concurrent', 'effort', 'per_trial_cap_usd', 'max_turns',
+    'timeout_multiplier', 'prebake', 'setup_timeout_multiplier', 'env_build_timeout_multiplier', 'schedule',
+    'max_containers'];
+  const RUN_TEXT = ['effort', 'prebake', 'schedule'];  // choices, not numbers; empty means the profile's
   const CAPS = ['per_trial_cap_usd', 'max_turns'];  // empty means no cap (null); any other empty run field is left out
   const LABELS = {
     attempts: 'Attempts', 'run.budget_usd': 'Budget', 'run.parallel_arms': 'Arms at once', 'run.n_concurrent': 'Trials at once',
     'run.per_trial_cap_usd': 'Per-trial cap', 'run.max_turns': 'Max turns', 'run.timeout_multiplier': 'Timeout multiplier',
+    'run.prebake': 'Harness setup', 'run.setup_timeout_multiplier': 'Setup limit',
+    'run.env_build_timeout_multiplier': 'Image pull limit', 'run.schedule': 'Schedule',
+    'run.max_containers': 'Containers at once',
   };
   const BASIS = {measured: 'measured', measured_any_options: 'any options', borrowed: 'borrowed', prior: 'prior'};
   const CONFIDENCE_TAG = {high: 'ok', medium: '', low: 'warn'};
@@ -91,6 +97,53 @@
     return clip(typeof v === 'string' ? v : JSON.stringify(v), 90);
   }
 
+  /**
+   * The diff entries under spec.reused (raw JSON says little there), as one line per arm: the tasks it now reuses,
+   * no longer reuses, and reuses from other trials. spec is the version shown, which names the task at a place.
+   */
+  function reusedChanges(diff, spec) {
+    const arms = new Map();
+    const of = (name) => arms.get(name) || arms.set(name, {from: [], to: [], moved: new Set(), retasked: new Set()}).get(name);
+    const names = (v) => (typeof v === 'string' ? [v] : (Array.isArray(v) ? v : v ? [v] : []).map((e) => e && e.task))
+      .filter((t) => typeof t === 'string');
+    for (const d of diff) {
+      const m = /^reused(?:\.([a-z][a-z0-9-]*)(?:\[(\d+)\](?:\.(\w+))?)?)?$/.exec(d.path);
+      if (!m) continue;
+      const [, name, at, key] = m;
+      if (!name) {  // reuse turned on or off: the whole block
+        for (const [n, v] of Object.entries(d.from || {})) of(n).from.push(...names(v));
+        for (const [n, v] of Object.entries(d.to || {})) of(n).to.push(...names(v));
+      } else if (!key || key === 'task') {
+        of(name).from.push(...names(d.from));
+        of(name).to.push(...names(d.to));
+        if (key) of(name).retasked.add(at);
+      } else {
+        of(name).moved.add(at);  // the trials or runs of the task at that place
+      }
+    }
+    const current = (spec && spec.reused) || {};
+    return [...arms].map(([name, a]) => ({
+      name,
+      added: a.to.filter((t) => !a.from.includes(t)),
+      removed: a.from.filter((t) => !a.to.includes(t)),
+      swapped: [...a.moved].filter((at) => !a.retasked.has(at))
+        .map((at) => ((current[name] || [])[Number(at)] || {}).task).filter((t) => typeof t === 'string'),
+    })).filter((x) => x.added.length || x.removed.length || x.swapped.length);
+  }
+
+  function diffItems(diff, spec) {
+    const plain = diff.filter((d) => !/^reused(\.|\[|$)/.test(d.path)).map((d) => h('li', null,
+      h('span', {class: 'dz-path'}, d.path), ': ',
+      h('span', {class: 'dz-from', title: JSON.stringify(d.from)}, valueText(d.from)), ' → ',
+      h('span', {class: 'dz-to', title: JSON.stringify(d.to)}, valueText(d.to))));
+    const reused = reusedChanges(diff, spec).map((x) => {
+      const text = [x.added.length && `+ ${x.added.join(', ')}`, x.removed.length && `− ${x.removed.join(', ')}`,
+        x.swapped.length && `other trials for ${x.swapped.join(', ')}`].filter(Boolean).join(' · ');
+      return h('li', null, h('span', {class: 'dz-path'}, `reused · ${x.name}`), ': ', h('span', {title: text}, clip(text, 120)));
+    });
+    return [...plain, ...reused];
+  }
+
   function countText(n, word, cls, glyph) {
     if (!isNum(n)) return h('span', {class: 'faint'}, `${word}s ${DASH}`);
     return h('span', {class: n ? cls : 'faint'}, `${n ? glyph : '·'} ${plural(n, word)}`);
@@ -122,7 +175,7 @@
     for (const k of RUN_FIELDS) run[k] = String(f.run[k]).trim();
     return {
       title: f.title.trim(), purpose: f.purpose.trim(), rationale: f.rationale.trim(), change_note: f.change_note.trim(),
-      tasks: f.tasks, attempts: f.attempts.trim(), baseline: baselineName(f), run,
+      tasks: f.tasks, attempts: f.attempts.trim(), baseline: baselineName(f), run, reuse: f.reuse,
       arms: f.arms.map((a) => ({
         name: a.name.trim(), agent: a.agent, provider: a.provider, model: a.model.trim(), effort: a.effort.trim() || 'inherit',
         options: a.options, tasks: a.tasks,
@@ -137,7 +190,10 @@
     for (const k of RUN_FIELDS) {
       const v = run ? run[k] : null;
       // An effort the design input cannot name (the profile's own) shows as the profile default and is left out.
-      out[k] = k === 'effort' ? (RUN_EFFORTS.includes(v) ? v : '') : isNum(v) ? String(v) : '';
+      if (k === 'effort') out[k] = RUN_EFFORTS.includes(v) ? v : '';
+      else if (k === 'prebake') out[k] = ['off', 'prefer', 'require'].includes(v) ? v : '';
+      else if (k === 'schedule') out[k] = ['tasks', 'arms'].includes(v) ? v : '';
+      else out[k] = v === 'auto' ? 'auto' : isNum(v) ? String(v) : '';
     }
     return out;
   }
@@ -147,15 +203,30 @@
     const seeded = seededPositions();
     const arms = spec.arms.map((a) => ({
       key: ++armSeq, name: a.name, agent: a.agent, provider: a.provider, model: a.model, effort: a.effort || 'inherit',
-      options: sortKeys(a.options || {}), tasks: Array.isArray(a.tasks) ? [...a.tasks] : null,
+      options: sortKeys(a.options || {}), tasks: askedTasks(spec, a),
     }));
     const baseline = arms.find((a) => a.name === spec.baseline_arm);
     return {
       title: detail.title || '', purpose: detail.purpose || '', rationale: detail.rationale || '', change_note: '',
       tasks: [...spec.tasks], extra: spec.tasks.filter((t) => !seeded.has(t)).join('\n'),
       attempts: String(spec.attempts ?? 1), baselineKey: baseline ? baseline.key : null,
-      run: runForm(spec.run), arms,
+      run: runForm(spec.run), arms, reuse: spec.reuse || 'off',
     };
+  }
+
+  /** The tasks an arm of a saved spec takes from the ledger instead of running (spec.reused). */
+  const reusedOf = (spec, name) => ((spec.reused && spec.reused[name]) || []).filter((e) => e && typeof e.task === 'string');
+
+  /** An arm's tasks as asked for (the server's spec.asked_tasks): a version that reuses measured trials has them
+      out of the arm's tasks and in spec.reused, so the editor puts them back. Saving resolves them afresh. */
+  function askedTasks(spec, arm) {
+    const reused = reusedOf(spec, arm.name).map((e) => e.task);
+    if (!reused.length) return Array.isArray(arm.tasks) ? [...arm.tasks] : null;
+    const kept = Array.isArray(arm.tasks) ? arm.tasks : spec.tasks;
+    const wanted = new Set([...kept, ...reused]);
+    const asked = [...new Set(spec.tasks)].filter((t) => wanted.has(t));
+    asked.push(...kept.filter((t) => !spec.tasks.includes(t)));  // outside the design: kept for the check to report
+    return asked.length === spec.tasks.length && asked.every((t, i) => t === spec.tasks[i]) ? null : asked;
   }
 
   /** A new design: run fields empty, so the profile defaults apply (shown as placeholders). The caps start at the
@@ -163,7 +234,7 @@
   function blankForm() {
     const run = ui.state.config.run;
     const form = {title: '', purpose: '', rationale: '', change_note: '', tasks: [], extra: '', attempts: '1', baselineKey: null,
-      run: runForm(null), arms: []};
+      run: runForm(null), arms: [], reuse: 'off'};
     for (const k of CAPS) form.run[k] = isNum(run[k]) ? String(run[k]) : '';
     return form;
   }
@@ -180,9 +251,16 @@
     const run = {};
     for (const k of RUN_FIELDS) {
       const raw = String(f.run[k]).trim();
-      if (k === 'effort') {
-        if (raw) run.effort = raw;  // empty: the profile's effort
+      if (RUN_TEXT.includes(k)) {
+        if (raw) run[k] = raw;  // empty: the profile's
         continue;
+      }
+      if (k === 'setup_timeout_multiplier' && raw.toLowerCase() === 'auto') {
+        run[k] = 'auto';
+        continue;
+      }
+      if (k === 'setup_timeout_multiplier' && raw && number(raw) === undefined) {
+        errors.push('Setup limit must be auto or a number');
       }
       const n = number(raw);
       if (n !== undefined) run[k] = n;
@@ -199,6 +277,7 @@
     };
     const attempts = number(f.attempts);
     if (attempts !== undefined) spec.attempts = attempts;
+    if (f.reuse === 'measured') spec.reuse = 'measured';  // resolved against the ledger by every check and save
     return {spec, errors};
   }
 
@@ -570,7 +649,7 @@
       f.attempts = el.value;
       updateTaskCount();
     } else if (head in f) {
-      f[head] = el.value;  // title, purpose, rationale, change_note
+      f[head] = el.value;  // title, purpose, rationale, change_note, reuse
     }
     touched();
   }
@@ -807,10 +886,7 @@
         b && b.author === 'assistant' && assistantBanner(b),
         b && b.diff_from_parent && b.diff_from_parent.length > 0 && h('details', {class: 'dz-diff', open: true},
           h('summary', null, `Changes from v${b.parent_version}`),
-          h('ul', null, b.diff_from_parent.map((d) => h('li', null,
-            h('span', {class: 'dz-path'}, d.path), ': ',
-            h('span', {class: 'dz-from', title: JSON.stringify(d.from)}, valueText(d.from)), ' → ',
-            h('span', {class: 'dz-to', title: JSON.stringify(d.to)}, valueText(d.to)))))),
+          h('ul', null, diffItems(b.diff_from_parent, b.spec))),
         actionBar(ed),
         tasksSection(f),
         runSection(f),
@@ -901,7 +977,15 @@
       h('div', {class: 'row'},
         num('budget_usd', 'Budget (USD)', {min: 0, step: 'any', required: true, placeholder: `required · profile ${run.budget_usd}`},
           [h('span', {class: 'dz-suggest'}), note('A hard stop, checked after every trial')]),
-        num('parallel_arms', 'Arms at once', {min: 1, max: 12, step: 1, placeholder: profile(run.parallel_arms)}),
+        field('Schedule', select(null, [['', `profile (${run.schedule || 'tasks'})`],
+          ['tasks', 'tasks: a race per task'], ['arms', 'arms: one job per arm']], f.run.schedule,
+        {'data-k': 'run.schedule'}),
+        {notes: [note('tasks: each task\'s images built, raced by every arm, removed')]}),
+        num('max_containers', 'Containers at once',
+          {min: 1, max: 16, step: 1, placeholder: profile(run.max_containers)},
+          [note('In one task race')]),
+        num('parallel_arms', 'Arms at once', {min: 1, max: 12, step: 1, placeholder: profile(run.parallel_arms)},
+          [note('Schedule arms only')]),
         num('n_concurrent', 'Trials at once, per arm', {min: 1, max: 8, step: 1, placeholder: profile(run.n_concurrent)}),
         field('Effort', select(null, [['', `profile (${run.effort})`], ...RUN_EFFORTS.map((e) => [e, e === 'omit' ? "omit, each harness's default" : e])],
           f.run.effort, {'data-k': 'run.effort'}), {notes: [note('For arms set to inherit')]}),
@@ -909,7 +993,20 @@
           [note(`Empty = no cap · profile ${isNum(run.per_trial_cap_usd) ? money(run.per_trial_cap_usd) : 'none'}`)]),
         num('max_turns', 'Max turns', {min: 1, step: 1, placeholder: 'none'},
           [note(`Empty = no cap · profile ${isNum(run.max_turns) ? run.max_turns : 'none'}`)]),
-        num('timeout_multiplier', 'Timeout multiplier', {min: 0, max: 4, step: 'any', placeholder: profile(run.timeout_multiplier)})),
+        num('timeout_multiplier', 'Timeout multiplier', {min: 0, max: 4, step: 'any', placeholder: profile(run.timeout_multiplier)}),
+        field('Harness setup', select(null, [['', `profile (${run.prebake || 'prefer'})`],
+          ['prefer', 'prefer: pre-baked, else stock'], ['require', 'require: pre-baked only'],
+          ['off', 'off: stock install']], f.run.prebake, {'data-k': 'run.prebake'}),
+        {notes: [note('A pre-baked image per task, or Harbor\'s install in each trial')]}),
+        field('Setup limit ×', h('input', {type: 'text', class: 'mono', value: f.run.setup_timeout_multiplier,
+          'data-k': 'run.setup_timeout_multiplier', inputmode: 'decimal', spellcheck: 'false', autocomplete: 'off',
+          placeholder: `${run.setup_timeout_multiplier ?? 'auto'} (profile)`}),
+        {notes: [note('auto, or times Harbor\'s 360 s')]}),
+        num('env_build_timeout_multiplier', 'Image pull limit ×',
+          {min: 0, max: 4, step: 'any', placeholder: profile(run.env_build_timeout_multiplier)},
+          [note('Times Harbor\'s 600 s')]),
+        field('Reuse measured trials', select(null, [['off', 'Off'], ['measured', 'On']], f.reuse, {'data-k': 'reuse'}),
+          {notes: [note('Skip tasks the ledger already has for this exact configuration')]})),
       h('p', {class: 'dz-hint'}, 'Leave a field empty to use the profile default shown in it.'));
   }
 
@@ -954,7 +1051,8 @@
           field('Model', h('input', {type: 'text', class: 'mono', value: a.model, list: 'dz-model-options', spellcheck: 'false',
             autocomplete: 'off', 'data-k': k('model')}), {notes: [h('small', {class: 'dz-harbor'})]})),
         field('Effort', h('span', {class: 'dz-effort'}, effortControl(a, f))),
-        field('Tasks', h('button', {type: 'button', class: 'btn ghost small dz-subset', onclick: () => editSubset(a.key)}))),
+        field('Tasks', h('button', {type: 'button', class: 'btn ghost small dz-subset', onclick: () => editSubset(a.key)}),
+          {notes: [h('small', {class: 'dz-arm-reuse'})]})),
       h('button', {type: 'button', class: 'btn ghost small dz-remove', title: 'Remove this arm', 'aria-label': 'Remove this arm',
         onclick: () => removeArm(a.key)}, '✕'),
       h('div', {class: 'dz-arm-options'},
@@ -1018,6 +1116,7 @@
       subset.textContent = `${inside} of ${f.tasks.length}${outside ? ` · ${outside} outside` : ''}`;
     }
     subset.title = a.tasks === null ? 'Runs every task of the design' : a.tasks.join(', ');
+    updateArmReuse(a);
     const schema = ui.schemas.get(a.agent);
     const known = schema ? new Set(schema.fields.map((x) => x.name)) : null;
     const entries = Object.entries(a.options || {});
@@ -1028,6 +1127,21 @@
           name, [[JSON.stringify(value), 'value'], odd ? `Not an option of ${a.agent}` : null].filter(Boolean));
       })
       : h('span', {class: 'faint dz-none'}, 'No options'));
+  }
+
+  /** Under an arm's task subset: what the check found it reuses, in a few words (the check panel has the detail). */
+  function updateArmReuse(a) {
+    const row = armRowEl(a.key);
+    const el = row && row.querySelector('.dz-arm-reuse');
+    if (!el) return;
+    const r = st.check && st.check.reuse;
+    const x = r ? r.arms.find((y) => y.arm === a.name.trim()) || null : null;
+    el.classList.toggle('ok-text', Boolean(x && x.tasks_reused));
+    el.textContent = !x ? ''
+      : x.skipped ? `Skipped: all ${x.tasks_reused} reused`
+        : x.tasks_reused ? `${x.tasks_reused} reused · runs ${x.tasks_to_run}`
+          : x.harness_version === 'unpinned' ? 'Not reused: version not pinned' : 'None reused';
+    el.title = x ? reuseArmText(x) : '';
   }
 
   function refreshSubsets() {
@@ -1095,6 +1209,7 @@
       const ws = c && c.validation ? c.validation.warnings.filter((w) => /seeded-sample order|outside the seeded sample/.test(w)) : [];
       fill(order, ws.map((w) => h('p', {class: 'warn-text dz-line'}, h('span', null, '!'), h('span', null, w))));
     }
+    for (const a of st.ed.form.arms) updateArmReuse(a);
   }
 
   /** Buttons, the unsaved mark and the status tag, updated in place (never rebuilt, so focus stays). */
@@ -1229,7 +1344,9 @@
       st.checkError && h('p', {class: st.checkError.includes('again') ? 'warn-text' : 'bad-text'}, st.checkError),
       issues.length > 0 && h('ul', {class: 'issues dz-issues'}, issues.map(([kind, text]) => issue(kind, text))),
       plan && h('p', {class: 'dz-line muted'}, h('span', null, '·'),
-        h('span', null, `${plural(plan.trials, 'trial')} in ${plural(plan.arms.length, 'arm')} · peak ${plural(plan.peak_containers, 'container')}`)),
+        h('span', null, `${plural(plan.trials, 'trial')} in ${plural(plan.arms.length, 'arm')} · peak ${plural(plan.peak_containers, 'container')}`
+          + `${plan.skipped_arms && plan.skipped_arms.length ? ` · ${plural(plan.skipped_arms.length, 'arm')} skipped` : ''}`)),
+      reuseBlock(c, ed, open),
       est ? estimateBlock(est, plan) : c && c.estimate_note && h('p', {class: 'muted dz-est-note'}, c.estimate_note),
       plan && plan.arms.some((a) => a.command) && h('details', {'data-d': 'cmd', open: open.has('cmd')},
         h('summary', null, 'Harbor commands'),
@@ -1238,6 +1355,15 @@
       est && est.assumptions && est.assumptions.length > 0 && h('details', {'data-d': 'assume', open: open.has('assume')},
         h('summary', null, `Assumptions (${est.assumptions.length})`),
         h('ul', {class: 'dz-assume'}, est.assumptions.map((text) => h('li', null, text)))));
+  }
+
+  /** An estimate's task races: tasks x arms, the longest task's image build and the peak disk. */
+  function raceText(race) {
+    const build = race.build_wall_min_max;
+    const gb = race.peak_disk_gb;
+    return `${plural(race.tasks, 'task')} × ${plural(race.arms, 'arm')}`
+      + (isNum(build) && build > 0 ? ` · builds ≤ ${duration(build)} per task` : '')
+      + (isNum(gb) ? ` · peak ~${gb < 10 ? gb.toFixed(1) : Math.ceil(gb)} GB` : '');
   }
 
   function estimateBlock(est, plan) {
@@ -1255,8 +1381,14 @@
         param('In-flight allowance', money(r.inflight_allowance_usd)),
         param('Wall time', r.wall_minutes ? `${duration(r.wall_minutes.p50)} p50 · ${duration(r.wall_minutes.p90)} p90` : DASH),
         param('Peak containers', count(r.peak_containers)),
+        // Under schedule tasks: tasks x arms, the longest task's image build and the peak disk (one task's images).
+        r.race && param('Task races', raceText(r.race)),
         param('Suggested budget', isNum(r.suggested_budget_usd) ? linkButton(money(r.suggested_budget_usd), () => useBudget(r.suggested_budget_usd),
-          'Use it as the budget') : DASH)),
+          'Use it as the budget') : DASH),
+        // Reused trials are not in the figures above: they are not run, and their own measured cost is not spent.
+        est.reuse && h('div', {class: 'dz-wide'}, h('dt', null, 'Reused, not run'),
+          h('dd', null, `${plural(est.reuse.trials, 'trial')} · ${money(est.reuse.cost_avoided_usd)} not spent`
+            + `${est.reuse.unpriced_tasks ? ` (${plural(est.reuse.unpriced_tasks, 'task')} without a cost)` : ''}`))),
       uncapped.length > 0 && h('p', {class: 'warn-text dz-line'}, h('span', null, '!'),
         h('span', null, `No dollar cap: ${listText(uncapped)}. The run budget still applies after every trial.`)),
       (est.warnings || []).map((w) => h('p', {class: 'warn-text dz-line'}, h('span', null, '!'), h('span', null, w))),
@@ -1274,7 +1406,15 @@
         ...(a.unpriced_models || []).map((m) => h('p', {class: 'warn-text dz-line'}, h('span', null, '!'), h('span', null, `${a.arm}: ${m} has no price`))),
         ...(a.notes || []).map((text) => h('p', {class: 'dz-line muted'}, h('span', null, '·'), h('span', null, `${a.arm}: ${text}`))),
       ]),
-      est.pairing && est.pairing.length > 0 && [eyebrow('Pairs'), h('ul', {class: 'dz-pairs'}, est.pairing.map(pairingLine))]);
+      est.pairing && est.pairing.length > 0
+        && [eyebrow(pairsTitle(est.pairing)), h('ul', {class: 'dz-pairs'}, est.pairing.map(pairingLine))]);
+  }
+
+  /** "Pairs on 27 tasks from config/tasks.txt", the REPORT's default scope; an older check's says nothing. */
+  function pairsTitle(pairing) {
+    const scope = (pairing.find((p) => p.scope) || {}).scope;
+    if (scope) return `Pairs on ${plural(scope.tasks, 'task')} from ${scope.tasks_file}`;
+    return pairing.some((p) => 'scope' in p) ? 'Pairs on every task in the ledger' : 'Pairs';
   }
 
   function basisTag(a) {
@@ -1292,19 +1432,132 @@
 
   function pairingLine(p) {
     const base = p.baseline_cell || {};
+    const baseName = base.family || base.arm || 'baseline';
+    const metric = p.metric || 'cost';
+    const now = p.multiple_now || {};  // {value, ci, n}: arm ÷ baseline, or null below 3 paired tasks
+    const ci = Array.isArray(now.ci) && isNum(now.ci[0]) && isNum(now.ci[1]) ? now.ci : null;
     return tip(h('li', null,
-      `${p.arm} vs ${base.family || base.arm || 'baseline'}: ${p.pairs_now} → ${plural(p.pairs_after, 'paired task')}; `
+      `${p.arm} vs ${baseName}: ${p.pairs_now} → ${plural(p.pairs_after, 'paired task')}; `
         + `interval ×/÷${factor(p.ci_factor_now)} → ×/÷${factor(p.ci_factor_after)}`,
-      isNum(p.multiple_now) && h('span', {class: 'muted'}, ` · now ${times(p.multiple_now)}`)),
-    `${p.arm} · ${p.metric || 'cost'}`, [
+      isNum(now.value) && h('span', {class: 'muted'}, ` · now ${times(now.value)} ${baseName}'s ${metric}`),
+      p.scope && p.scope.outside > 0 && h('span', {class: 'muted'},
+        ` · ${plural(p.scope.outside, 'task')} outside ${p.scope.tasks_file} not counted`)),
+    `${p.arm} · ${metric}`, [
       [base.arm || DASH, 'baseline arm'], [`${base.provider || DASH}:${base.model || DASH}`, 'model'],
+      isNum(now.value) && [ci ? `${multiple(ci[0])}–${times(ci[1])}` : DASH,
+        `now, ${p.arm} ÷ ${baseName}, ${plural(now.n, 'pair')}`],
       [isNum(p.sd_log) ? p.sd_log.toFixed(2) : DASH, `log spread (${p.sd_source || DASH})`],
-    ], true);
+    ].filter(Boolean), true);
+  }
+
+  // Reused trials ------------------------------------------------------------
+  //
+  // A design with reuse "measured" is resolved against the ledger by every check and every save: each arm leaves
+  // out the tasks the ledger already has `attempts` usable trials of for its exact configuration, and the saved
+  // version records them in spec.reused with the trials and runs it reuses. check.reuse is the summary: per arm
+  // what it reuses and its cost, or why it reuses nothing, and for a saved check whether saving again would reuse
+  // something else (current, changes).
+
+  /** The reuse section of D-03, or null when the design does not reuse. */
+  function reuseBlock(c, ed, open) {
+    const spec = !st.live && ed.base ? ed.base.spec : null;  // a saved version: exactly what it runs and reuses
+    const r = c && (c.reuse || (spec && spec.reuse ? savedReuse(spec) : null));
+    if (!r) return null;
+    const avoided = isNum(r.cost_avoided_usd) && r.cost_avoided_usd > 0 ? ` · about ${money(r.cost_avoided_usd)} not spent` : '';
+    return h('div', {class: 'dz-reuse'},
+      h('div', {class: 'section-head'}, eyebrow(spec ? `Reused in v${ed.base.version}` : 'Reused when saved'),
+        h('span', {class: 'dz-reuse-total'}, `${count(r.trials_reused)} of ${plural(r.trials_asked, 'trial')}${avoided}`)),
+      spec && r.current === false && driftStrip(ed),
+      h('ul', {class: 'dz-reuse-arms'}, r.arms.map((a) => reuseArmItem(a, spec, open))),
+      (r.notes || []).map((text) => h('p', {class: 'dz-line muted'}, h('span', null, '·'), h('span', null, text))));
+  }
+
+  /** check.reuse rebuilt from a saved spec alone, for a check that could not read the ledger: no costs, no reasons. */
+  function savedReuse(spec) {
+    const attempts = spec.attempts || 1;
+    const arms = spec.arms.map((a) => {
+      const reused = reusedOf(spec, a.name).map((e) => ({...e, cost_avoided_usd: null, lower_bound: 0}));
+      const runs = Array.isArray(a.tasks) ? a.tasks.length : spec.tasks.length;
+      return {arm: a.name, family: a.family, config_hash: null, harness_version: null, reason: null, tasks_asked: runs + reused.length,
+        tasks_reused: reused.length, tasks_to_run: runs, trials_reused: reused.length * attempts, cost_avoided_usd: null,
+        skipped: reused.length > 0 && !runs, cell_trials: null, reused, short: []};
+    });
+    const reused = sum(arms, (a) => a.trials_reused);
+    return {trials_reused: reused, trials_asked: reused + sum(arms, (a) => a.tasks_to_run) * attempts, cost_avoided_usd: null,
+      skipped_arms: arms.filter((a) => a.skipped).map((a) => a.arm), arms, current: null, changes: [],
+      notes: ['The ledger could not be read, so this lists what the version saved, without costs.']};
+  }
+
+  /** The ledger now resolves this saved version differently: it still runs as saved; a new version reuses the latest. */
+  function driftStrip(ed) {
+    const b = ed.base;
+    const newest = b.version === latestVersion(ed) && !b.archived;
+    return h('div', {class: 'note-strip dz-banner'},
+      h('span', null, 'The ledger has changed since this version was saved. Save a new version to reuse the latest trials.',
+        h('br'), h('small', null, `v${b.version} still runs exactly the tasks it saved.`)),
+      newest && h('span', {class: 'actions'}, h('button', {type: 'button', class: 'btn small',
+        onclick: (e) => save(e.currentTarget, 'Reused trials resolved again against the ledger')}, `Save v${b.version + 1}`)));
+  }
+
+  /** The tasks an arm runs: the saved version's own list, or for edits the arm's tasks less what the check reuses. */
+  function tasksToRun(a, spec) {
+    if (spec) {
+      const arm = spec.arms.find((x) => x.name === a.arm);
+      return arm ? (Array.isArray(arm.tasks) ? arm.tasks : spec.tasks) : [];
+    }
+    const f = st.ed.form;
+    const arm = f.arms.find((x) => x.name.trim() === a.arm);
+    const reused = new Set(a.reused.map((e) => e.task));
+    return arm ? (arm.tasks || f.tasks).filter((t) => !reused.has(t)) : [];
+  }
+
+  function reuseArmItem(a, spec, open) {
+    const toRun = tasksToRun(a, spec);
+    const key = `reuse:${a.arm}`;
+    return h('li', {class: 'dz-reuse-arm'},
+      h('div', {class: 'dz-reuse-head'},
+        h('b', {class: 'mono'}, a.arm),
+        a.skipped && tag('skipped', 'ok'),
+        a.harness_version && tag(`version ${REUSE_VERSION[a.harness_version] || a.harness_version}`, a.harness_version === 'unpinned' ? 'warn' : ''),
+        a.config_hash && h('span', {class: 'dz-hash mono', title: 'Configuration hash: the cell whose trials count'}, a.config_hash)),
+      reuseArmNote(a, h('p', {class: a.tasks_reused ? 'dz-line ok-text' : 'dz-line muted'}, reuseArmText(a))),
+      a.reused.length > 0 && h('details', {'data-d': key, open: open.has(key)},
+        h('summary', null, `${plural(a.reused.length, 'reused task')}${isNum(a.cost_avoided_usd) ? ` · ${money(a.cost_avoided_usd)}` : ''}`),
+        h('ul', {class: 'dz-reused'}, a.reused.map((e) => h('li', null,
+          h('div', {class: 'dz-reused-task'},
+            h('span', {class: 'mono'}, e.task),
+            e.lower_bound > 0
+              ? tip(h('span', {class: 'mono muted'}, `≥ ${money(e.cost_avoided_usd)}`), 'Cut short',
+                [`${plural(e.lower_bound, 'reused trial')} stopped early, so the usage is a lower bound.`], true)
+              : h('span', {class: 'mono muted'}, money(e.cost_avoided_usd))),
+          h('div', {class: 'dz-reused-from'}, e.trials.map(trialRef), e.runs.map(runRef)))))),
+      toRun.length > 0 && a.tasks_reused > 0 && h('details', {'data-d': `${key}:run`, open: open.has(`${key}:run`)},
+        h('summary', null, `${plural(toRun.length, 'task')} to run`),
+        h('p', {class: 'dz-reuse-run mono'}, toRun.join(', '))),
+      a.short.length > 0 && h('p', {class: 'dz-line warn-text'}, h('span', null, '!'),
+        h('span', null, `Too few usable trials, so ${a.short.length === 1 ? 'it runs' : 'these run'} in full: `
+          + a.short.map((s) => `${s.task} (${s.usable} usable)`).join(', '))));
+  }
+
+  /** A reused trial: its trial name, the whole trial key in the tooltip. */
+  function trialRef(key) {
+    const name = String(key).split('/').pop();
+    return tip(h('span', {class: 'chip'}, name), 'Trial', [[key, 'trial key']], true);
+  }
+
+  /** A run trials were reused from: it opens when it is one of this profile's runs, otherwise it is only named. */
+  function runRef(key) {
+    const [profile, runId] = String(key).split('/');
+    const own = runId && profile === ((ui.state && ui.state.config.profile) || 'default') && ui.state.runs.some((r) => r.id === runId);
+    return own
+      ? h('button', {type: 'button', class: 'chip dz-run-ref', title: 'Open this run', onclick: () => openRun(runId)}, key)
+      : h('span', {class: 'chip', title: 'Run'}, key);
   }
 
   // Saving and the other actions ---------------------------------------------
 
-  async function save(button) {
+  /** `fallbackNote`: the change note when the form has none, for a save that only resolves the reused trials again. */
+  async function save(button, fallbackNote = '') {
     const ed = st.ed;
     if (!ed) return;
     const f = ed.form;
@@ -1319,7 +1572,7 @@
       toast(errors.join('; '), true);
       return;
     }
-    const body = {title: f.title.trim(), purpose: f.purpose.trim(), rationale: f.rationale.trim(), change_note: f.change_note.trim(), spec};
+    const body = {title: f.title.trim(), purpose: f.purpose.trim(), rationale: f.rationale.trim(), change_note: f.change_note.trim() || fallbackNote, spec};
     await busy(button, async () => {
       let detail;
       try {
@@ -1367,6 +1620,7 @@
         out.extra = mine.extra;
       });
       for (const k of RUN_FIELDS) take(`run.${k}`, (c) => c.run[k], () => { out.run[k] = mine.run[k]; });
+      take('reuse', (c) => c.reuse, () => { out.reuse = mine.reuse; });
       const baselineMine = baselineName(mine);
       let baseline = baselineName(out);
       take('arms', (c) => c.arms, () => { out.arms = mine.arms; });
@@ -1495,12 +1749,16 @@
             h('span', null, a.name, a.name === cfg.baseline_arm && h('span', {class: 'faint'}, ' · baseline')),
             h('small', {class: 'mono faint'}, `${a.family || a.agent} · ${a.provider}/${a.model}`))))),
         field('Title', title, {notes: [note('Optional')]}),
+        h('label', {class: 'dz-check'}, h('input', {type: 'checkbox', name: 'reuse'}),
+          h('span', null, 'Reuse measured trials'),
+          h('small', {class: 'faint'}, 'Skip tasks the ledger already has for this exact configuration')),
         h('p', {class: 'muted'}, 'Saves version 1 of a new design from the mode\'s tasks and the arms as configured. Nothing runs.'),
       ],
       read: (form) => {
         const arms = [...form.querySelectorAll('input[name="arm"]:checked')].map((i) => i.value);
         if (!arms.length) throw new Error('Tick at least one arm.');
         const body = {mode: form.elements.mode.value, arms};
+        if (form.elements.reuse.checked) body.reuse = 'measured';
         const text = form.elements.title.value.trim();
         if (text) body.title = text;
         return api('POST', '/api/designs/from-config', body);
@@ -1577,10 +1835,13 @@
       if (typeof id === 'string' && id) load(id, null, false, true);
     },
     onState(state, prev) {
-      // New trials in the ledger change the estimate: recheck edits (a saved check reloads through the list).
+      // New trials in the ledger change the estimate: recheck edits (a saved check reloads through the list). What
+      // edits that reuse trials take also changes with an exclusion or an outcome, which only the ledger version shows.
       const now = stateBlock('ledger');
       const before = prev && prev.ledger && !prev.ledger.error ? prev.ledger : null;
-      if (now && before && now.last_ingest_at !== before.last_ingest_at && st.ed && (isEdited() || !st.ed.base)) scheduleCheck();
+      const changed = now && before && (now.last_ingest_at !== before.last_ingest_at
+        || (st.ed && st.ed.form.reuse === 'measured' && now.version !== before.version));
+      if (changed && st.ed && (isEdited() || !st.ed.base)) scheduleCheck();
     },
     /** params: {id, version}; a null version means the latest. */
     open(params) {
