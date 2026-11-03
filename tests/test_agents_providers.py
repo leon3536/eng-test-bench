@@ -284,12 +284,23 @@ class ProviderArms(BenchTestCase):
                                            "CLINE_PROMPT_ARTIFACT_DIR": "/logs/agent"})
 
     def test_goose(self) -> None:
+        from bench.agents.goose import session_affinity
+
+        links = ("mkdir -p /logs/agent/goose/xdg-data/goose ~/.local/share && rm -rf ~/.local/share/goose && "
+                 "ln -s /logs/agent/goose/xdg-data/goose ~/.local/share/goose && "
+                 "mkdir -p /logs/agent/goose/xdg-state/goose ~/.local/state && rm -rf ~/.local/state/goose && "
+                 "ln -s /logs/agent/goose/xdg-state/goose ~/.local/state/goose")
         for key, m in provider_arms.MODELS.items():
             with self.subTest(model=key):
                 _, env = self.run_agent(key, "goose")
                 command, run_env = env.find("goose run ")
+                setup, setup_env = env.find(" ln -s ")
                 run = ('export PATH="$HOME/.local/bin:$PATH" && goose run --recipe ~/runtime-recipe.yaml '
                        "--output-format stream-json --max-turns 300 2>&1 | stdbuf -oL tee /logs/agent/goose.txt")
+                # Goose's data and state are the defaults, outside the logs dir; only its own dirs link into it.
+                self.assertEqual(command, PREFIX + 'export XDG_DATA_HOME="$HOME/.local/share" '
+                                 'XDG_STATE_HOME="$HOME/.local/state" && ' + run)
+                self.assertNotIn(SESSION, command)  # nothing of the trial (or task) name in the run's cmdline
                 # Fireworks and xAI run as a custom provider declaring the effort (Harbor sees Goose's openai
                 # client at the provider's host); Terra is OpenAI's own provider.
                 host = {"fireworks": {"OPENAI_HOST": "https://api.fireworks.ai/inference"},
@@ -297,16 +308,15 @@ class ProviderArms(BenchTestCase):
                 provider = {"fireworks": "bench_fireworks_ai", "xai": "bench_xai"}.get(m.provider, "openai")
                 self.assertEqual(run_env, {**host, "OPENAI_API_KEY": KEY_OF[m.provider][1],
                                            "GOOSE_MODEL": self.model_id(m), "GOOSE_PROVIDER": provider,
-                                           "XDG_DATA_HOME": "/logs/agent/goose/xdg-data",
-                                           "XDG_STATE_HOME": "/logs/agent/goose/xdg-state",
                                            "GOOSE_THINKING_EFFORT": m.effort})
+                self.assertEqual(setup_env, run_env)
                 if m.provider == "openai":
-                    self.assertEqual(command, PREFIX + run)
+                    self.assertEqual(setup, PREFIX + links)
                     continue
-                write, _, rest = command.removeprefix(PREFIX).partition(" && printf '%s\\n' ")
+                write, _, rest = setup.removeprefix(PREFIX + links + " && ").partition(" && printf '%s\\n' ")
                 self.assertEqual(write, "mkdir -p ~/.config/goose/custom_providers")
-                spec_text, _, rest = rest.partition(f" > ~/.config/goose/custom_providers/{provider}.json && ")
-                self.assertEqual(rest, run)
+                spec_text, _, rest = rest.partition(f" > ~/.config/goose/custom_providers/{provider}.json")
+                self.assertEqual(rest, "")
                 model: dict[str, Any] = {"name": self.model_id(m), "request_params": {"reasoning_effort": m.effort}}
                 if m.provider == "fireworks":
                     model["context_limit"] = {"deepseek": 1000000, "glm": 1048573, "kimi": 1048576}[key]
@@ -315,8 +325,16 @@ class ProviderArms(BenchTestCase):
                 self.assertEqual(json.loads(shlex.split(spec_text)[0]), {
                     "name": provider, "engine": "openai", "display_name": title,
                     "api_key_env": "OPENAI_API_KEY", "base_url": url + "/chat/completions", "models": [model],
-                    "headers": {header: SESSION}, "supports_streaming": True, "requires_auth": True,
-                    "dynamic_models": False})
+                    "headers": {header: session_affinity(SESSION)}, "supports_streaming": True,
+                    "requires_auth": True, "dynamic_models": False})
+
+    def test_goose_session_affinity_is_a_hash_of_the_trial(self) -> None:
+        from bench.agents.goose import session_affinity
+
+        trial = "pypi-server__bZZeEkw__agent"
+        self.assertEqual(session_affinity(trial), session_affinity(trial))
+        self.assertNotEqual(session_affinity(trial), session_affinity("pypi-server__cYYfFlx__agent"))
+        self.assertRegex(session_affinity(trial), r"^[0-9a-f]{32}$")
 
     def test_goose_refuses_an_effort_the_provider_does_not_take(self) -> None:
         from bench.agents.goose import custom_provider

@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "id": "d-glm-redo-13-trials-c382",
+  "title": "Redo: 13 GLM + 2 Goose DeepSeek + 13 Grok infra",
+  "created_at": "2026-11-02T16:01:07+00:00",
+  "updated_at": "2026-11-03T03:21:50+00:00",
+  "latest_version": 3,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-02T16:01:07+00:00",
+      "spec_hash": "sha256:7fabbdf7936dfe6b73680eeedb912c0bfeeb48f1f7bdc42577d182ce21eebaa7",
+      "change_note": "",
+      "approved_at": "2026-11-02T16:01:11+00:00",
+      "runs": []
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-02T16:22:27+00:00",
+      "spec_hash": "sha256:2e0d4920ed9975ec7352cb4f0cd00f15bda53a169d2dccfd87b923742af9635f",
+      "change_note": "Add goose-deepseek financial-document-processor (passed, tokens not reported).",
+      "approved_at": "2026-11-02T16:22:58+00:00",
+      "runs": []
+    },
+    "3": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-03T03:21:34+00:00",
+      "spec_hash": "sha256:6e838702519ad18381a0f34d5fd79b009bc122fff6905c3fe74d7372fc53ae61",
+      "change_note": "Add goose-deepseek pypi-server (Goose self-kill, fixed) and 13 Grok trials lost to our side today (CPU-pinned timeouts, 1 no-start).",
+      "approved_at": "2026-11-03T03:21:48+00:00",
+      "runs": [
+        "20261102-192150-glm-redo-13-tria-v3"
+      ]
+    }
+  }
+}

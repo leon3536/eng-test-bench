@@ -2,12 +2,13 @@
 
 The user runs, runs again, and then asks "where are we?", so the report is
 not one run's results but a live query over the whole ledger. Each harness
-is compared with the baseline harness (Claude Code) on the same provider and
-model, task by task on identical task content, pooling every run and attempt
-that matches the filters. The task is the unit: repeats sharpen a task's
-mean but never add a pair. With compare 'models' the other axis is held:
-each harness stays fixed, and each model it ran is compared with the
-baseline model (config baseline_model) on the same task content, with no
+is compared with the baseline harness (Claude Code) on the same provider,
+model and effort, task by task on identical task content, pooling every run
+and attempt that matches the filters. The task is the unit: repeats sharpen
+a task's mean but never add a pair. With compare 'models' the other axis is
+held: each harness stays fixed, and each model and effort it ran is
+compared with the baseline model (config baseline_model) at the baseline
+effort (report.baseline_effort) on the same task content, with no
 published-figure verdicts, since those figures compare harnesses.
 
 Judgements are made here, at report time, from the ledger's facts: which
@@ -40,7 +41,7 @@ from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 from typing import Any
 
-from . import classify, extract, harnesses, pricing, settings, stats
+from . import classify, extract, harnesses, hostload, pricing, settings, stats
 from .fsutil import canonical_json
 from .ledger import Filters, parse_filters
 from .settings import Config
@@ -50,7 +51,7 @@ __all__ = [
     "build_pairs", "export_rows", "analysis_rows", "ledger_fingerprint", "prepare_rows", "group_key",
     "pick_baselines", "build_cells", "compare_metric", "compare_pass", "reference_for", "verdict", "coverage_for",
     "caveats_for", "headline", "setup_matches", "task_scope", "tasks_file", "saved_report", "harness_key",
-    "axis_key", "same_basis", "flag_caveats", "fallback_model",
+    "axis_key", "same_basis", "flag_caveats", "fallback_model", "effort_of",
 ]
 
 GROUP_BY = ("family", "implementation", "config")
@@ -59,6 +60,9 @@ PRICING_MODES = ("current", "as_ingested", "reported")
 # What a comparison varies: the harness on one model, or the model under one harness.
 COMPARE_AXES = ("harnesses", "models")
 DEFAULT_BASELINE_MODEL = settings.DEFAULT_BASELINE_MODEL
+# The effort of the baseline model's group that compare 'models' sets the others against.
+DEFAULT_BASELINE_EFFORT = "medium"
+_EFFORT_NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 METRICS = ("tokens_total", "tokens_uncached", "cost")
 ESTIMATORS = ("ratio_of_means", "geomean")
 EXPORT_LEVELS = ("trials", "pairs", "comparisons")
@@ -104,6 +108,8 @@ ANALYSIS_KEYS = (
     # What reuse.py matches a trial on beyond its cell: the dataset, its snapshot and the Harbor that ran it,
     # the share of its tokens spent on the arm's model, and a person's exclusion whatever report.exclusions says.
     "dataset", "dataset_snapshot", "harbor_version", "primary_share", "excluded_by_hand",
+    # The host CPU was busy for the trial's agent time, so its time is left out (reuse runs such a task again).
+    "cpu_contended",
 )
 
 
@@ -133,6 +139,7 @@ class Options:
     setup: str = "any"      # SETUP_FILTERS
     compare: str = "harnesses"                      # COMPARE_AXES
     baseline_model: str = DEFAULT_BASELINE_MODEL    # 'provider:model', for compare 'models'
+    baseline_effort: str = DEFAULT_BASELINE_EFFORT  # the baseline model's effort, for compare 'models'
 
 
 # Where each option sits in a request body ({"pairing": {"match_on": ...}}).
@@ -159,6 +166,7 @@ _REQUEST_PATHS: dict[str, tuple[str, ...]] = {
     "setup": ("setup",),
     "compare": ("compare",),
     "baseline_model": ("baseline", "model"),
+    "baseline_effort": ("baseline", "effort"),
 }
 
 # The flat keys a profile's `report:` section may set. The precision target,
@@ -171,7 +179,7 @@ _CONFIG_KEYS: dict[str, str] = {
     "same_run_only": "same_run_only", "match_on": "match_on", "ci_level": "ci_level",
     "bootstrap_resamples": "resamples", "seed": "seed", "min_pairs_estimate": "min_pairs_estimate",
     "min_pairs_verdict": "min_pairs_verdict", "pricing": "pricing", "target_pass_delta_pp": "target_pass_delta_pp",
-    "compare": "compare",
+    "compare": "compare", "baseline_effort": "baseline_effort",
 }
 
 
@@ -242,6 +250,10 @@ def _coerce(name: str, value: Any, label: str) -> Any:
         if not provider.strip() or not model.strip() or len(value) > 200:
             raise ValueError(f"{label} must be provider:model, e.g. {DEFAULT_BASELINE_MODEL}")
         return f"{provider.strip()}:{model.strip()}"
+    if name == "baseline_effort":
+        if not isinstance(value, str) or not _EFFORT_NAME.fullmatch(value.strip()):
+            raise ValueError(f"{label} must be an effort level, e.g. {DEFAULT_BASELINE_EFFORT}")
+        return value.strip()
     raise ValueError(f"Unknown option {label}")
 
 
@@ -412,11 +424,14 @@ def prepare_rows(rows: Sequence[Mapping[str, Any]], o: Options,
     out = []
     for source in rows:
         row = dict(source)
+        if row.get("outcome") == "answer_lookup":
+            row["passed"] = False  # looked up the answer: a fail, scored or not (Ledger._trial_row)
         manual = _manual_reason(row, trials, runs)
         phases = _mapping(row.get("phases"))
         agent_sec, total_sec = phases.get("agent_exec_sec"), row.get("total_sec")
         setup_sec = phases.get("agent_setup_sec")
-        status = classify.usage_status({**row, "agent_exec_sec": row.get("agent_exec_sec", agent_sec)})
+        exec_sec = row.get("agent_exec_sec", agent_sec)
+        status = classify.usage_status({**row, "agent_exec_sec": exec_sec})
         validity = classify.validity(row["outcome"], crashes=o.crashes, misconfigured_cap=o.misconfigured_cap,
                                      usage=status)
         n_input, n_cache, n_output = row.get("n_input"), row.get("n_cache"), row.get("n_output")
@@ -441,6 +456,10 @@ def prepare_rows(rows: Sequence[Mapping[str, Any]], o: Options,
             # The latest action on the trial, else on its run (Ledger._trial_row), as _manual_reason decides it.
             excluded_by_hand=manual is not None or _mapping(row.get("exclusion")).get("action") == "exclude",
             agent_minutes=agent_sec / 60.0 if agent_sec is not None else None,
+            # The agent's execution time for the time multiple (compare_time), and whether other work on the
+            # host was using the CPU through much of it (hostload), which keeps it out of that multiple.
+            time_sec=float(exec_sec) if isinstance(exec_sec, (int, float)) and exec_sec > 0 else None,
+            cpu_contended=hostload.is_contended(row.get("flags", row.get("flags_json"))),
             total_minutes=total_sec / 60.0 if total_sec is not None else None,
             setup_mode=row.get("setup_mode"),
             setup_minutes=setup_sec / 60.0 if setup_sec is not None else None,
@@ -501,9 +520,17 @@ def ledger_fingerprint(rows: Sequence[Mapping[str, Any]]) -> str:
 
 # Grouping and pairing ---------------------------------------------------------------------
 
-def group_key(row: Mapping[str, Any], o: Options) -> str:
-    """The line a trial pools into on its (provider, model). A pinned
-    baseline config stands apart only when harnesses are compared."""
+def effort_of(row: Mapping[str, Any]) -> str | None:
+    """The effort a trial ran at (harnesses.effective_effort); None for the harness default."""
+    return harnesses.effective_effort(row)
+
+
+def group_key(row: Mapping[str, Any], o: Options, *, effort: bool = True) -> str:
+    """The line a trial pools into on its (provider, model): one per
+    effort, so Opus at low, medium and high are three lines. A config hash
+    already covers the effort. A pinned baseline config stands apart only
+    when harnesses are compared. effort=False leaves the effort out, as
+    keys were before efforts split (the bootstrap seeds, _seed_key)."""
     provider, model, family = row["provider"], row["model"], row["family"]
     config_hash = row.get("config_hash")
     pinned = o.baseline_config and o.compare == "harnesses"
@@ -515,6 +542,9 @@ def group_key(row: Mapping[str, Any], o: Options) -> str:
         key = f"impl:{provider}|{model}|{family}|{row.get('implementation') or 'builtin'}"
     else:
         key = f"cfg:{config_hash}"
+    level = effort_of(row) if effort and not key.startswith("cfg:") else None
+    if level is not None:
+        key += f"|e:{level}"
     if o.split_harness_versions:
         key += f"|v{row.get('harness_version') or '?'}"
     return key
@@ -534,7 +564,9 @@ def task_id(row: Mapping[str, Any], match_on: str) -> tuple[str, str]:
     return _task_id(row, match_on)
 
 def _pair_key(row: Mapping[str, Any], o: Options) -> tuple[str, ...]:
-    # Comparing models, the same task content pairs across models; the group key holds the model.
+    # Comparing models, the same task content pairs across models; the group key holds the model. The
+    # group key also holds the effort, and a comparison pairs a group only with its axis's baseline,
+    # which ran at the same effort (pick_baselines), so no pair crosses efforts.
     task = _task_id(row, o.match_on)
     key: tuple[str, ...] = tuple(task) if o.compare == "models" else (row["provider"], row["model"], *task)
     if o.same_run_only:
@@ -544,16 +576,18 @@ def _pair_key(row: Mapping[str, Any], o: Options) -> tuple[str, ...]:
 
 def harness_key(row: Mapping[str, Any], o: Options) -> str:
     """What compare 'models' holds fixed: the harness as the grouping sees
-    it, without the model. A configuration is its family, implementation,
-    effort and options, since its config hash covers the model too."""
+    it, without the model or the effort, so every model and effort it ran is
+    set against its one baseline. A configuration is its family,
+    implementation and options less the effort, since its config hash covers
+    the model and the effort too."""
     family = row["family"]
     if o.group_by == "family":
         key = f"fam:{family}"
     elif o.group_by == "implementation":
         key = f"impl:{family}|{row.get('implementation') or 'builtin'}"
     else:
-        key = (f"cfg:{family}|{row.get('implementation') or 'builtin'}|{row.get('effort')}|"
-               f"{canonical_json(_mapping(row.get('options')))}")
+        key = (f"cfg:{family}|{row.get('implementation') or 'builtin'}|"
+               f"{canonical_json(harnesses.options_without_effort(row))}")
     if o.split_harness_versions:
         key += f"|v{row.get('harness_version') or '?'}"
     return key
@@ -577,6 +611,9 @@ def build_cells(rows: Sequence[Mapping[str, Any]], o: Options) -> dict[tuple[str
                 "values": {m: [] for m in METRICS}, "floors": {m: [] for m in METRICS},
                 "measured": {m: False for m in METRICS},
                 "passes": [], "mean": {}, "pass": None, "n_reward": 0,
+                # Agent execution seconds of the counted trials whose host was not busy, and how many
+                # counted trials were left out because it was (compare_time).
+                "times": [], "time_contended": 0,
                 # The cost values from list prices, and whether every cost value is the harness's own
                 # figure (pricing 'reported'): a pair uses reported figures only when both cells are.
                 "computed": {"values": [], "floors": []}, "reported_only": True,
@@ -591,6 +628,11 @@ def build_cells(rows: Sequence[Mapping[str, Any]], o: Options) -> dict[tuple[str
             cell["included"] += 1
             if row.get("usage_status") == "unmeasured":
                 cell["unmeasured"] += 1
+            if row.get("time_sec") is not None:
+                if row.get("cpu_contended"):
+                    cell["time_contended"] += 1
+                else:
+                    cell["times"].append(float(row["time_sec"]))
         for metric in METRICS:
             source = "cost" if metric == "cost" else metric
             if row.get(source) is not None:
@@ -750,15 +792,29 @@ def _rom(pairs: Sequence[tuple[float, float]]) -> float:
 
 
 def axis_key(group: Mapping[str, Any], o: Options) -> tuple[str, ...]:
-    """What a comparison holds fixed: the (provider, model) when harnesses
-    are compared, the harness (harness_key) when models are."""
-    return (group["harness_key"],) if o.compare == "models" else (group["provider"], group["model"])
+    """What a comparison holds fixed: the (provider, model, effort) when
+    harnesses are compared ('' for the harness default), the harness
+    (harness_key) when models are."""
+    if o.compare == "models":
+        return (group["harness_key"],)
+    return (group["provider"], group["model"], group.get("effort") or "")
+
+
+def _effort_text(effort: str | None) -> str:
+    return f"{effort} effort" if effort else "the harness default effort"
+
+
+def _most_valid(groups: Mapping[str, Mapping[str, Any]], keys: Sequence[str]) -> str:
+    return max(keys, key=lambda k: (groups[k]["trials"]["included"], groups[k]["trials"]["total"]))
 
 
 def _pick_model_baselines(groups: Mapping[str, Mapping[str, Any]],
                           o: Options) -> tuple[dict[tuple[str, ...], str], list[str]]:
-    """The baseline group of each harness: its group on the baseline model,
-    the one with the most valid trials when the grouping gives several."""
+    """The baseline group of each harness: its group on the baseline model
+    at the baseline effort, the one with the most valid trials when the
+    grouping gives several. A harness that never ran the baseline model at
+    that effort falls back to its group on the model with the most valid
+    trials, with a warning naming it."""
     by_harness: dict[tuple[str, ...], list[str]] = defaultdict(list)
     for key, g in groups.items():
         by_harness[axis_key(g, o)].append(key)
@@ -766,11 +822,16 @@ def _pick_model_baselines(groups: Mapping[str, Mapping[str, Any]],
     warnings: list[str] = []
     for axis in sorted(by_harness):
         keys = sorted(by_harness[axis])
-        candidates = [k for k in keys if f"{groups[k]['provider']}:{groups[k]['model']}" == o.baseline_model]
-        if not candidates:
+        on_model = [k for k in keys if f"{groups[k]['provider']}:{groups[k]['model']}" == o.baseline_model]
+        if not on_model:
             continue
-        best = max(candidates, key=lambda k: (groups[k]["trials"]["included"], groups[k]["trials"]["total"]))
+        candidates = [k for k in on_model if groups[k].get("effort") == o.baseline_effort] or on_model
+        best = _most_valid(groups, candidates)
         picked[axis] = best
+        if groups[best].get("effort") != o.baseline_effort and len(keys) > 1:
+            warnings.append(f"No {o.baseline_model} trials at {o.baseline_effort} effort with "
+                            f"{groups[best]['harness_name']}, so its baseline is {groups[best]['label']} "
+                            "(most valid trials).")
         if len(candidates) > 1:
             others = "; ".join(groups[k]["label"] for k in candidates if k != best)
             warnings.append(f"{len(candidates)} groups of one harness on {o.baseline_model}. The baseline is "
@@ -779,19 +840,26 @@ def _pick_model_baselines(groups: Mapping[str, Mapping[str, Any]],
 
 
 def pick_baselines(groups: Mapping[str, Mapping[str, Any]], o: Options) -> tuple[dict[tuple[str, ...], str], list[str]]:
-    """The baseline group on each (provider, model): the pinned config when
-    there is one, else the baseline family's group, else the one of its
-    groups with the most valid trials, with a warning naming the rest.
+    """The baseline group on each (provider, model, effort): the pinned
+    config when there is one, else the baseline family's group, else the one
+    of its groups with the most valid trials, with a warning naming the rest.
+    A side whose effort was not recorded (the harness default) may stand for
+    any effort: groups with no baseline at their own effort are compared
+    with the baseline family's group of unknown effort on that model, or,
+    being of unknown effort themselves, with its group at the baseline
+    effort (else the one with the most valid trials), with a warning.
     Comparing models, the baseline of each harness (_pick_model_baselines)."""
     if o.compare == "models":
         return _pick_model_baselines(groups, o)
-    by_model: dict[tuple[str, str], list[str]] = defaultdict(list)
+    by_axis: dict[tuple[str, ...], list[str]] = defaultdict(list)
     for key, g in groups.items():
-        by_model[(g["provider"], g["model"])].append(key)
+        by_axis[axis_key(g, o)].append(key)
     picked: dict[tuple[str, ...], str] = {}
     warnings: list[str] = []
-    for pm in sorted(by_model):
-        keys = sorted(by_model[pm])
+    for axis in sorted(by_axis):
+        keys = sorted(by_axis[axis])
+        provider, model, effort = axis
+        where = f"{provider}:{model}" + (f" at {effort} effort" if effort else "")
         candidates: list[str] = []
         if o.baseline_config:
             pinned = f"cfg:{o.baseline_config}"
@@ -799,12 +867,25 @@ def pick_baselines(groups: Mapping[str, Mapping[str, Any]], o: Options) -> tuple
         if not candidates:
             candidates = [k for k in keys if groups[k]["family"] == o.baseline_family]
         if not candidates:
+            # Unknown effort matches any: the baseline family's group of unknown effort on this model, or, for a
+            # side of unknown effort, its group at the baseline effort, else any of its groups on the model.
+            elsewhere = sorted(k for k, g in groups.items() if (g["provider"], g["model"]) == (provider, model)
+                               and g["family"] == o.baseline_family and (not effort or not g.get("effort")))
+            nearest = [k for k in elsewhere if groups[k].get("effort") == o.baseline_effort] or elsewhere
+            if not nearest:
+                continue
+            best = _most_valid(groups, nearest)
+            picked[axis] = best
+            n = len(keys)
+            warnings.append(f"No {o.baseline_family} trials on {provider}:{model} at {_effort_text(effort or None)}, "
+                            f"so {n} group{'' if n == 1 else 's'} there {'is' if n == 1 else 'are'} compared with "
+                            f"{groups[best]['label']}, which ran at {_effort_text(groups[best].get('effort'))}.")
             continue
-        best = max(candidates, key=lambda k: (groups[k]["trials"]["included"], groups[k]["trials"]["total"]))
-        picked[pm] = best
+        best = _most_valid(groups, candidates)
+        picked[axis] = best
         if len(candidates) > 1:
             others = "; ".join(groups[k]["label"] for k in candidates if k != best)
-            warnings.append(f"{len(candidates)} {o.baseline_family} groups on {pm[0]}:{pm[1]}. The baseline is "
+            warnings.append(f"{len(candidates)} {o.baseline_family} groups on {where}. The baseline is "
                             f"{groups[best]['label']} (most valid trials); the others are compared with it: "
                             f"{others}. Pin one with options.baseline.config.")
     return picked, warnings
@@ -818,13 +899,15 @@ def _summary(values: Sequence[float]) -> dict[str, Any]:
 
 
 def _group_names(key: str, rows: Sequence[Mapping[str, Any]], o: Options) -> tuple[str, str]:
-    """(short name for headlines, label)."""
+    """(short name for headlines, label). The label names the effort when
+    one was recorded; a configuration's label already does."""
     first = rows[0]
     family, provider, model = first["family"], first["provider"], first["model"]
     # Built the way group_key built the suffix: parsing the key would mistake
     # a model or family starting with 'v' for a version.
     version = f" v{first.get('harness_version') or '?'}" if o.split_harness_versions else ""
-    where = f"{provider}:{model}"
+    effort = effort_of(first)
+    where = f"{provider}:{model}" + (f" · {effort}" if effort else "")
     if key.startswith("cfg:"):
         config_hash = first.get("config_hash") or ""
         return f"{family} {config_hash[:6]}{version}", f"{first.get('config_label') or key}{version}"
@@ -903,8 +986,11 @@ def _group(key: str, rows: list[dict], o: Options) -> dict[str, Any]:
     ratios = [r["reported_cost_usd"] / r["cost_current"] for r in rows
               if r.get("reported_cost_usd") is not None and r.get("cost_current")]
     outcomes = Counter(r["outcome"] for r in rows)
+    efforts = {effort_of(r) for r in rows}
     return {
         "key": key, "label": label, "name": name, "provider": first["provider"], "model": first["model"],
+        # The one effort its trials ran at (the key holds it); None for the harness default.
+        "effort": next(iter(efforts)) if len(efforts) == 1 else None,
         # What compare 'models' holds fixed across models, and its name there.
         "harness_key": harness_key(first, o), "harness_name": _harness_name(first, name, o),
         "family": first["family"], "implementation": next(iter(impls)) if len(impls) == 1 else None,
@@ -1188,6 +1274,61 @@ def compare_pass(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str, o
     return out
 
 
+def _time_mean(cell: Mapping[str, Any] | None) -> float | None:
+    """A cell's mean agent execution seconds over trials whose host was not busy."""
+    times = (cell or {}).get("times") or []
+    return math.fsum(times) / len(times) if times else None
+
+
+def compare_time(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str, o: Options, key: str) -> dict:
+    """Arm ÷ baseline agent execution time (setup and verifier excluded) on
+    paired tasks, shaped like compare_metric's geomean and ratio of means.
+    Only trials whose host CPU was not busy count (hostload; a trial with no
+    host record counts): other work on the machine slows a trial, which is
+    not the model's speed. A shared task left with no such trial on a side
+    is dropped as host_busy, and so said; contended_trials counts the
+    trials set aside on the paired tasks."""
+    arm_cells, base_cells = _side(cells, arm), _side(cells, base)
+    dropped = {"no_arm_valid": 0, "no_baseline_valid": 0, "host_busy": 0, "no_time": 0}
+    pairs: list[tuple[tuple, float, float]] = []
+    contended = 0
+    for pk in sorted(set(arm_cells) & set(base_cells)):
+        a, b = arm_cells[pk], base_cells[pk]
+        if not a["included"]:
+            dropped["no_arm_valid"] += 1
+            continue
+        if not b["included"]:
+            dropped["no_baseline_valid"] += 1
+            continue
+        contended += a["time_contended"] + b["time_contended"]
+        av, bv = _time_mean(a), _time_mean(b)
+        if av and bv:
+            pairs.append((pk, bv, av))
+        elif (not av and a["time_contended"]) or (not bv and b["time_contended"]):
+            dropped["host_busy"] += 1
+        else:
+            dropped["no_time"] += 1
+    n = len(pairs)
+    measured = (any(c["times"] or c["time_contended"] for c in arm_cells.values())
+                and any(c["times"] or c["time_contended"] for c in base_cells.values()))
+    status, need = _status(n, o) if measured else ("not_measured", 0)
+    out: dict[str, Any] = {"status": status, "n": n, "need": need, "geomean": None, "ratio_of_means": None,
+                           "per_task": None, "dropped": dropped, "host_busy_tasks": dropped["host_busy"],
+                           "contended_trials": contended, "basis": "agent_exec_sec"}
+    if status in ("low_n", "ok"):
+        logs = [_log_ratio(b, h) for _, b, h in pairs]
+        gm = stats.log_ratio_summary(logs, o.ci_level)
+        out["geomean"] = {"estimate": gm["estimate"], "lo": gm["lo"], "hi": gm["hi"], "sd_log": gm["sd_log"],
+                          "gsd": gm["gsd"], "method": "t_on_log_ratios"}
+        values = [(b, h) for _, b, h in pairs]
+        ci = stats.bootstrap_ci(values, _rom, resamples=o.resamples, seed=stats.stable_seed(o.seed, key, "time"),
+                                level=o.ci_level)
+        out["ratio_of_means"] = {"estimate": _rom(values), "lo": ci[0] if ci else None,
+                                 "hi": ci[1] if ci else None, "method": "task_bootstrap"}
+        out["per_task"] = stats.quartiles([h / b for b, h in values])
+    return out
+
+
 def _task_names(cells: Sequence[Mapping[str, Any]], order: Mapping[str, int]) -> list[str]:
     names = {t for c in cells for t in c["tasks"]}
     return sorted(names, key=lambda t: (order.get(t, len(order)), t))
@@ -1209,9 +1350,12 @@ def _pairs_summary(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str,
 
 def _side_summary(cell: Mapping[str, Any] | None) -> dict[str, Any]:
     if cell is None:
-        return {"trials": 0, "valid": 0, "tokens_total": None, "cost": None, "pass": None, "trial_keys": []}
+        return {"trials": 0, "valid": 0, "tokens_total": None, "cost": None, "pass": None, "trial_keys": [],
+                "time_sec": None, "time_contended": 0}
+    # time_sec: mean agent seconds over trials whose host was not busy; time_contended: counted trials it left out.
     return {"trials": len(cell["trial_keys"]), "valid": cell["included"], "tokens_total": cell["mean"]["tokens_total"],
-            "cost": cell["mean"]["cost"], "pass": cell["pass"], "trial_keys": list(cell["trial_keys"])}
+            "cost": cell["mean"]["cost"], "pass": cell["pass"], "trial_keys": list(cell["trial_keys"]),
+            "time_sec": _time_mean(cell), "time_contended": cell["time_contended"]}
 
 
 def _ratio(base: float | None, arm: float | None) -> float | None:
@@ -1240,6 +1384,7 @@ def _pairs_table(cells: Mapping[tuple[str, tuple], dict], arm: str, base: str, o
             "arm": _side_summary(a), "baseline": _side_summary(b),
             "ratio_tokens": _ratio(b["mean"]["tokens_total"] if b else None, a["mean"]["tokens_total"] if a else None),
             "ratio_cost": _ratio(b["mean"]["cost"] if b else None, a["mean"]["cost"] if a else None),
+            "ratio_time": _ratio(_time_mean(b), _time_mean(a)),
         })
     return rows
 
@@ -1361,8 +1506,10 @@ def caveats_for(comparison: Mapping[str, Any], arm_group: Mapping[str, Any], bas
     for g, _ in sides:
         if g["config_diff"]:
             out.append(f"{g['name']} pools configurations that differ in {', '.join(sorted(g['config_diff']))}.")
-    efforts = [sorted({r.get("effort") or "the harness default" for r in rows}) for _, rows in sides]
-    if efforts[0] and efforts[1] and efforts[0] != efforts[1]:
+    efforts = [sorted({effort_of(r) or "the harness default" for r in rows}) for _, rows in sides]
+    # Comparing models, a recorded effort is part of each side's name (_model_name), so only an unknown one is news.
+    named = comparison.get("compare") == "models" and not ({"the harness default"} & {*efforts[0], *efforts[1]})
+    if efforts[0] and efforts[1] and efforts[0] != efforts[1] and not named:
         out.append(f"Effort differs: {arm_group['name']} ran at {', '.join(efforts[0])}, "
                    f"{base_group['name']} at {', '.join(efforts[1])}.")
     fraction = comparison["pairs"]["same_run_fraction"]
@@ -1517,6 +1664,8 @@ def headline(comparison: Mapping[str, Any], level: float = 0.90) -> str:
         who = f"{arm} vs {base} with {comparison.get('harness') or 'one harness'}"
     else:
         who = f"{arm} vs {base} on {comparison['provider']}:{comparison['model']}"
+        if comparison.get("effort"):
+            who += f" at {comparison['effort']} effort"
     metric = (comparison.get("coverage") or {}).get("metric") or "cost"
     if metric == "pass":
         p = comparison["pass"]
@@ -1636,7 +1785,7 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
             if others:
                 one = len(others) == 1
                 where = (f"{o.baseline_model} with {groups[others[0]]['harness_name']}" if by_models
-                         else f"{axis[0]}:{axis[1]}")
+                         else f"{axis[0]}:{axis[1]}" + (f" at {axis[2]} effort" if axis[2] else ""))
                 warnings.append(f"No {'trials' if by_models else o.baseline_family + ' trials'} on {where}, so "
                                 f"{len(others)} group{'' if one else 's'} there {'has' if one else 'have'} "
                                 "no comparison.")
@@ -1647,6 +1796,7 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
         for arm in sorted(others, key=lambda k: (groups[k]["name"], groups[k]["provider"], groups[k]["model"], k)):
             ag = groups[arm]
             key = f"{arm}~{base}"
+            seed = _seed_key(by_group[arm][0], by_group[base][0], o)
             # Published figures are harness multiples on one model: never a verdict on a model comparison.
             ref_ok = not by_models and ag["family"] != bg["family"] and bg["family"] == ref_baseline
             here = same_basis(cells, arm, base, o)
@@ -1659,19 +1809,23 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
             for metric in METRICS:
                 ref = (reference_for(cfg.reference, ag["family"], ag["provider"], ag["model"], metric)
                        if ref_ok and metric != "tokens_uncached" else None)
-                metrics[metric] = compare_metric(here, arm, base, metric, o, key, variants=there, reference=ref,
+                metrics[metric] = compare_metric(here, arm, base, metric, o, seed, variants=there, reference=ref,
                                                  names=names)
             pass_ref = (reference_for(cfg.reference, ag["family"], ag["provider"], ag["model"], "pass")
                         if ref_ok else None)
             comparison: dict[str, Any] = {
                 "key": key, "compare": o.compare, "provider": ag["provider"], "model": ag["model"],
                 "baseline_provider": bg["provider"], "baseline_model": bg["model"],
+                # Each side's effort (None: the harness default); harnesses are compared at one effort.
+                "effort": ag["effort"], "baseline_effort": bg["effort"],
                 # The harness both sides ran (compare 'models'), else None.
                 "harness": ag["harness_name"] if by_models else None,
                 "group": arm, "baseline_group": base,
                 "arm_name": names[0], "baseline_name": names[1], "headline": "",
                 "pairs": _pairs_summary(here, arm, base, metrics["cost"], order), "metrics": metrics,
-                "pass": compare_pass(here, arm, base, o, key, reference=pass_ref), "coverage": {}, "caveats": [],
+                "pass": compare_pass(here, arm, base, o, seed, reference=pass_ref),
+                # Agent time, from trials whose host CPU was not busy (compare_time).
+                "time": compare_time(here, arm, base, o, seed), "coverage": {}, "caveats": [],
             }
             comparison["coverage"] = coverage_for(comparison, here, groups, cfg, o)
             comparison["caveats"] = caveats_for(comparison, ag, bg, by_group[arm], by_group[base], run_status, o)
@@ -1729,9 +1883,24 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
 
 
 def _model_name(g: Mapping[str, Any], other: Mapping[str, Any]) -> str:
-    """A side of a model comparison by its model; with its provider when the
-    other side's model has the same id on another provider."""
-    return g["model"] if g["model"] != other["model"] else f"{g['provider']}:{g['model']}"
+    """A side of a model comparison by its model and its effort when one was
+    recorded ("claude-opus-5-5 low"); with its provider when the other side's
+    model has the same id on another provider."""
+    same_id = g["model"] == other["model"] and g["provider"] != other["provider"]
+    name = f"{g['provider']}:{g['model']}" if same_id else g["model"]
+    return f"{name} {g['effort']}" if g.get("effort") else name
+
+
+def _seed_key(arm: Mapping[str, Any], base: Mapping[str, Any], o: Options) -> str:
+    """What a comparison's bootstrap draws are seeded from, given a trial of
+    each side: its group keys without the effort, as before efforts split, so
+    a ledger of one effort keeps its intervals; the two efforts are added
+    when they differ."""
+    key = f"{group_key(arm, o, effort=False)}~{group_key(base, o, effort=False)}"
+    efforts = (effort_of(arm), effort_of(base))
+    if efforts[0] != efforts[1]:
+        key += f"|e:{efforts[0] or ''}~{efforts[1] or ''}"
+    return key
 
 
 def _variant_cells(raw: Sequence[Mapping[str, Any]], excl: tuple, table: Any, o: Options) -> dict[str, dict]:
@@ -1880,8 +2049,9 @@ def _csv_text(value: Any) -> str:
 # later, or beside one from before multiples were harness / baseline, cannot be misread.
 _PAIR_COLUMNS = ("comparison", "provider", "model", "group", "baseline_group", "task", "digest_short", "run_key",
                  "same_run", "arm_trials", "arm_valid", "arm_tokens_total", "arm_cost", "arm_pass", "arm_trial_keys",
-                 "baseline_trials", "baseline_valid", "baseline_tokens_total", "baseline_cost", "baseline_pass",
-                 "baseline_trial_keys", "ratio_tokens", "ratio_cost", "direction", "filters")
+                 "arm_time_sec", "arm_time_contended", "baseline_trials", "baseline_valid", "baseline_tokens_total",
+                 "baseline_cost", "baseline_pass", "baseline_trial_keys", "baseline_time_sec",
+                 "baseline_time_contended", "ratio_tokens", "ratio_cost", "ratio_time", "direction", "filters")
 _COMPARISON_COLUMNS = ("comparison", "provider", "model", "group", "baseline_group", "metric", "status", "n", "need",
                        "geomean", "geomean_lo", "geomean_hi", "sd_log", "ratio_of_means", "ratio_of_means_lo",
                        "ratio_of_means_hi", "delta_pp", "delta_pp_lo", "delta_pp_hi", "delta_method", "robust",
@@ -1918,8 +2088,9 @@ def export_rows(ledger: Any, cfg: Config, f: Filters | None, o: Options | None, 
                 values = [p["task"], p["digest_short"], p["run_key"], p["same_run"]]
                 for side in ("arm", "baseline"):
                     s = p[side]
-                    values += [s["trials"], s["valid"], s["tokens_total"], s["cost"], s["pass"], s["trial_keys"]]
-                values += [p["ratio_tokens"], p["ratio_cost"], stats.DIRECTION, used]
+                    values += [s["trials"], s["valid"], s["tokens_total"], s["cost"], s["pass"], s["trial_keys"],
+                               s["time_sec"], s["time_contended"]]
+                values += [p["ratio_tokens"], p["ratio_cost"], p["ratio_time"], stats.DIRECTION, used]
                 out.append([_csv_text(v) for v in head + values])
         return iter(out)
     out.append(list(_COMPARISON_COLUMNS))

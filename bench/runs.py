@@ -60,7 +60,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import checks, datasets, fsutil, keys, prebake, procs, results, schemas
+from . import checks, datasets, fsutil, hostload, keys, prebake, procs, results, schemas
 from .procs import cleanup_containers  # noqa: F401  re-exported: older callers and tests patch runs.cleanup_containers
 from .prebake import ArmPrebake
 from .settings import (
@@ -97,7 +97,8 @@ PREFLIGHT_RETRY_WAITS = (20, 60)
 _DOCKER_SLOW = "Docker daemon is not running"  # harbor's preflight message when `docker info` fails or times out
 # Between two harbor starts in a task race: enough to spread their preflights, short because a campaign has many.
 RACE_STAGGER_SECONDS = 3
-# Images built at once before a task's race: one per arm, at most one per real CPU core of the bench host.
+# The most images built at once before a task's race; prebake.build_jobs sets the actual number. Builds have no
+# CPU cap (BuildKit ignores --cpus), so six at once used every core of the host (2026-10-31).
 RACE_BUILD_JOBS = 6
 MAX_RUN_ID = 44  # keeps the deepest trial paths under Windows' MAX_PATH
 _WINDOWS = os.name == "nt"
@@ -108,6 +109,11 @@ _UNMEASURED = ("{n} finished trial(s) ran but recorded no usage; their spend is 
                "so recorded spend is a lower bound.")
 
 log = logging.getLogger(__name__)
+
+
+def race_build_jobs(cfg: Config) -> int:
+    """Images a race builds at once: prebake.build_jobs, never above RACE_BUILD_JOBS."""
+    return max(1, min(RACE_BUILD_JOBS, int(cfg.prebake.build_jobs)))
 
 
 def _now() -> str:
@@ -457,11 +463,11 @@ def race_images(cfg: Config, spec: RunSpec, found: dict[str, Any]) -> dict[str, 
         gb = sum(float(getattr(ADAPTERS.get(f), "expected_gb", 0.0)) for f, _ in images.values())
         per_task.append({"task": task, "arms": arms, "images": len(images), "build": len(minutes),
                          "build_min": round(sum(minutes), 1),
-                         "build_wall_min": round(stats.lpt_makespan(minutes, RACE_BUILD_JOBS), 1),
+                         "build_wall_min": round(stats.lpt_makespan(minutes, race_build_jobs(cfg)), 1),
                          "disk_gb": round(gb * DISK_FACTOR, 2)})
     walls = [t["build_wall_min"] for t in per_task]
     return {"tasks": len(per_task), "arms": len(spec.arms), "lanes": sum(len(t["arms"]) for t in per_task),
-            "max_containers": spec.run.max_containers, "build_jobs": RACE_BUILD_JOBS,
+            "max_containers": spec.run.max_containers, "build_jobs": race_build_jobs(cfg),
             "images_to_build": sum(t["build"] for t in per_task),
             "build_wall_min_total": round(sum(walls), 1),
             "build_wall_min_max": max(walls, default=0.0),
@@ -1175,6 +1181,8 @@ class RunManager:
         return run.spend_usd + run.reserve_usd >= run.budget_usd
 
     def _execute(self, cfg: Config, spec: RunSpec, run: Run, locks: contextlib.ExitStack | None = None) -> None:
+        # The host's CPU load while the run goes on, so a trial slowed by other work is not charged to its model.
+        sampler = hostload.start(RUNS_DIR / run.id / hostload.HOSTLOAD_FILE)
         try:
             log_path = RUNS_DIR / run.id / "dataset.log"
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1232,6 +1240,8 @@ class RunManager:
                     a.finished_at = a.finished_at or _now()
         finally:
             run.finished_at = _now()
+            if sampler is not None:
+                sampler.stop()
             self._finish_race(run)
             if locks is not None:
                 locks.close()  # a build may start once this run is over
@@ -1672,7 +1682,7 @@ class RunManager:
         entry["build"]["images"] = len(plan.items)
         manager = self._race_builds()
         try:
-            started = manager.start(cfg, plan, jobs=min(RACE_BUILD_JOBS, len(plan.items)), setup="once",
+            started = manager.start(cfg, plan, jobs=min(race_build_jobs(cfg), len(plan.items)), setup="once",
                                     owner_run=run.id, prune_cache=True)
         except Exception as exc:  # BuildRefused (disk, Docker, a build elsewhere): the race still runs
             why = " ".join(str(exc).split())[:400]

@@ -40,7 +40,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
-from .. import keys
+from .. import keys, procs
 from ..environments.prebaked import BAKE_FORMAT, command_digest, exec_signature, harbor_version, redacted_env
 from ..fsutil import canonical_json, sha256_hex
 from .adapters import Adapter
@@ -264,7 +264,8 @@ class DockerProbes:
 
     def _docker(self, args: Sequence[str]) -> subprocess.CompletedProcess:
         return subprocess.run(["docker", *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=self.timeout_sec, env=keys.child_env(None))
+                              errors="replace", timeout=self.timeout_sec, env=keys.child_env(None),
+                              creationflags=procs.NO_WINDOW)
 
     def image(self, image: str) -> dict[str, str]:
         with self._lock:

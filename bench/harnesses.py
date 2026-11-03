@@ -7,7 +7,11 @@ classifier can use them without importing either. Nothing here does I/O.
 
 from __future__ import annotations
 
+import copy
+import json
 import re
+from collections.abc import Mapping
+from typing import Any
 
 # Options through which a harness stops itself on spend or on turns. The run's
 # per-trial caps are passed through whichever of these a harness accepts.
@@ -46,3 +50,64 @@ def reports_mispriced_cost(family: str, provider: str) -> bool:
     must not be trusted over the bench's computed cost on this provider."""
     return any(f == family and priced_for != provider
                for (f, _option), priced_for in CAP_PRICED_FOR.items())
+
+
+def _options(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A trial's options, parsed ('options') or as the ledger stores them ('options_json')."""
+    options = row.get("options")
+    if isinstance(options, Mapping):
+        return options
+    raw = row.get("options_json")
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, Mapping) else {}
+    return {}
+
+
+def _level(value: Any) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def effective_effort(row: Mapping[str, Any]) -> str | None:
+    """The reasoning effort a trial ran at, wherever its harness takes it:
+    the ledger's effort, else the option that carries it for a harness
+    without an effort setting (opencode's and kilo-code's variant, the
+    strands factory's effort, else its model's reasoning_effort). None is
+    the harness default: no level was recorded."""
+    level = _level(row.get("effort"))
+    if level is not None:
+        return level
+    options = _options(row)
+    factory = options.get("factory_kwargs")
+    model = options.get("model_kwargs")
+    params = model.get("params") if isinstance(model, Mapping) else None
+    for value in (options.get("variant"), factory.get("effort") if isinstance(factory, Mapping) else None,
+                  params.get("reasoning_effort") if isinstance(params, Mapping) else None):
+        level = _level(value)
+        if level is not None:
+            return level
+    return None
+
+
+def options_without_effort(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A trial's options less the one that carried its effective effort, so
+    a configuration can be named apart from its effort. The ledger's own
+    effort field is not an option and leaves the options as they are."""
+    options = copy.deepcopy(dict(_options(row)))
+    if _level(row.get("effort")) is not None:
+        return options
+    if _level(options.get("variant")) is not None:
+        del options["variant"]
+        return options
+    factory = options.get("factory_kwargs")
+    if isinstance(factory, dict) and _level(factory.get("effort")) is not None:
+        del factory["effort"]
+        return options
+    model = options.get("model_kwargs")
+    params = model.get("params") if isinstance(model, dict) else None
+    if isinstance(params, dict) and _level(params.get("reasoning_effort")) is not None:
+        del params["reasoning_effort"]
+    return options

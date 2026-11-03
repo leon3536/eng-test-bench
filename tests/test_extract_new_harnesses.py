@@ -271,8 +271,9 @@ class OpenCodeBunEpipe(unittest.TestCase):
 
         env = run(NonZeroAgentExitCodeError("Command failed (exit 1): opencode ..."), finished)
         self.assertEqual(env.commands, ["cat /logs/agent/opencode.txt"])  # the host's copy is not trusted first
+        run(ApiRateLimitError("Command failed (exit 1): x"), finished)  # a phrase in a finished run's tool output
         for error, text in ((NonZeroAgentExitCodeError("Command failed (exit 1): x"), self.TRACE),
                             (NonZeroAgentExitCodeError("Command failed (exit 137): x"), finished),
-                            (ApiRateLimitError("Command failed (exit 1): x"), finished)):
+                            (ApiRateLimitError("Command failed (exit 1): x"), self.TRACE)):
             with self.subTest(error=repr(error)), self.assertRaises(NonZeroAgentExitCodeError):
                 run(error, text)

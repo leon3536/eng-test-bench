@@ -1536,7 +1536,11 @@
         h('p', {class: 'dz-reuse-run mono'}, toRun.join(', '))),
       a.short.length > 0 && h('p', {class: 'dz-line warn-text'}, h('span', null, '!'),
         h('span', null, `Too few usable trials, so ${a.short.length === 1 ? 'it runs' : 'these run'} in full: `
-          + a.short.map((s) => `${s.task} (${s.usable} usable)`).join(', '))));
+          + a.short.map((s) => `${s.task} (${s.usable} usable)`).join(', '))),
+      (a.host_busy || []).length > 0 && h('p', {class: 'dz-line warn-text'}, h('span', null, '!'),
+        h('span', null, `All usable trials ran while the host CPU was busy, so the time is unknown and `
+          + `${a.host_busy.length === 1 ? 'it runs' : 'these run'} again: `
+          + a.host_busy.map((s) => `${s.task} (${s.usable} usable)`).join(', '))));
   }
 
   /** A reused trial: its trial name, the whole trial key in the tooltip. */

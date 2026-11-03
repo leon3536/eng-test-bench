@@ -15,7 +15,7 @@ from typing import Any, Callable
 import anthropic
 import httpx
 
-from . import datasets, fsutil, keys
+from . import datasets, fsutil, keys, procs
 from .settings import PREBAKE_OFF, PREBAKE_REQUIRE, SCHEDULE_TASKS, Config
 
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -36,7 +36,7 @@ def _cached(name: str, ttl: float, fn: Callable[[], dict[str, Any]]) -> dict[str
 def _docker() -> dict[str, Any]:
     try:
         proc = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"],
-                              capture_output=True, text=True, timeout=20)
+                              capture_output=True, text=True, timeout=20, creationflags=procs.NO_WINDOW)
     except FileNotFoundError:
         return {"ok": False, "detail": "Docker CLI not found. Install Docker Desktop."}
     except subprocess.TimeoutExpired:
@@ -50,7 +50,7 @@ def _capacity() -> dict[str, Any]:
     try:
         proc = subprocess.run(["docker", "info", "--format", "{{.NCPU}} {{.MemTotal}}"],
                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=20)
+                              timeout=20, creationflags=procs.NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return {"value": None}
     parts = proc.stdout.split() if proc.returncode == 0 and proc.stdout else []

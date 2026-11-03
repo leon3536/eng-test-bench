@@ -31,7 +31,7 @@ from typing import Any
 
 from harbor.models.trial.error_policy import FailureCause, policy_for
 
-from . import classify, extract, fsutil, harnesses, pricing, stats
+from . import classify, extract, fsutil, harnesses, lookups, pricing, stats
 from .settings import EFFORT_INHERIT, JOBS_DIR, Arm, Config, Price, is_variant
 
 # Failures that end a trial before it is a task attempt. Harbor still runs the
@@ -49,6 +49,8 @@ _DEFAULT_TOLERANCE = 1.5
 # trial's log no longer changes, and the run view re-reads every result.json on each refresh.
 _WRITES: dict[str, tuple[tuple[int, int], dict[str, tuple[int, int]]]] = {}
 _WRITES_KEEP = 4096
+# Trial folder -> (trajectory.json's (mtime, size), lookups.scan's flag), for the same reason.
+_LOOKUPS: dict[str, tuple[tuple[int, int], dict[str, Any] | None]] = {}
 
 
 def _cost(price: Price, n_input: int, n_cache: int, n_output: int, n_write_5m: int = 0,
@@ -87,6 +89,34 @@ def _writes(path: Path, cfg: Config, arm: Arm, usage: dict[str, tuple[int, int, 
         _WRITES.clear()
     _WRITES[key] = (stamp, found)
     return found
+
+
+def _answer_lookup(trial: Path, trial_name: Any) -> dict[str, Any] | None:
+    """The trial's answer lookup when it counts, as the ledger judges it
+    (lookups.scan, then a verdict by hand in config/answer_lookups.yaml)."""
+    agent = trial / "agent"
+    try:
+        st = (agent / "trajectory.json").stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        stamp = (-1, -1)
+    hit = _LOOKUPS.get(str(trial))
+    if hit is not None and hit[0] == stamp:
+        found = hit[1]
+    else:
+        found = lookups.scan(agent) if agent.is_dir() else None
+        if len(_LOOKUPS) >= _WRITES_KEEP:
+            _LOOKUPS.clear()
+        _LOOKUPS[str(trial)] = (stamp, found)
+    flags: dict[str, Any] = {lookups.FLAG: found} if found else {}
+    try:
+        job_id = json.loads((trial / "config.json").read_text(encoding="utf-8")).get("job_id")
+    except (OSError, ValueError, AttributeError):
+        job_id = None
+    if job_id:
+        flags = lookups.with_verdict(flags, f"{job_id}/{trial_name or trial.name}")
+    lookup = classify.answer_lookup({"flags": flags})
+    return dict(lookup) if lookup is not None else None
 
 
 def _ceiling(cfg: Config, provider: str) -> Price | None:
@@ -183,6 +213,12 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
     cause = policy_for(error).cause if error else None
     if cause in _NOT_AN_ATTEMPT:
         reward = None  # still counted under errors
+    passed = None if reward is None else reward >= 1.0
+    # A pass that looked up the benchmark's answer is a fail (policy of 2026-11-02), as in the ledger and
+    # the report; reward stays Harbor's raw figure. Only passes are checked: a fail stays a fail anyway.
+    lookup = _answer_lookup(path.parent, data.get("trial_name")) if passed else None
+    if lookup is not None:
+        passed = False
     return {
         "arm": arm.name,
         "family": arm.family or arm.agent,
@@ -190,7 +226,8 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
         "trial": data.get("trial_name"),
         "reward": reward,
         "reward_valid": reward is not None,
-        "passed": None if reward is None else reward >= 1.0,
+        "passed": passed,
+        "answer_lookup": lookup,
         "error": error,
         "failure_cause": cause.value if cause else None,
         "error_message": (exc.get("exception_message") or "")[:400],  # the ledger keeps the full text

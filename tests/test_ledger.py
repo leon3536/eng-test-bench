@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -123,6 +123,26 @@ class Ingestion(LedgerCase):
         self.assertEqual((summary["inserted"], summary["unchanged"]), (0, 1))
         self.assertEqual(len(self.raw_rows()), 1)
         self.assertEqual(self.raw_rows()[0]["ingest_via"], "live")
+
+    def test_host_load_reaches_flags_and_outcome_on_rederive(self) -> None:
+        data, run = self.bench_job()
+        job = data / "jobs" / "r1" / "pi-glm"
+        lf.make_trial(job / "t1", exception_type="AgentTimeoutError", reward=0.0)
+        led = self.open_ledger()
+        led.ingest_job(job, self.ctx(run), final=True, via="rescan")
+        row = self.rows(led)[0]
+        self.assertEqual(row["outcome"], "agent_limit")  # no host record: unknown, so the timeout is the agent's
+        self.assertNotIn("cpu_contended", row["flags"])
+        # The run's host load over the agent's 300 s, every sample hot.
+        start = lf._T0 + timedelta(seconds=60)
+        lines = [json.dumps({"t": (start + timedelta(seconds=5 * (i + 1))).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                             "cpu": 97.5}) for i in range(60)]
+        (data / "runs" / "r1" / "hostload.jsonl").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+        self.assertEqual(led.rederive(force=True), 1)
+        row = self.rows(led)[0]
+        self.assertEqual((row["outcome"], row["flags"]["cpu_contended"], row["flags"]["host_cpu_samples"]),
+                         ("infra", True, 60))
+        self.assertIn("host CPU was busy", row["outcome_reason"])
 
     def test_incomplete_then_upgraded(self) -> None:
         data, run = self.bench_job()

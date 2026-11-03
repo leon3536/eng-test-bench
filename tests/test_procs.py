@@ -339,7 +339,7 @@ class CleanupContainersTests(BenchTestCase):
             self.assertIsNotNone(kw.get("timeout"), argv)
             self.assertFalse(kw.get("shell", False), argv)
         if WINDOWS:
-            self.assertEqual(procs.NO_CTRL_C, subprocess.CREATE_NEW_PROCESS_GROUP)
+            self.assertEqual(procs.NO_CTRL_C, subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
 
     def test_a_failed_listing_raises_instead_of_reporting_nothing_to_remove(self) -> None:
         self.docker.failing_ls.add("container")

@@ -32,6 +32,7 @@
   const OUTCOMES = {
     passed: {glyph: '●', label: 'passed'},
     failed: {glyph: '○', label: 'failed'},
+    answer_lookup: {glyph: '⊘', label: 'looked up the answer (fail)'},
     agent_limit: {glyph: '▲', label: 'hit its own limit'},
     agent_crash: {glyph: '×', label: 'harness crashed'},
     misconfigured_cap: {glyph: '$', label: 'stopped by a mispriced cap'},
@@ -42,7 +43,7 @@
     incomplete: {glyph: '…', label: 'killed before finishing'},
   };
   const OUTCOME_ORDER = Object.keys(OUTCOMES);
-  const CORNER = ['agent_crash', 'setup_failure', 'infra', 'incomplete'];  // marked in the corner of a coverage cell
+  const CORNER = ['answer_lookup', 'agent_crash', 'setup_failure', 'infra', 'incomplete'];  // marked in the corner of a coverage cell
   // Reference verdicts: [glyph, chip text, tag tone, what it means]. Never "confirmed". Multiples are
   // harness ÷ baseline, so below the published range means relatively cheaper than published.
   const VERDICTS = {
@@ -76,8 +77,10 @@
     group_by: 'family', split_harness_versions: false, 'baseline.family': 'claude-code', 'baseline.config': null,
     'pairing.match_on': 'digest', 'pairing.same_run_only': false, 'policy.crashes': 'include',
     'policy.misconfigured_cap': 'exclude', 'policy.exclusions': true, pricing: 'current', ci_level: 0.9, setup: 'any',
-    compare: 'harnesses', 'baseline.model': null,
+    compare: 'harnesses', 'baseline.model': null, 'baseline.effort': 'medium',
   };
+  // Efforts the baseline model can be set at (designs.RUN_EFFORTS).
+  const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
   // options.compare: harnesses (each model held fixed) or models (each harness held fixed).
   const COMPARE_CHOICES = [['harnesses', 'Harnesses'], ['models', 'Models']];
   // How each way names its two sides, its multiple and what enough pairs earn.
@@ -306,6 +309,25 @@
     return rows;
   }
 
+  /**
+   * The trial drawer's answer lookup (TrialRow.flags answer_lookup and answer_lookup_verdict): what the agent
+   * fetched of the benchmark's own solution or tests, and whether that makes the trial a fail. A verdict by hand
+   * (config/answer_lookups.yaml) wins over the bench's own check.
+   */
+  function lookupSection(flags) {
+    const found = (flags || {}).answer_lookup || null;
+    const hand = (flags || {}).answer_lookup_verdict || null;
+    if (!found && !hand) return null;
+    const verdict = hand ? `${hand.verdict === 'lookup' ? 'Counts as a fail' : 'Allowed'}, decided by hand`
+      : found.used === true ? 'Counts as a fail' : found.used === false ? 'Does not count' : 'Not judged: check by hand';
+    return sideSection('Answer lookup', 'the agent fetched the benchmark\'s own task files', params([
+      ['Verdict', verdict],
+      hand && hand.note && ['Note', hand.note],
+      found && ['Why', found.reason],
+      found && (found.urls || []).length > 0 && ['Fetched', h('span', {class: 'mono'}, found.urls.join(' · '))],
+    ]));
+  }
+
   /** The ledger table's mark beside a cost its checks question, with the checks in its tooltip. */
   function flagMark(flags) {
     const rows = flagRows(flags);
@@ -369,8 +391,19 @@
       ref.verdict === 'not_applicable' && POSITION[ref.position] && h('small', null, POSITION[ref.position]));
   }
 
-  /** not_measured: the harness reports no tokens, or (since the usage addendum) one side's every trial lost its usage. */
+  /** A comparison's figure for a forest metric: tokens and cost from c.metrics, agent time from c.time. */
+  const metricOf = (c, metric) => (metric === 'time' ? c.time || null : c.metrics ? c.metrics[metric] : null);
+
+  /** "2 left out: host busy": paired tasks the time multiple dropped because the host CPU was busy. */
+  function hostBusyText(t) {
+    const n = t && t.host_busy_tasks;
+    return n > 0 ? `${n} left out: host busy` : '';
+  }
+
+  /** not_measured: the harness reports no tokens, or (since the usage addendum) one side's every trial lost its usage;
+   *  for agent time, no paired task has a usable time on both sides. */
   function notMeasuredText(m) {
+    if (m.basis === 'agent_exec_sec') return 'no agent time recorded';
     const d = m.dropped || {};
     return d.usage_not_recorded > 0 && !(d.tokens_not_reported > 0)
       ? 'no usage recorded on one side' : 'tokens not reported by this harness';
@@ -1089,6 +1122,8 @@
     if (baseModel && !modelChoices.some(([v]) => v === baseModel)) {
       modelChoices.unshift([baseModel, `${baseModel} (no trials)`]);
     }
+    const baseEffort = optValue('baseline.effort') || 'medium';
+    const effortChoices = (EFFORTS.includes(baseEffort) ? EFFORTS : [baseEffort, ...EFFORTS]).map((e) => [e, e]);
     const ciError = h('small', {class: 'warn-text', hidden: !rp.invalid}, rp.invalid);
     const ci = numberInput('ci_level', optValue('ci_level'), {min: 0.8, max: 0.99, step: 0.01, oninput: (e) => {
       const v = Number(e.target.value);
@@ -1119,6 +1154,11 @@
         optSet('baseline.model', e.target.value);
         changedOption();
       }}), {notes: [note(models ? 'Every model is compared with this one, harness by harness.'
+        : 'Used when comparing models.')]}),
+      field('Baseline effort', select('baseline_effort', effortChoices, baseEffort, {disabled: !models, onchange: (e) => {
+        optSet('baseline.effort', e.target.value);
+        changedOption();
+      }}), {notes: [note(models ? 'The baseline model at this effort; a harness that never ran it uses its group with the most trials.'
         : 'Used when comparing models.')]}),
       field('Baseline config', pin, {notes: [note('Pin the baseline to one exact configuration.')]}),
       field('Pair on', select('match_on', [['digest', 'task content (default)'], ['name', 'task name']], optValue('pairing.match_on'), {onchange: (e) => {
@@ -1477,24 +1517,30 @@
       for (const c of r.comparisons || []) if (groups.has(c.group)) get(groups.get(c.group)).comparisons.push(c);
       return [...models.values()].sort((a, b) => a.title.localeCompare(b.title));
     }
-    const get = (provider, model) => {
-      const key = `${provider}:${model}`;
-      if (!models.has(key)) models.set(key, {key, title: key, provider, model, groups: [], comparisons: []});
+    // Harnesses are compared at one effort: a card per provider:model and effort ("· high"; none when not recorded).
+    const get = (provider, model, effort) => {
+      const key = `${provider}:${model}|${effort || ''}`;
+      const title = `${provider}:${model}${effort ? ` · ${effort}` : ''}`;
+      if (!models.has(key)) models.set(key, {key, title, provider, model, effort, groups: [], comparisons: []});
       return models.get(key);
     };
-    for (const g of r.groups || []) get(g.provider, g.model).groups.push(g);
-    for (const c of r.comparisons || []) get(c.provider, c.model).comparisons.push(c);
+    for (const g of r.groups || []) get(g.provider, g.model, g.effort).groups.push(g);
+    for (const c of r.comparisons || []) get(c.provider, c.model, c.effort).comparisons.push(c);
     return [...models.values()];
   }
 
   /** How the report names its two sides: harness and baseline, or model and baseline model. */
   const sidesOf = (r = rp.report) => SIDES[byModels(r) ? 'models' : 'harnesses'];
 
-  /** The baseline's name in headings: "Opus 5.5" when models are compared, "Claude Code" when harnesses are. */
+  /** The baseline's name in headings: "Opus 5.5 medium" when models are compared, "Claude Code" when harnesses are. */
   function baselineLabel(r) {
-    return byModels(r) ? modelLabel(dig(r.spec, 'options.baseline.model'))
+    const effort = dig(r.spec, 'options.baseline.effort');
+    return byModels(r) ? modelLabel(`${dig(r.spec, 'options.baseline.model') || ''}${effort ? ` ${effort}` : ''}`)
       : harnessLabel(dig(r.spec, 'options.baseline.family') || 'claude-code');
   }
+
+  /** A group's model as model comparisons name it, with its effort when one was recorded: "Opus 5.5 low". */
+  const groupModel = (g) => modelLabel(`${g.provider}:${g.model}${g.effort ? ` ${g.effort}` : ''}`);
 
   /** The Harnesses | Models switch above the multiples (the same option as Compare in Advanced). */
   function compareSwitch(r, readOnly) {
@@ -1535,7 +1581,9 @@
 
   function modelCard(m, r, {readOnly = false} = {}) {
     const groups = new Map((r.groups || []).map((g) => [g.key, g]));
-    const base = m.groups.find((g) => g.is_baseline);
+    // A group whose effort was not recorded may be compared with a baseline at another effort, on another card.
+    const base = m.groups.find((g) => g.is_baseline)
+      || (m.comparisons.length ? groups.get(m.comparisons[0].baseline_group) : undefined);
     const models = byModels(r);
     const baseFamily = models ? dig(r.spec, 'options.baseline.model')
       : dig(r.spec, 'options.baseline.family') || 'claude-code';
@@ -1550,7 +1598,7 @@
     const head = h('div', {class: 'rp-card-head'},
       h('h3', null, m.title),
       h('span', {class: 'rp-card-meta'},
-        base ? `baseline ${models ? baseName : base.name}` : `no ${baseFamily} baseline`),
+        base ? `baseline ${models ? groupModel(base) : base.name}` : `no ${baseFamily} baseline`),
       comps.length > 0 && h('span', {class: 'rp-card-meta'}, lo === hi ? plural(lo, 'paired task') : `${lo}–${hi} paired tasks`),
       caveats.length > 0 && tag(`⚠ ${plural(caveats.length, 'caveat')}`, 'warn'));
     const noneText = models
@@ -1564,8 +1612,10 @@
     return h('article', {class: 'rp-card'}, head,
       noBaseline && h('p', {class: 'rp-card-empty'}, noneText),
       h('div', {class: 'rp-plots'}, forest(comps, 'tokens_total', `Tokens vs ${baseName}`, S),
-        forest(comps, 'cost', `Cost vs ${baseName}`, S)),
-      passStrip(comps, S),
+        forest(comps, 'cost', `Cost vs ${baseName}`, S),
+        forest(comps, 'time', `Time vs ${baseName}`, S,
+          `agent run time, setup excluded; trials on a busy host left out; ${S.ratio}, log scale; left of 1× is faster`)),
+      passStrip(comps, `Pass rate vs ${baseName}`, S),
       plotLegend(baseName, models),
       h('div', {class: 'scroll'}, compTable(comps, groups, readOnly, baseName, models)),
       caveats.length > 0 && caveatList(comps, caveats));
@@ -1584,10 +1634,10 @@
   const diamond = (p, y, cls) => svg('svg', {x: at(p), y, width: 1, height: 1, overflow: 'visible'},
     svg('path', {d: 'M0 -5L5 0L0 5L-5 0Z', class: cls}));
 
-  function forest(comps, metric, title, S = sidesOf()) {
+  function forest(comps, metric, title, S = sidesOf(), subtitle = `${S.ratio}, log scale; left of 1× is less`) {
     return h('div', {class: 'rp-forest'},
       h('div', {class: 'rp-forest-head'}, eyebrow(title),
-        h('span', {class: 'faint'}, `${S.ratio}, log scale; left of 1× is less`)),
+        h('span', {class: 'faint'}, subtitle)),
       comps.map((c) => forestRow(c, metric, S)),
       axisRow(TICKS.map((v) => [xLog(v), tickLabel(v), v === 1])));
   }
@@ -1609,17 +1659,19 @@
     : `${c.arm_name} vs ${c.baseline_name}`);
 
   function forestRow(c, metric, S = sidesOf()) {
-    const m = c.metrics ? c.metrics[metric] : null;
+    const m = metricOf(c, metric);
+    const busy = metric === 'time' ? hostBusyText(m) : '';
     const label = h('div', {class: 'rp-who', title: `${c.arm_name} vs ${c.baseline_name}`},
       h('span', null, armLabel(c)), m && m.status === 'low_n' && tag('low n'));
     if (!m || m.status === 'not_measured') {
       return h('div', {class: 'rp-frow'}, label,
-        h('div', {class: 'rp-track-note'}, m ? notMeasuredText(m) : 'tokens not reported by this harness'),
+        h('div', {class: 'rp-track-note'}, m ? notMeasuredText(m)
+          : metric === 'time' ? 'no agent time in this report' : 'tokens not reported by this harness'),
         h('div', {class: 'rp-val faint'}, m ? `n=${m.n}` : DASH));
     }
     if (!m.geomean || m.status === 'insufficient') {
       return h('div', {class: 'rp-frow'}, label,
-        h('div', {class: 'rp-track-note'}, `needs ${plural(m.need, 'more paired task')}`),
+        h('div', {class: 'rp-track-note'}, `needs ${plural(m.need, 'more paired task')}${busy ? ` (${busy})` : ''}`),
         h('div', {class: 'rp-val faint'}, `n=${m.n}`));
     }
     const g = m.geomean;
@@ -1638,6 +1690,8 @@
       [`${times(g.estimate)} ${interval(g.lo, g.hi)}`, 'geometric mean'],
       rom && [`${times(rom.estimate)} ${interval(rom.lo, rom.hi)}`.trim(), 'ratio of means'],
       [count(m.n), 'paired tasks'],
+      busy && [busy, 'paired tasks'],
+      metric === 'time' && m.contended_trials > 0 && [count(m.contended_trials), 'trials left out: host CPU busy'],
       ref && [publishedText(ref), 'published'],
       ref && [verdictText(ref), 'verdict'],
       ref && ref.published && ref.published.source,
@@ -1645,10 +1699,11 @@
     ].filter(Boolean);
     return h('div', {class: `rp-frow${m.status === 'low_n' ? ' rp-lown' : ''}`}, label,
       tip(h('div', {class: 'rp-track-wrap', role: 'img', 'aria-label': `${armLabel(c)}: ${metricText(m)}`}, track),
-        `${armLabel(c)} · ${metric === 'cost' ? 'cost' : 'tokens'} vs `
+        `${armLabel(c)} · ${metric === 'cost' ? 'cost' : metric === 'time' ? 'agent time' : 'tokens'} vs `
           + `${c.compare === 'models' ? modelLabel(c.baseline_name) : c.baseline_name}`, rows, true),
       h('div', {class: 'rp-val'}, h('b', null, times(g.estimate)), ' ', h('span', {class: 'rp-ci'}, interval(g.lo, g.hi)),
-        rom && isNum(rom.estimate) && h('small', null, `mean ratio ${times(rom.estimate)}`)));
+        rom && isNum(rom.estimate) && h('small', null, `mean ratio ${times(rom.estimate)}`),
+        busy && h('small', null, busy)));
   }
 
   function axisRow(ticks) {
@@ -1659,9 +1714,9 @@
       h('span'));
   }
 
-  function passStrip(comps, S = sidesOf()) {
+  function passStrip(comps, title, S = sidesOf()) {
     return h('div', {class: 'rp-forest rp-pass'},
-      h('div', {class: 'rp-forest-head'}, eyebrow('Δ pass rate'),
+      h('div', {class: 'rp-forest-head'}, eyebrow(title),
         h('span', {class: 'faint'}, `${S.diff}, in points, on paired tasks`)),
       comps.map((c) => passRow(c, S)),
       axisRow(PASS_TICKS.map((v) => [xPass(v), v === 0 ? '0' : `${signed(v, 0)}`, v === 0])));
@@ -1728,6 +1783,21 @@
       m.status === 'low_n' && h('small', {class: 'sub'}, 'low n'));
   }
 
+  /** The agent time multiple in the comparison table: "0.62× (2 left out: host busy)". */
+  function timeCell(t) {
+    if (!t) return h('td', {class: 'num faint'}, DASH);
+    const busy = hostBusyText(t);
+    if (t.status === 'not_measured') return h('td', {class: 'num faint'}, 'no agent time');
+    if (!t.geomean) {
+      return h('td', {class: 'num faint'}, `needs ${t.need} more`, busy && h('small', {class: 'sub'}, busy));
+    }
+    const g = t.geomean;
+    return h('td', {class: `num${t.status === 'low_n' ? ' rp-lown' : ''}`},
+      `${times(g.estimate)}${busy ? ` (${busy})` : ''}`,
+      h('small', {class: 'sub'}, interval(g.lo, g.hi)),
+      t.status === 'low_n' && h('small', {class: 'sub'}, 'low n'));
+  }
+
   function passCell(p) {
     if (!p) return DASH;
     const d = p.delta_pp || {};
@@ -1741,7 +1811,8 @@
   function compTable(comps, groups, readOnly, baseName, models = false) {
     const S = SIDES[models ? 'models' : 'harnesses'];
     return h('table', {class: 'grid-t compact rp-cmp'},
-      thead(S.Arm, thNum('Pairs'), thNum(`Tokens vs ${baseName}`), thNum(`Cost vs ${baseName}`), !models && 'Published',
+      thead(S.Arm, thNum('Pairs'), thNum(`Tokens vs ${baseName}`), thNum(`Cost vs ${baseName}`),
+        h('th', {class: 'num', title: 'Agent run time, setup excluded; trials on a busy host left out'}, `Time vs ${baseName}`), !models && 'Published',
         !models && 'Verdict', `Pass, ${S.arm} vs ${S.base}`, thNum('Setup failures')),
       comps.map((c) => {
         const open = readOnly ? null : () => openPairs(c.key);
@@ -1759,12 +1830,14 @@
                   e.stopPropagation();
                   open();
                 }}, armLabel(c), h('span', {class: 'arrow'}, ' ›')),
-              h('span', {class: 'sub mono'}, models ? `${c.provider}:${c.model}` : `vs ${c.baseline_name}`),
+              h('span', {class: 'sub mono'}, models ? `${c.provider}:${c.model}${c.effort ? ` · ${c.effort}` : ''}`
+                : `vs ${c.baseline_name}`),
               (c.caveats || []).length > 0 && tip(h('span', {class: 'rp-cav'},
                 `⚠ ${plural(c.caveats.length, 'caveat')}`), 'Caveats', caveatsOf(c), true)),
             tdNum(count(c.pairs.n_tasks)),
             metricCell(c.metrics.tokens_total),
             metricCell(c.metrics.cost),
+            timeCell(c.time),
             !models && h('td', null, refs.length
               ? refs.map(([name, ref]) => h('div', null, both && h('span', {class: 'faint'}, `${name} `),
                 tip(h('span', {class: 'rp-pub'}, publishedText(ref)), `Published (${name.toLowerCase()})`,
@@ -1775,7 +1848,7 @@
               : DASH),
             h('td', null, passCell(c.pass)),
             tdNum(sf ? `${pct(sf.estimate)} ${interval(sf.lo, sf.hi, pct)}` : DASH, sf ? `${plural(sf.trials, 'trial')}, Wilson interval` : null)),
-          h('tr', {class: 'rp-headline'}, h('td', {colspan: models ? 6 : 8}, modelProse(c, c.headline))));
+          h('tr', {class: 'rp-headline'}, h('td', {colspan: models ? 7 : 9}, modelProse(c, c.headline))));
       }));
   }
 
@@ -1808,7 +1881,7 @@
           const sf = g.setup_failure_rate;
           const versions = Object.entries(g.harness_versions || {}).map(([v, n]) => `${v} ×${n}`).join(', ');
           return h('tr', {class: g.is_baseline ? 'baseline' : null},
-            h('td', null, h('b', null, byModels(r) ? `${g.provider}:${g.model}` : g.name),
+            h('td', null, h('b', null, byModels(r) ? `${g.provider}:${g.model}${g.effort ? ` · ${g.effort}` : ''}` : g.name),
               g.is_baseline && [' ', tag('baseline', 'ok')],
               g.implementation && g.implementation !== 'builtin' && h('span', {class: 'sub mono rp-impl'}, g.implementation),
               g.implementation === null && h('span', {class: 'sub'}, 'mixed implementations'),
@@ -1894,7 +1967,7 @@
       h('h3', {class: 'rp-cov-title'}, m.title),
       h('div', {class: 'scroll'}, h('table', {class: 'matrix rp-cov'},
         h('thead', null, h('tr', null, h('th', null, 'Task'), cols.map((g) => {
-          const name = byModels(r) ? modelLabel(`${g.provider}:${g.model}`) : g.name;
+          const name = byModels(r) ? groupModel(g) : g.name;
           return h('th', {title: g.label}, g.is_baseline ? `${name} ◆` : name);
         }))),
         h('tbody', null,
@@ -2056,7 +2129,8 @@
       params([
         models && ['Harness', c.harness || DASH],
         ['Model', h('span', {class: 'mono'}, `${c.provider}:${c.model}`)],
-        models && ['Baseline model', h('span', {class: 'mono'}, `${c.baseline_provider}:${c.baseline_model}`)],
+        models && ['Baseline model', h('span', {class: 'mono'},
+          `${c.baseline_provider}:${c.baseline_model}${c.baseline_effort ? ` · ${c.baseline_effort}` : ''}`)],
         ['Paired tasks', count(c.pairs.n_tasks)],
         ['Same run', isNum(c.pairs.same_run_fraction) ? pct(c.pairs.same_run_fraction) : DASH],
         [`${S.Arm} only`, c.pairs.arm_only_tasks.length ? plural(c.pairs.arm_only_tasks.length, 'task') : 'none'],
@@ -2083,7 +2157,10 @@
   }
 
   function ratioStrip(pairs, c, S = SIDES.harnesses) {
-    const rows = [['Tokens', 'ratio_tokens', c.metrics.tokens_total], ['Cost', 'ratio_cost', c.metrics.cost]];
+    const rows = [['Tokens', 'ratio_tokens', c.metrics.tokens_total], ['Cost', 'ratio_cost', c.metrics.cost],
+      ['Agent time', 'ratio_time', c.time]];
+    const sideValue = (key, s) => (key === 'ratio_tokens' ? tokens(s.tokens_total)
+      : key === 'ratio_cost' ? money(s.cost) : secs(s.time_sec));
     if (!pairs.length) return h('p', {class: 'muted'}, 'No paired tasks yet.');
     return h('div', {class: 'rp-forest rp-ratios'},
       rows.map(([label, key, m]) => {
@@ -2091,8 +2168,8 @@
           svg('circle', {cx: at(xLog(p[key])), cy: 15, r: 11, class: 'rp-hit'}),
           svg('circle', {cx: at(xLog(p[key])), cy: 15, r: 4, class: 'rp-gm'})),
         p.task, [[times(p[key]), `${label.toLowerCase()}, ${S.ratio}`],
-          [key === 'ratio_tokens' ? tokens(p.baseline.tokens_total) : money(p.baseline.cost), `${S.base} mean`],
-          [key === 'ratio_tokens' ? tokens(p.arm.tokens_total) : money(p.arm.cost), `${S.arm} mean`],
+          [sideValue(key, p.baseline), `${S.base} mean`],
+          [sideValue(key, p.arm), `${S.arm} mean`],
           [p.same_run ? 'yes' : 'no', 'same run']], true));
         const g = m && m.geomean;
         return h('div', {class: 'rp-frow'},
@@ -2102,7 +2179,8 @@
             svg('line', {x1: at(xLog(1)), x2: at(xLog(1)), y1: 0, y2: 30, class: 'rp-parity'}),
             g && isNum(g.estimate) && svg('line', {x1: at(xLog(g.estimate)), x2: at(xLog(g.estimate)), y1: 3, y2: 27, class: 'rp-gm-line'}),
             marks)),
-          h('div', {class: 'rp-val'}, marks.length ? `${marks.length} tasks` : 'none', g && h('small', null, `geomean ${times(g.estimate)}`)));
+          h('div', {class: 'rp-val'}, marks.length ? `${marks.length} tasks` : 'none', g && h('small', null, `geomean ${times(g.estimate)}`),
+            key === 'ratio_time' && hostBusyText(m) && h('small', null, hostBusyText(m))));
       }),
       axisRow(TICKS.map((v) => [xLog(v), tickLabel(v), v === 1])));
   }
@@ -2114,7 +2192,7 @@
     return h('div', {class: 'scroll'}, h('table', {class: 'grid-t compact'},
       thead('Task', 'Digest', 'Same run', thNum(`Trials ${arm} / B`), thNum(`Valid ${arm} / B`), thNum(`Tokens ${arm}`),
         thNum('Tokens B'), thNum(`Cost ${arm}`), thNum('Cost B'), thNum(`Tokens ${arm} ÷ B`), thNum(`Cost ${arm} ÷ B`),
-        thNum(`Pass ${arm} / B`)),
+        thNum(`Agent time ${arm} ÷ B`), thNum(`Pass ${arm} / B`)),
       h('tbody', null, pairs.map((p) => h('tr', null,
         h('td', {class: 'mono'}, p.task),
         h('td', {class: 'mono faint'}, p.digest_short || DASH),
@@ -2123,8 +2201,17 @@
         tdNum(`${p.arm.valid} / ${p.baseline.valid}`),
         tdNum(tokens(p.arm.tokens_total)), tdNum(tokens(p.baseline.tokens_total)),
         tdNum(money(p.arm.cost)), tdNum(money(p.baseline.cost)),
-        tdNum(times(p.ratio_tokens)), tdNum(times(p.ratio_cost)),
+        tdNum(times(p.ratio_tokens)), tdNum(times(p.ratio_cost)), tdNum(timeRatioText(p)),
         tdNum(`${passText(p.arm)} / ${passText(p.baseline)}`))))));
+  }
+
+  /** A pair's agent time multiple, "host busy" when every counted trial of a side ran while the host CPU was busy,
+   *  with how many trials of the pair were left out for that. */
+  function timeRatioText(p) {
+    const busy = [p.arm, p.baseline].some((s) => !isNum(s.time_sec) && s.time_contended > 0);
+    const left = (p.arm.time_contended || 0) + (p.baseline.time_contended || 0);
+    if (busy) return h('span', {class: 'warn-text', title: `${plural(left, 'trial')} left out: host busy`}, 'host busy');
+    return left > 0 ? `${times(p.ratio_time)} (${left} left out: host busy)` : times(p.ratio_time);
   }
 
   function sensitivityTable(c, S = SIDES.harnesses) {
@@ -2270,6 +2357,7 @@
         ['Unpriced models', (t.unpriced_models || []).join(', ') || 'none'],
         ['Primary model share', pct(t.primary_share)],
       ])),
+      lookupSection(t.flags),
       flagRows(t.flags).length > 0 && sideSection('Cost checks', 'raised at ingest from the harness\'s own log',
         h('dl', {class: 'params rp-params rp-flags'}, flagRows(t.flags).map(([k, v]) => h('div', null, h('dt', null, k),
           h('dd', null, v))))),

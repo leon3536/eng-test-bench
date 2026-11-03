@@ -32,12 +32,28 @@ trial's calls on one cache replica (Fireworks' x-session-affinity, xAI's
 x-grok-conv-id), the provider's chat endpoint and OPENAI_API_KEY as its key.
 A level the provider does not take fails the trial before any model call.
 
+The provider file is written by an exec of its own before the run, and the
+header carries a hash of the trial name, not the name: Harbor runs a command
+as `bash -c <command>`, so whatever is in the run's command line stays in
+that wrapper's /proc cmdline for the whole run, and trial names start with
+the task's name. On pypi-server the agent killed every process whose cmdline
+matched the server's name, Goose's wrapper with it (exit 143).
+
+Harbor points XDG_DATA_HOME and XDG_STATE_HOME at /logs/agent/goose, so
+whatever else the agent installs under them (uv's Pythons and tools, with
+their symlinks) lands in the logs dir too, and copying that dir to a Windows
+host fails on the symlinks, losing goose.txt. Goose runs with the default
+~/.local/share and ~/.local/state instead, and only its own dirs there are
+links into Harbor's, so its session database (usage, extract.py) and its
+llm_request logs are still downloaded where they were.
+
 The goose arms use it as `agent: bench.agents.goose:PinnedGoose` with
 `family: goose`.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shlex
@@ -54,6 +70,8 @@ _SCRIPT = "/download_cli.sh"
 GOOSE_HOSTS = {providers.FIREWORKS: providers.FIREWORKS_BASE_URL.removesuffix("/v1"),
                providers.XAI: providers.XAI_BASE_URL.removesuffix("/v1")}
 _RUN = "goose run --recipe"
+# Harbor's XDG dirs (under /logs/agent) and the default each is replaced by for the run.
+_XDG_HOMES = (("XDG_DATA_HOME", ".local/share"), ("XDG_STATE_HOME", ".local/state"))
 
 
 class CustomRoute(NamedTuple):
@@ -88,6 +106,11 @@ def custom_provider(provider: str, model_id: str, effort: str | None, session: s
             "api_key_env": "OPENAI_API_KEY", "base_url": route.chat_url, "models": [model],
             "headers": {route.session_header: session}, "supports_streaming": True, "requires_auth": True,
             "dynamic_models": False}
+
+
+def session_affinity(session: str) -> str:
+    """The cache-replica header's value for a trial: stable per trial, with no task name in it."""
+    return hashlib.sha256(session.encode("utf-8")).hexdigest()[:32]
 
 
 def release_tag(version: str) -> str:
@@ -128,18 +151,33 @@ class PinnedGoose(Goose):
                             cwd: str | None = None, timeout_sec: int | None = None) -> Any:
         if self._install_env and _SCRIPT in command:
             env = {**(env or {}), **self._install_env}
-        if self._custom_route is not None and _RUN in command:
-            command, env = self._with_custom_provider(command, dict(env or {}))
+        if _RUN in command:
+            setup, command, env = self._run_setup(command, dict(env or {}))
+            if setup:
+                await super().exec_as_agent(environment, setup, env=env, cwd=cwd, timeout_sec=60)
         return await super().exec_as_agent(environment, command, env=env, cwd=cwd, timeout_sec=timeout_sec)
 
-    def _with_custom_provider(self, command: str, env: dict[str, str]) -> tuple[str, dict[str, str]]:
-        """The run command after writing the trial's custom provider, and GOOSE_PROVIDER naming it."""
-        assert self._custom_route is not None
-        provider, model_id = self._custom_route
-        session = getattr(self, "session_id", None) or str(uuid.uuid4())
-        spec = custom_provider(provider, model_id, env.get("GOOSE_THINKING_EFFORT"), session)
-        path = f"~/.config/goose/custom_providers/{spec['name']}.json"
-        write = (f"mkdir -p ~/.config/goose/custom_providers && "
-                 f"printf '%s\\n' {shlex.quote(json.dumps(spec, sort_keys=True))} > {path} && ")
-        env["GOOSE_PROVIDER"] = spec["name"]
-        return write + command, env
+    def _run_setup(self, command: str, env: dict[str, str]) -> tuple[str, str, dict[str, str]]:
+        """(setup, run command, env): the setup exec moves Goose's XDG dirs out of
+        the logs dir (links back in) and writes the trial's custom provider, so
+        nothing of the trial's name is in the run's own command line."""
+        steps: list[str] = []
+        exports: list[str] = []
+        for var, default in _XDG_HOMES:
+            logs = env.pop(var, None)
+            if logs is None:
+                continue
+            target, link = shlex.quote(f"{logs}/goose"), f"~/{default}/goose"
+            steps.append(f"mkdir -p {target} ~/{default} && rm -rf {link} && ln -s {target} {link}")
+            exports.append(f'{var}="$HOME/{default}"')
+        if self._custom_route is not None:
+            provider, model_id = self._custom_route
+            session = getattr(self, "session_id", None) or str(uuid.uuid4())
+            spec = custom_provider(provider, model_id, env.get("GOOSE_THINKING_EFFORT"), session_affinity(session))
+            path = f"~/.config/goose/custom_providers/{spec['name']}.json"
+            steps.append(f"mkdir -p ~/.config/goose/custom_providers && "
+                         f"printf '%s\\n' {shlex.quote(json.dumps(spec, sort_keys=True))} > {path}")
+            env["GOOSE_PROVIDER"] = spec["name"]
+        if exports:
+            command = f"export {' '.join(exports)} && {command}"
+        return " && ".join(steps), command, env

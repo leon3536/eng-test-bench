@@ -1,0 +1,1860 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 4 models (fireworks/deepseek-v4p1-flash-1017, fireworks/kimi-k3, xai/grok-4.7, anthropic/claude-opus-5-5). Pairs form only within one model and provider, so each comparison needs its baseline on the same model",
+      "Arm 'terminus-2-deepseek' runs 1 of the design's 5 tasks",
+      "Arm 'mini-swe-agent-deepseek' runs 1 of the design's 5 tasks",
+      "Arm 'strands-kimi' runs 1 of the design's 5 tasks",
+      "Arm 'pi-grok' runs 1 of the design's 5 tasks",
+      "Arm 'kilo-opus-low' runs 1 of the design's 5 tasks",
+      "Arm 'claude-code-opus-high' runs 1 of the design's 5 tasks",
+      "Arm 'terminus-2-opus-high' runs 1 of the design's 5 tasks",
+      "Arm 'pi-opus-high' runs 2 of the design's 5 tasks",
+      "Arm 'strands-opus-high' runs 1 of the design's 5 tasks",
+      "Arm 'goose-opus-high' runs 1 of the design's 5 tasks",
+      "Arm 'kilo-opus-high' runs 1 of the design's 5 tasks",
+      "Tasks are not in seeded-sample order. Keeping that order pairs new trials with earlier runs and keeps each block balanced by difficulty"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "cobol-modernization",
+      "db-wal-recovery",
+      "headless-terminal",
+      "hf-model-inference",
+      "mteb-retrieve"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 12,
+    "budget_usd": 25.0,
+    "worst_case_capped_usd": 30.0,
+    "uncapped_arms": [
+      "terminus-2-deepseek",
+      "strands-kimi",
+      "pi-grok",
+      "kilo-opus-low",
+      "terminus-2-opus-high",
+      "pi-opus-high",
+      "strands-opus-high",
+      "goose-opus-high",
+      "kilo-opus-high"
+    ],
+    "arms": [
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "c407c5f85bad",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2-deepseek --job-name db-wal-recovery --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name db-wal-recovery --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-session-affinity\\\"] --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "db-wal-recovery"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 0.6,
+            "build_gb": 0.2,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "b5e7f1c8aa43",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\mini-swe-agent-deepseek --job-name db-wal-recovery --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name db-wal-recovery --ak reasoning_effort=\\\"high\\\" --ak cost_limit=\\\"15\\\" --ak session_id_headers=[\\\"x-session-affinity\\\"] --ak version=\\\"2.4.6\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"mini-swe-agent\\\" --ek prebake_version=\\\"2.4.6\\\" --ek prebake_recipe=\\\"a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "mini-swe-agent",
+          "supported": true,
+          "reason": "",
+          "version": "2.4.6",
+          "recipe": "a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [
+              "db-wal-recovery"
+            ],
+            "missing": [],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-11-01T11:18:13+00:00",
+            "build_min": 0.0,
+            "build_gb": 0.0,
+            "all_ready": true,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands-kimi",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/kimi-k3",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "model_kwargs",
+            "value": {
+              "params": {
+                "reasoning_effort": "high"
+              }
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "56947a848038",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model fireworks_ai/accounts/fireworks/models/kimi-k3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands-kimi --job-name hf-model-inference --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name hf-model-inference --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak \"model_kwargs={\\\"params\\\": {\\\"reasoning_effort\\\": \\\"high\\\"}}\" --ak version=\\\"1.57.2\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"strands\\\" --ek prebake_version=\\\"1.57.2\\\" --ek prebake_recipe=\\\"48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "strands",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.2",
+          "recipe": "48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813",
+          "variant": "strands-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "hf-model-inference"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.5,
+            "build_gb": 1.25,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi-grok",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi-grok --job-name headless-terminal --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name headless-terminal --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "headless-terminal"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.6,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo-opus-low",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "low",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "33cf15868ab0",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo-opus-low --job-name hf-model-inference --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name hf-model-inference --ak variant=\\\"low\\\" --ak version=\\\"7.8.18\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"kilo-code\\\" --ek prebake_version=\\\"7.8.18\\\" --ek prebake_recipe=\\\"4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "kilo-code",
+          "supported": true,
+          "reason": "",
+          "version": "7.8.18",
+          "recipe": "4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555",
+          "variant": "kilo-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "hf-model-inference"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-opus-high",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "54ba249e1265",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-opus-high --job-name cobol-modernization --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name cobol-modernization --ak reasoning_effort=\\\"high\\\" --ak max_budget_usd=\\\"15\\\" --ak max_turns=300 --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "cobol-modernization"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 11.0,
+            "build_gb": 1.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "terminus-2-opus-high",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          }
+        ],
+        "options_fingerprint": "44136fa355b3",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2-opus-high --job-name cobol-modernization --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name cobol-modernization --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "cobol-modernization"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 0.6,
+            "build_gb": 0.2,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi-opus-high",
+        "agent": "pi",
+        "family": "pi",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent pi --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi-opus-high --job-name cobol-modernization --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name cobol-modernization --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "cobol-modernization",
+              "mteb-retrieve"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.2,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands-opus-high",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_kwargs",
+            "value": {
+              "model_spec": "anthropic/claude-opus-5-5",
+              "effort": "high"
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2ddc701b3ee6",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands-opus-high --job-name mteb-retrieve --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name mteb-retrieve --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak \"factory_kwargs={\\\"model_spec\\\": \\\"anthropic/claude-opus-5-5\\\", \\\"effort\\\": \\\"high\\\"}\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak version=\\\"1.57.2\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"strands\\\" --ek prebake_version=\\\"1.57.2\\\" --ek prebake_recipe=\\\"48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "strands",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.2",
+          "recipe": "48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813",
+          "variant": "strands-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "mteb-retrieve"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.5,
+            "build_gb": 1.25,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-opus-high",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-opus-high --job-name hf-model-inference --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name hf-model-inference --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "hf-model-inference"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.5,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo-opus-high",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72628531661",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo-opus-high --job-name cobol-modernization --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name cobol-modernization --ak variant=\\\"high\\\" --ak version=\\\"7.8.18\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"kilo-code\\\" --ek prebake_version=\\\"7.8.18\\\" --ek prebake_recipe=\\\"4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "kilo-code",
+          "supported": true,
+          "reason": "",
+          "version": "7.8.18",
+          "recipe": "4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555",
+          "variant": "kilo-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "cobol-modernization"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:c3bfc82d661557f8da8f944dd9eb1447f71c31a753b64dfca1ef2aad3de0f557",
+    "warnings": [],
+    "peak_containers": 4,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 11,
+      "build_min": 29.2,
+      "build_wall_min": 11.0,
+      "build_gb": 11.15,
+      "jobs": 3,
+      "task_images": 5,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 5,
+        "arms": 11,
+        "lanes": 12,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 11,
+        "build_wall_min_total": 18.6,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 4.6,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "cobol-modernization",
+            "arms": [
+              "claude-code-opus-high",
+              "terminus-2-opus-high",
+              "pi-opus-high",
+              "kilo-opus-high"
+            ],
+            "images": 4,
+            "build": 4,
+            "build_min": 16.1,
+            "build_wall_min": 11.0,
+            "disk_gb": 4.6
+          },
+          {
+            "task": "db-wal-recovery",
+            "arms": [
+              "terminus-2-deepseek",
+              "mini-swe-agent-deepseek"
+            ],
+            "images": 2,
+            "build": 1,
+            "build_min": 0.6,
+            "build_wall_min": 0.6,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "headless-terminal",
+            "arms": [
+              "pi-grok"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.69
+          },
+          {
+            "task": "hf-model-inference",
+            "arms": [
+              "strands-kimi",
+              "kilo-opus-low",
+              "goose-opus-high"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 7.0,
+            "build_wall_min": 3.0,
+            "disk_gb": 3.51
+          },
+          {
+            "task": "mteb-retrieve",
+            "arms": [
+              "pi-opus-high",
+              "strands-opus-high"
+            ],
+            "images": 2,
+            "build": 2,
+            "build_min": 4.0,
+            "build_wall_min": 2.5,
+            "disk_gb": 2.13
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 5,
+      "arms": 11,
+      "lanes": 12,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 11,
+      "build_wall_min_total": 18.6,
+      "build_wall_min_max": 11.0,
+      "peak_disk_gb": 4.6,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "5 task race(s) x 11 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "cobol-modernization",
+          "arms": [
+            "claude-code-opus-high",
+            "terminus-2-opus-high",
+            "pi-opus-high",
+            "kilo-opus-high"
+          ],
+          "images": 4,
+          "build": 4,
+          "build_min": 16.1,
+          "build_wall_min": 11.0,
+          "disk_gb": 4.6
+        },
+        {
+          "task": "db-wal-recovery",
+          "arms": [
+            "terminus-2-deepseek",
+            "mini-swe-agent-deepseek"
+          ],
+          "images": 2,
+          "build": 1,
+          "build_min": 0.6,
+          "build_wall_min": 0.6,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "headless-terminal",
+          "arms": [
+            "pi-grok"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.69
+        },
+        {
+          "task": "hf-model-inference",
+          "arms": [
+            "strands-kimi",
+            "kilo-opus-low",
+            "goose-opus-high"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 7.0,
+          "build_wall_min": 3.0,
+          "disk_gb": 3.51
+        },
+        {
+          "task": "mteb-retrieve",
+          "arms": [
+            "pi-opus-high",
+            "strands-opus-high"
+          ],
+          "images": 2,
+          "build": 2,
+          "build_min": 4.0,
+          "build_wall_min": 2.5,
+          "disk_gb": 2.13
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:c3bfc82d661557f8da8f944dd9eb1447f71c31a753b64dfca1ef2aad3de0f557",
+    "ledger_fingerprint": "sha256:0a6d6501075ab282",
+    "seed": 241808985411594,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "terminus-2-deepseek",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6ca7c4045bc7ede3",
+          "options_fingerprint": "c407c5f85bad"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "27 trials on 27 tasks of this configuration on fireworks:deepseek-v4p1-flash-1017",
+        "confidence": "high",
+        "evidence": {
+          "trials": 27,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.028394,
+          "p50": 0.024892,
+          "p90": 0.051537
+        },
+        "total": {
+          "p10": 0.01079,
+          "p50": 0.023621,
+          "p90": 0.050974
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.61,
+          "p90": 3.44
+        },
+        "arm_minutes": {
+          "p50": 2.65,
+          "p90": 4.47
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.09,
+          "basis": "measured",
+          "trials": 193
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent-deepseek",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "34e9ffa835e63070",
+          "options_fingerprint": "b5e7f1c8aa43"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "27 trials on 27 tasks of this configuration on fireworks:deepseek-v4p1-flash-1017",
+        "confidence": "high",
+        "evidence": {
+          "trials": 27,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.10474,
+          "p50": 0.086536,
+          "p90": 0.195242
+        },
+        "total": {
+          "p10": 0.040425,
+          "p50": 0.0869,
+          "p90": 0.186389
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 3.68,
+          "p90": 7.39
+        },
+        "arm_minutes": {
+          "p50": 4.55,
+          "p90": 8.66
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 5.11,
+          "basis": "measured",
+          "trials": 204
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands-kimi",
+        "cell": {
+          "family": "strands",
+          "provider": "fireworks",
+          "model": "kimi-k3",
+          "effort": "harness default",
+          "config_hash": "99878c9c73413c5c",
+          "options_fingerprint": "56947a848038"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "27 trials on 27 tasks of this configuration on fireworks:kimi-k3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 27,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.100835,
+          "p50": 0.078987,
+          "p90": 0.185926
+        },
+        "total": {
+          "p10": 0.033854,
+          "p50": 0.075726,
+          "p90": 0.165407
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.07,
+          "p90": 24.08
+        },
+        "arm_minutes": {
+          "p50": 12.18,
+          "p90": 25.25
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.38,
+          "basis": "measured",
+          "trials": 192
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi-grok",
+        "cell": {
+          "family": "pi",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "2821adb389462338",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "6 trials on 6 tasks of this configuration on xai:grok-4.7",
+        "confidence": "medium",
+        "evidence": {
+          "trials": 6,
+          "tasks": 6,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.086199,
+          "p50": 0.846743,
+          "p90": 2.039938
+        },
+        "total": {
+          "p10": 0.418522,
+          "p50": 0.903441,
+          "p90": 1.938102
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.19,
+          "p90": 24.35
+        },
+        "arm_minutes": {
+          "p50": 14.11,
+          "p90": 28.15
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 29.73,
+          "basis": "measured",
+          "trials": 184
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "kilo-opus-low",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "harness default",
+          "config_hash": "a49fbe1d66426860",
+          "options_fingerprint": "33cf15868ab0"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.189014,
+          "p50": 0.157005,
+          "p90": 0.31423
+        },
+        "total": {
+          "p10": 0.070089,
+          "p50": 0.152167,
+          "p90": 0.333204
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 7.36,
+          "p90": 15.61
+        },
+        "arm_minutes": {
+          "p50": 8.58,
+          "p90": 17.58
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 20.9,
+          "basis": "measured",
+          "trials": 209
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-opus-high",
+        "cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "config_hash": "81c2816bd025b030",
+          "options_fingerprint": "54ba249e1265"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.001809,
+          "p50": 0.854447,
+          "p90": 1.854403
+        },
+        "total": {
+          "p10": 0.395122,
+          "p50": 0.866753,
+          "p90": 1.823609
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 5.93,
+          "p90": 11.53
+        },
+        "arm_minutes": {
+          "p50": 7.38,
+          "p90": 15.28
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 91
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "terminus-2-opus-high",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "config_hash": "82b159c030d352ad",
+          "options_fingerprint": "44136fa355b3"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.384525,
+          "p50": 1.174717,
+          "p90": 2.496542
+        },
+        "total": {
+          "p10": 0.55843,
+          "p50": 1.216032,
+          "p90": 2.578807
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 13.54,
+          "p90": 30.73
+        },
+        "arm_minutes": {
+          "p50": 13.83,
+          "p90": 28.88
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.09,
+          "basis": "measured",
+          "trials": 193
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi-opus-high",
+        "cell": {
+          "family": "pi",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "config_hash": "66ad6c94a2b9993a",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.441503,
+          "p50": 0.247353,
+          "p90": 1.050253
+        },
+        "total": {
+          "p10": 0.375893,
+          "p50": 0.676678,
+          "p90": 1.333407
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 9.85,
+          "p90": 22.5
+        },
+        "arm_minutes": {
+          "p50": 24.67,
+          "p90": 42.24
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 29.73,
+          "basis": "measured",
+          "trials": 184
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands-opus-high",
+        "cell": {
+          "family": "strands",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "harness default",
+          "config_hash": "0361a38b1573e891",
+          "options_fingerprint": "2ddc701b3ee6"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.144657,
+          "p50": 0.122486,
+          "p90": 0.256777
+        },
+        "total": {
+          "p10": 0.053056,
+          "p50": 0.117543,
+          "p90": 0.256777
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.05,
+          "p90": 27.32
+        },
+        "arm_minutes": {
+          "p50": 14.38,
+          "p90": 30.43
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.38,
+          "basis": "measured",
+          "trials": 192
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "goose-opus-high",
+        "cell": {
+          "family": "goose",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "config_hash": "7441dc50b2e8aa56",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.07587,
+          "p50": 0.067803,
+          "p90": 0.12865
+        },
+        "total": {
+          "p10": 0.030264,
+          "p50": 0.064152,
+          "p90": 0.137544
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.88,
+          "p90": 10.74
+        },
+        "arm_minutes": {
+          "p50": 6.11,
+          "p90": 12.24
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 1.88,
+          "basis": "measured",
+          "trials": 215
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "kilo-opus-high",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "harness default",
+          "config_hash": "8a6699ade54f14ca",
+          "options_fingerprint": "a72628531661"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.984572,
+          "p50": 0.847182,
+          "p90": 1.857841
+        },
+        "total": {
+          "p10": 0.392725,
+          "p50": 0.850428,
+          "p90": 1.85505
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 7.64,
+          "p90": 17.2
+        },
+        "arm_minutes": {
+          "p50": 8.63,
+          "p90": 17.15
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 20.9,
+          "basis": "measured",
+          "trials": 209
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 4.22018,
+        "p50": 5.735299,
+        "p90": 8.017767
+      },
+      "budget_usd": 25.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 9.5,
+      "worst_case_capped_usd": 30.0,
+      "uncapped_arms": [
+        "terminus-2-deepseek",
+        "strands-kimi",
+        "pi-grok",
+        "kilo-opus-low",
+        "terminus-2-opus-high",
+        "pi-opus-high",
+        "strands-opus-high",
+        "goose-opus-high",
+        "kilo-opus-high"
+      ],
+      "inflight_allowance_usd": 66.0,
+      "wall_minutes": {
+        "p50": 96.41,
+        "p90": 127.98
+      },
+      "peak_containers": 4,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 5,
+        "arms": 11,
+        "max_containers": 6,
+        "build_wall_min_total": 18.6,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 4.6,
+        "images_to_build": 11
+      }
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2-deepseek",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3129,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "mini-swe-agent-deepseek",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3129,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands-kimi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "kimi-k3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3129,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3129,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo-opus-low",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 1.325,
+          "ci": [
+            1.2118,
+            1.4487
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0934,
+        "ci_factor_after": 1.0934,
+        "sd_log": 0.272,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "terminus-2-opus-high",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 1.0988,
+          "ci": [
+            0.9996,
+            1.2079
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0993,
+        "ci_factor_after": 1.0993,
+        "sd_log": 0.2883,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi-opus-high",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 0.7169,
+          "ci": [
+            0.6641,
+            0.774
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0796,
+        "ci_factor_after": 1.0796,
+        "sd_log": 0.2332,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands-opus-high",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 0.9588,
+          "ci": [
+            0.8989,
+            1.0227
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0667,
+        "ci_factor_after": 1.0667,
+        "sd_log": 0.1966,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-opus-high",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 0.7973,
+          "ci": [
+            0.7406,
+            0.8584
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0765,
+        "ci_factor_after": 1.0765,
+        "sd_log": 0.2247,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo-opus-high",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code-opus-high"
+        },
+        "metric": "cost",
+        "pairs_now": 27,
+        "pairs_after": 27,
+        "multiple_now": {
+          "value": 1.325,
+          "ci": [
+            1.2118,
+            1.4487
+          ],
+          "n": 27
+        },
+        "ci_factor_now": 1.0934,
+        "ci_factor_after": 1.0934,
+        "sd_log": 0.272,
+        "sd_source": "observed",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-11-02T08:54:00+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:28b507cb72c30ac8bcb76487e543f654562f908eb8b48a2a1b1922c9c69752a8",
+  "ledger_fingerprint": "sha256:0a6d6501075ab282",
+  "reuse_fingerprint": null
+}

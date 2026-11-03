@@ -211,7 +211,7 @@ def _fallback_groups(by_group: Mapping[str, list[Mapping[str, Any]]], comparison
         rows = by_group[key]
         hashes = {r.get("config_hash") for r in rows}
         outcomes = Counter(str(r.get("outcome")) for r in rows)
-        out.append({"key": key, "family": rows[0].get("family"), "label": key,
+        out.append({"key": key, "family": rows[0].get("family"), "label": key, "effort": report.effort_of(rows[0]),
                     "is_baseline": key in bases or (not bases and rows[0].get("family") == baseline),
                     "config_hash": next(iter(hashes)) if len(hashes) == 1 else None, "configs": [],
                     "config_diff": {}, "tasks": len({r.get("task") for r in rows}),
@@ -253,9 +253,13 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
         by_group[report.group_key(r, o)].append(r)
     comparisons = {c["group"]: c for c in contract.get("comparisons") or []}
     groups = rep["groups"] if rep is not None else _fallback_groups(by_group, comparisons, base_family)
-    base_group = next((g for g in groups if g.get("is_baseline")), None)
+    # One baseline per effort the model ran at: the one at the baseline effort stands for the model, and each
+    # comparison's half-pairs are counted against its own baseline, as the report pairs it.
+    bases = [g for g in groups if g.get("is_baseline")]
+    base_group = next((g for g in bases if g.get("effort") == o.baseline_effort), bases[0] if bases else None)
     base_key = base_group["key"] if base_group else None
     base_rows = by_group.get(base_key, []) if base_key else []
+    base_keys_all = {g["key"] for g in bases}
 
     # The precision target: pairs for +/-target_halfwidth at stats.confidence,
     # sized by the spread observed on this model, else the prior.
@@ -287,12 +291,12 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
 
     cells = []
     pair_state: dict[str, dict[str, Any]] = {}
-    base_keys: dict[str, dict[str, set[tuple[str, ...]]]] = {}
+    base_keys: dict[tuple[str | None, str], dict[str, set[tuple[str, ...]]]] = {}
     for g in groups:
         key = g["key"]
         rs = by_group.get(key, [])
         comp = comparisons.get(key)
-        is_base = key == base_key
+        is_base = key in base_keys_all
         metric = (comp.get("coverage") or {}).get("metric") if comp else None
         metric = metric or _row_metric(rs)
         valid_names = _names(rs, metric)
@@ -304,7 +308,7 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
             "config_hash": g.get("config_hash"),
             "configs": [{"config_hash": c.get("config_hash"), "label": c.get("label"), "trials": c.get("trials")}
                         for c in g.get("configs") or []],
-            "effort": sorted({str(r.get("effort") or "default") for r in rs}),
+            "effort": sorted({str(report.effort_of(r) or "default") for r in rs}),
             "trials": trials.get("total", len(rs)), "cost_valid": trials.get("valid_cost"),
             "infra": sum(outcomes.get(k, 0) for k in report.RELIABILITY_OUTCOMES),
             "finished": len(finished), "tasks": g.get("tasks"),
@@ -339,11 +343,13 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
             cell["paired_with_baseline"] = paired
             cell["pairs_needed"] = needed
             cell["needed_more"] = max(0, needed - paired)
-            if metric not in base_keys:
-                base_keys[metric] = _task_keys(base_rows, metric, o)
+            against = comp.get("baseline_group") or base_key
+            if (against, metric) not in base_keys:
+                base_keys[(against, metric)] = _task_keys(by_group.get(against, []), metric, o)
+            theirs_keys = base_keys[(against, metric)]
             arm_keys = _task_keys(rs, metric, o)
-            mine, theirs = _pair_view(arm_keys, base_keys[metric], o)
-            already = _already_paired(arm_keys, base_keys[metric])
+            mine, theirs = _pair_view(arm_keys, theirs_keys, o)
+            already = _already_paired(arm_keys, theirs_keys)
             missing_base = _sorted_tasks((mine - theirs) & set(sample), order)
             missing_arm = _sorted_tasks((theirs - mine) & set(sample), order)
             cell["half_pair_tasks"] = ([{"task": t, "missing": "baseline"} for t in missing_base]
@@ -361,7 +367,7 @@ def coverage(cfg: Config, reader: Any, provider: str, model: str, baseline_famil
         # The tasks counted, as the REPORT tab's scope block says it (report.task_scope).
         "scope": report.task_scope(cfg, Filters(tasks=scope_tasks(cfg))),
         "baseline": {"family": base_family, "key": base_key,
-                     "effort": sorted({str(r.get("effort") or "default") for r in base_rows})},
+                     "effort": sorted({str(report.effort_of(r) or "default") for r in base_rows})},
         "ledger_fingerprint": fingerprint,
         "report_fingerprint": ((rep or contract).get("provenance") or {}).get("fingerprint"),
         "target_pairs": target, "target_source": "argument" if target_pairs is not None else "config",
@@ -495,16 +501,20 @@ def _gaps(cells: list[dict[str, Any]], by_group: Mapping[str, list[Mapping[str, 
                          + ", ".join(f"{t} ({len(digests[t])} versions)" for t in stale[:8]) + ".",
                          stale, None, 0))
 
-    configs: dict[str, dict[str, Mapping[str, Any]]] = defaultdict(dict)
-    for r in rows:
-        configs[str(r.get("family"))].setdefault(str(r.get("config_hash") or ""), r)
-    for family in sorted(configs):
-        if len(configs[family]) < 2:
+    # Only configurations that pool into one report line drift: each effort is a line of its own, and with
+    # group_by config every configuration is.
+    for key in sorted(by_group):
+        configs: dict[str, Mapping[str, Any]] = {}
+        for r in by_group[key]:
+            configs.setdefault(str(r.get("config_hash") or ""), r)
+        if len(configs) < 2:
             continue
-        differ = _differences(list(configs[family].values()))
+        first = next(iter(configs.values()))
+        family, level = str(first.get("family")), report.effort_of(first)
+        differ = _differences(list(configs.values()))
         gaps.append(_gap("option_drift", family, None,
-                         f"{family} has {len(configs[family])} configurations on this model"
-                         + (f" that differ in {', '.join(differ)}" if differ else "")
+                         f"{family}{f' at {level} effort' if level else ''} has {len(configs)} configurations on "
+                         "this model" + (f" that differ in {', '.join(differ)}" if differ else "")
                          + "; pooled by family they are averaged together. Group by configuration to see each.",
                          [], None, 0))
 

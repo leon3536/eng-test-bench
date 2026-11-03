@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "id": "d-five-models-27-tasks-x-8-7e23",
-  "title": "Five models: 27 tasks x 8 harnesses (DeepSeek, GLM, Kimi, Terra, Grok)",
+  "title": "Five models + Opus low/high: 27 tasks x 8-9 harnesses",
   "created_at": "2026-11-01T00:32:01+00:00",
-  "updated_at": "2026-11-01T02:40:13+00:00",
-  "latest_version": 3,
+  "updated_at": "2026-11-01T06:52:02+00:00",
+  "latest_version": 5,
   "archived": false,
   "versions": {
     "1": {
@@ -38,6 +38,28 @@
       "approved_at": "2026-11-01T02:40:10+00:00",
       "runs": [
         "20261031-194013-five-models-27-t-v3"
+      ]
+    },
+    "4": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-01T06:18:40+00:00",
+      "spec_hash": "sha256:34f7f89f22dc626fada46fa2665161fe791d6b207613ea2622b315f8c28de85f",
+      "change_note": "Merged: added Opus 5.5 at low and high on all 9 harnesses (18 arms); budget $1000. Reuse keeps finished trials.",
+      "approved_at": "2026-11-01T06:18:52+00:00",
+      "runs": [
+        "20261031-231855-five-models-27-t-v4"
+      ]
+    },
+    "5": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-01T06:51:05+00:00",
+      "spec_hash": "sha256:a9e34b135b79ef2c560ed5a00ed2ed35171eeb169898c96cf06c1495d73926de",
+      "change_note": "Same plan; reuse the finished openssl task. Restarted to build 3 images at a time (CPU).",
+      "approved_at": "2026-11-01T06:51:50+00:00",
+      "runs": [
+        "20261031-235201-five-models-27-t-v5"
       ]
     }
   }

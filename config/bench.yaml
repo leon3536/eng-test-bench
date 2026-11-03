@@ -171,6 +171,23 @@ arms:
       version: "7.8.18"        # npm latest (rc track is 7.8.25)
       variant: medium          # keep in step with run.effort
 
+  # DeepSeek Harness (dsh), DeepSeek's own agent, headless with full access
+  # and approval off (bench/agents/dsh.py). It runs its pi-ai adapter on a
+  # route to Fireworks the subclass declares; Fireworks is the only provider
+  # routed, so it has no Opus arm. Telemetry and the title-generator call are
+  # off. No turn or dollar cap: the task time limit is its only bound.
+  # Version 0.2.1-rc.5 (2026-10-29) is newer than the two-week pin habit; dsh
+  # has no non-rc release. Not yet smoke-tested, hence off.
+  - name: dsh
+    agent: bench.agents.dsh:DeepSeekHarness
+    family: deepseek-harness
+    provider: fireworks
+    model: deepseek-v4p1-flash-1017
+    effort: high               # Fireworks takes low | high | max (and dsh 'off'); no medium
+    enabled: true
+    options:
+      version: "0.2.1-rc.5"    # npm latest = next; pi-ai pinned to 1.3.0 inside the adapter
+
   # Example open-model arm on Fireworks. Fill in the model id from
   # fireworks.ai/models, add its price to config/pricing.yaml, then enable.
   # - name: opencode-fireworks
@@ -195,6 +212,7 @@ report:
   min_pairs_estimate: 3       # fewer pairs: no multiple is shown
   min_pairs_verdict: 8        # fewer pairs: no verdict against the published figures
   pricing: current            # current | as_ingested | reported (the harness's or OpenRouter's billed cost)
+  # baseline_effort: medium   # compare models: the baseline_model effort every model is set against
 
 # Statistics shared by the report, coverage and the assistant's estimates.
 stats:
@@ -219,7 +237,7 @@ assistant:
 # Limits on run designs, checked before a design can be queued.
 designs:
   max_budget_usd: 1000        # the largest budget one design may set (5-model race at full cost, user OK 2026-10-31)
-  max_arms: 48                # one per-task race of 5 models x 8 harnesses + the baseline (2026-10-31)
+  max_arms: 64                # per-task race: 5 models x 8 harnesses + Opus low/high x 9 + baseline
   max_attempts: 5
   warn_containers: 8          # parallel_arms x n_concurrent above this: warning
   max_containers: 16          # above this: the design cannot run
@@ -241,7 +259,7 @@ ledger:
 # and built FROM the local task image with Harbor's own install commands.
 prebake:
   prefix: benchbake           # image repository prefix (benchprobe/ is the prototypes')
-  build_jobs: 4               # builds at once; Claude Code's take 7-11 min each
+  build_jobs: 3               # builds at once, also per task race; builds have no CPU cap (6 cores for the bench)
   max_age_days: 14            # older images still run, with a warning: their apt lists go stale
   keep_days: 14               # prune keeps an image no arm wants this long
   auto_build: false           # true: the queue builds missing images before it starts an item

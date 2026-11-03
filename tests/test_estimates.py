@@ -612,6 +612,48 @@ class PairingRule(EstimateCase):
         self.assertAlmostEqual(pair["multiple_now"]["value"], expected, places=4)
         self.assertEqual(pair["scope"], {"tasks": 6, "tasks_file": report.tasks_file(cfg), "outside": 2})
 
+    def test_pairs_at_the_arms_own_effort_as_the_report_does(self) -> None:
+        # The report gives each effort a line of its own and pairs it with the baseline's line at that effort.
+        def at(effort: str | None, ratios: Sequence[float]) -> list[dict[str, Any]]:
+            rows = paired("pi", "claude-code", ratios)
+            for r in rows:
+                r["effort"] = effort
+            return rows
+
+        def pairing(rows: list[dict[str, Any]], run: Mapping[str, Any], arms: Sequence[Mapping[str, Any]]
+                    ) -> dict[str, Any]:
+            spec = designs.normalize(self.cfg, {"tasks": SAMPLE[:4], "run": {"budget_usd": 5.0, **run},
+                                                "arms": list(arms)})
+            check = designs.validate(self.cfg, spec)
+            self.assertEqual(check["problems"], [])
+            (pair,) = estimates.estimate(self.cfg, spec, rows, check["plan"], replicates=200)["pairing"]
+            return pair
+
+        def multiple(ratios: Sequence[float]) -> float:
+            return math.exp(sum(math.log(1 / k) for k in ratios) / len(ratios))
+
+        medium, high = [3.0, 2.0, 2.5, 4.0], [1.0, 1.5, 1.2]
+        rows = at("medium", medium) + at("high", high) + at("low", [0.5, 0.25, 0.4, 0.3, 0.2])
+        for run, ratios in (({}, medium), ({"effort": "high"}, high)):
+            with self.subTest(run=run):
+                pair = pairing(rows, run, [ARM_CC, ARM_PI])
+                self.assertEqual(pair["pairs_now"], len(ratios))
+                self.assertAlmostEqual(pair["multiple_now"]["value"], multiple(ratios), places=4)
+        # An effort carried in the options (opencode's variant) reads like the effort field; a harness whose
+        # trials record no effort reads as the harness default.
+        run = self.cfg.run
+        self.assertEqual(estimates._arm_effort(run, arm_spec("oc", "opencode", options={"variant": "high"}),
+                                               {"high", None}), "high")
+        self.assertEqual(estimates._arm_effort(run, arm_spec("t", "terminus-2"), {None}), None)
+        self.assertEqual(estimates._arm_effort(run, arm_spec("pi", "pi"), {"medium", None}), "medium")
+        # A harness that records no effort pairs with the baseline at the baseline effort, as the report falls back.
+        pi, cc = paired("pi", "claude-code", medium), paired("pi", "claude-code", high, base_cost=0.9)
+        unknown = [{**r, "effort": None} if r["family"] == "pi" else r for r in pi]
+        unknown += [{**r, "effort": "high"} for r in cc if r["family"] == "claude-code"]
+        pair = pairing(unknown, {}, [ARM_CC, ARM_PI])
+        self.assertEqual(pair["pairs_now"], 4)
+        self.assertAlmostEqual(pair["multiple_now"]["value"], multiple(medium), places=4)
+
 
 class CellStats(EstimateCase):
     def test_cells_by_configuration_and_by_family(self) -> None:

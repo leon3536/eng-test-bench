@@ -33,7 +33,7 @@ from typing import Any, Literal
 
 import yaml
 
-from . import classify, pricing, settings
+from . import classify, hostload, lookups, pricing, settings
 from .fsutil import canonical_json, harbor_jobs
 from .harnesses import is_import_path, reports_mispriced_cost
 
@@ -46,7 +46,12 @@ from .harnesses import is_import_path, reports_mispriced_cost
 #    whose adapters leave reasoning tokens out of the output (both) and cache writes out of the prompt
 #    (OpenCode); a stored row keeps the replaced usage once its folder is gone. Kilo Code's kilo.txt
 #    joined later without a bump: no stored row was Kilo's, so none needs re-deriving.
-PARSER_VERSION = 7
+#    DeepSeek Harness's dsh.jsonl joined the same way.
+# 8: host CPU load over the agent's execution (flags_json host_cpu_*, cpu_contended) from the run's
+#    hostload.jsonl, so time a busy host took is not counted as the model's.
+# 9: answer lookups (flags_json answer_lookup) from the agent's tool calls in its ATIF trajectory, and the
+#    verdict by hand from config/answer_lookups.yaml (answer_lookup_verdict); see lookups.py.
+PARSER_VERSION = 9
 
 # Text in a failed trial's message that means the harness never got going.
 SETUP_SIGNATURES: tuple[str, ...] = ("No module named", "ModuleNotFoundError", "command not found",
@@ -638,6 +643,52 @@ def phase_seconds(result: Mapping) -> dict[str, float | None]:
         "verifier_sec": verifier if verifier is not None else _step_span(result, "verifier"),
         "total_sec": _span(result),
     }
+
+
+def agent_windows(result: Mapping) -> list[tuple[datetime, datetime]]:
+    """The agent execution phase's (start, end) in UTC: one, or one per step."""
+    timings = [result.get("agent_execution")]
+    if not isinstance(timings[0], Mapping):
+        timings = [s.get("agent_execution") for s in _steps(result)]
+    out = []
+    for timing in timings:
+        if isinstance(timing, Mapping):
+            start, end = _parse_time(timing.get("started_at")), _parse_time(timing.get("finished_at"))
+            if start and end:
+                out.append((start, end))
+    return out
+
+
+# Host load --------------------------------------------------------------------
+
+def hostload_path(trial_dir: Path, ctx: RunContext) -> Path | None:
+    """runs/<run_id>/hostload.jsonl beside the jobs/<run_id>/... folder a
+    bench trial is in, or None for a plain Harbor job."""
+    if ctx.source != "bench" or not ctx.run_id:
+        return None
+    for parent in Path(trial_dir).parents:
+        if parent.name == ctx.run_id and parent.parent.name == "jobs":
+            return parent.parent.parent / "runs" / ctx.run_id / hostload.HOSTLOAD_FILE
+    return None
+
+
+def trial_hostload(trial_dir: Path, ctx: RunContext) -> list[hostload.Sample] | None:
+    """The run's host load samples for a trial, or None when none were kept."""
+    path = hostload_path(trial_dir, ctx)
+    return hostload.read_samples(path) if path is not None else None
+
+
+def _host_flags(flags: dict[str, Any], result: Mapping, samples: Sequence[hostload.Sample] | None,
+                stored: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The flags with the host's CPU load over the agent's execution. With no
+    samples there it is unknown and no key is set; a re-derive whose hostload
+    file is gone keeps what was stored."""
+    out = {k: v for k, v in flags.items() if k not in hostload.HOST_FLAGS}
+    found = hostload.contention(samples, agent_windows(result))
+    if not found and samples is None and stored is not None:
+        found = {k: v for k, v in (stored.get("flags") or {}).items() if k in hostload.HOST_FLAGS}
+    out.update(found)
+    return out
 
 
 # Setup provenance -------------------------------------------------------------
@@ -1297,6 +1348,52 @@ def _kilo_calls(agent: Path) -> list[_Call] | None:
     return _step_finish_calls(agent / "kilo.txt")
 
 
+def _dsh_steps(agent: Path) -> list[Mapping[str, Any]] | None:
+    """dsh.jsonl's status events, or None without the file."""
+    path = agent / "dsh.jsonl"
+    if not path.is_file():
+        return None
+    return [e for e in _jsonl(path) if e.get("type") == "status"]
+
+
+def _dsh_calls(agent: Path) -> list[_Call] | None:
+    """dsh.jsonl, the `dsh --profile headless --json` stream that
+    bench/agents/dsh.py writes: one step_end status event per model call,
+    its usage summed over the step's retried attempts. dsh's counts are
+    disjoint: inputTokens is uncached input only, the cache reads and writes
+    come apart, and outputTokens holds the reasoning (pi-ai counts
+    completion_tokens; reasoningTokens is a share of it, not more). dsh
+    computes no cost. A step whose attempts did not all report usage has no
+    usage at all, and only the top-level agent is in the stream: both are
+    left out here (_dsh_flags counts the first)."""
+    steps = _dsh_steps(agent)
+    if steps is None:
+        return None
+    calls: list[_Call] = []
+    for event in steps:
+        usage = event.get("usage")
+        if event.get("phase") != "step_end" or not isinstance(usage, Mapping):
+            continue
+        read, write = _int(usage.get("cacheReadTokens")), _int(usage.get("cacheWriteTokens"))
+        calls.append((None, _int(usage.get("inputTokens")) + read + write, read, _int(usage.get("outputTokens")),
+                      None, write, 0))
+    return calls
+
+
+def _dsh_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
+    """Model calls dsh.jsonl does not meter: a step started and never ended
+    (a kill mid-call), or one that ended without usage because an attempt
+    reported none. dsh gives no cost, so nothing bounds theirs."""
+    steps = _dsh_steps(agent) or []
+    phases = Counter(e.get("phase") for e in steps)
+    unmetered = sum(1 for e in steps if e.get("phase") == "step_end" and not isinstance(e.get("usage"), Mapping))
+    missing = max(phases["step_start"] - phases["step_end"], 0) + unmetered
+    if missing <= 0:
+        return {}
+    return {"unfinished_calls": {"calls": missing, "cost_usd_max": None, "source": "agent/dsh.jsonl",
+                                 "bound": "none (dsh reports no cost)"}}
+
+
 _GOOSE_DB = Path("goose") / "xdg-data" / "goose" / "sessions" / "sessions.db"
 
 
@@ -1430,19 +1527,21 @@ _RECOVERY = (("agent/pi/sessions", _pi_calls), ("agent/sessions/projects", _clau
              ("agent/mini-swe-agent.trajectory.json", _mini_swe_agent_calls), ("agent/cline.txt", _cline_calls),
              ("agent/opencode.txt", _opencode_calls), ("agent/kilo.txt", _kilo_calls),
              ("agent/" + _GOOSE_DB.as_posix(), _goose_calls),
-             ("agent/goose.txt", _goose_complete), ("agent/trajectory.json", _atif_calls))
+             ("agent/goose.txt", _goose_complete), ("agent/dsh.jsonl", _dsh_calls),
+             ("agent/trajectory.json", _atif_calls))
 
 # Logs whose calls replace Harbor's usage of a finished trial, not just add its
 # cache writes: Harbor's adapter sums the same calls short (see each recipe),
 # or, for Goose, reads only the main run's final `complete` event, while the
 # database holds every call of every session.
 _REPLACES_HARBOR = frozenset({"agent/cline.txt", "agent/opencode.txt", "agent/kilo.txt",
-                              "agent/" + _GOOSE_DB.as_posix()})
+                              "agent/" + _GOOSE_DB.as_posix(), "agent/dsh.jsonl"})
 
 
 # The checks only a harness's own log can make, by where its calls came from.
 _FLAG_READERS = {"agent/sessions/projects": _claude_code_flags,
-                 "agent/mini-swe-agent.trajectory.json": _mini_swe_agent_flags, "agent/pi/sessions": _pi_flags}
+                 "agent/mini-swe-agent.trajectory.json": _mini_swe_agent_flags, "agent/pi/sessions": _pi_flags,
+                 "agent/dsh.jsonl": _dsh_flags}
 
 
 @dataclass(frozen=True)
@@ -1459,10 +1558,21 @@ class HarnessLog:
         return self.where in _REPLACES_HARBOR
 
 
+def _lookup_flags(agent: Path) -> dict[str, Any]:
+    """The answer_lookup flag (lookups.scan), {} for none; a scan that fails
+    on an unexpected file shape never stops ingestion."""
+    try:
+        found = lookups.scan(agent)
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
+        return {}
+    return {lookups.FLAG: found} if found else {}
+
+
 def read_harness_log(trial_dir: Path) -> HarnessLog | None:
     """The harness's own usage log in trial_dir/agent, or None when it left
     none. Calls may be an empty list: the harness started its log, but no
-    model call completed."""
+    model call completed. Every harness's flags include an answer lookup
+    found in its tool calls (lookups.scan)."""
     agent = Path(trial_dir) / "agent"
     if not agent.is_dir():
         return None
@@ -1480,7 +1590,7 @@ def read_harness_log(trial_dir: Path) -> HarnessLog | None:
                 flags = reader(agent, calls)
             except (OSError, ValueError, TypeError, AttributeError):
                 flags = {}
-        return HarnessLog(where, calls, flags)
+        return HarnessLog(where, calls, {**flags, **_lookup_flags(agent)})
     return None
 
 
@@ -1727,12 +1837,14 @@ def _priced(usage: dict[str, dict[str, Any]], provider: str, model: str, family:
 def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, job_lock: Mapping | None,
            trial_dir: str, ctx: RunContext, prefixes: Mapping[str, str], job_id: str | None,
            log: HarnessLog | None = None, prebake: Mapping[str, Any] | None = None,
-           stored: Mapping[str, Any] | None = None) -> TrialFacts:
+           stored: Mapping[str, Any] | None = None,
+           host: Sequence[hostload.Sample] | None = None) -> TrialFacts:
     """Facts from a parsed result.json (finished) or a trial config.json
     (result None: killed before finishing). The harness's own log gives a
     killed trial its usage, and every trial its cache writes and flags;
     `stored` ({"usage", "flags"} as stored before) stands in for the log of
-    a finished trial whose folder is gone. prebake is the trial's prebake.json."""
+    a finished trial whose folder is gone. prebake is the trial's prebake.json;
+    host the run's host load samples (hostload.jsonl), None for none kept."""
     agent = trial_cfg.get("agent") if isinstance(trial_cfg.get("agent"), Mapping) else {}
     kwargs = agent.get("kwargs") if isinstance(agent.get("kwargs"), Mapping) else {}
     info = (result or {}).get("agent_info") if isinstance((result or {}).get("agent_info"), Mapping) else {}
@@ -1788,6 +1900,7 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
         cost, pricing_sha, flags = None, None, dict(log.flags) if log else {}
         if usage:
             cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, None, reported)
+        flags = lookups.with_verdict(flags, common["trial_key"])
         return TrialFacts(
             **common, trial_uid=None, reward=None, rewards_json=None, passed=None, exception_type=None,
             exception_head=None, harbor_cause=None, cap_marker=None, setup_marker=None,
@@ -1810,6 +1923,10 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
     cost, pricing_sha, flags = None, None, dict(log.flags) if log is not None else {}
     if usage:
         cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, stored, totals[3])
+    flags = _host_flags(flags, result, host, stored)
+    if log is None and stored is not None and not usage and lookups.FLAG in (stored.get("flags") or {}):
+        flags[lookups.FLAG] = stored["flags"][lookups.FLAG]  # _priced keeps it when there is usage
+    flags = lookups.with_verdict(flags, common["trial_key"])
     reward, rewards = _reward(result)
     exc = _exception(result)
     exception_type = str(exc["exception_type"]) if exc else None
@@ -1841,15 +1958,17 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
 def facts_from_result(result: Mapping, lock: Mapping | None, job_lock: Mapping | None, *, trial_dir: str,
                       ctx: RunContext, prefixes: Mapping[str, str],
                       prebake: Mapping[str, Any] | None = None, log: HarnessLog | None = None,
-                      stored: Mapping[str, Any] | None = None) -> TrialFacts:
+                      stored: Mapping[str, Any] | None = None,
+                      host: Sequence[hostload.Sample] | None = None) -> TrialFacts:
     """Facts from an already-parsed result.json and prebake.json; the
     ledger's rederive uses this on the stored copies, with the trial
     folder's harness log, or, once the folder is gone, the stored usage
-    and flags ({"usage", "flags"}) for what only the log held."""
+    and flags ({"usage", "flags"}) for what only the log held. host is the
+    run's host load samples (trial_hostload)."""
     trial_cfg = result.get("config") if isinstance(result.get("config"), Mapping) else {}
     return _build(result=result, trial_cfg=trial_cfg, lock=lock, job_lock=job_lock, trial_dir=trial_dir,
                   ctx=ctx, prefixes=prefixes, job_id=trial_cfg.get("job_id"), prebake=prebake, log=log,
-                  stored=stored)
+                  stored=stored, host=host)
 
 
 def parse_trial(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *, root: Path | None = None,
@@ -1866,7 +1985,8 @@ def parse_trial(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *
     return facts_from_result(result, lock if isinstance(lock, dict) else None,
                              job_lock if isinstance(job_lock, dict) else None,
                              trial_dir=relative_dir(trial_dir, root), ctx=ctx, prefixes=prefixes,
-                             prebake=read_prebake_record(trial_dir), log=read_harness_log(trial_dir))
+                             prebake=read_prebake_record(trial_dir), log=read_harness_log(trial_dir),
+                             host=trial_hostload(trial_dir, ctx))
 
 
 def parse_incomplete(trial_dir: Path, ctx: RunContext, prefixes: Mapping[str, str], *, root: Path | None = None,

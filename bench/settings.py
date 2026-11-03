@@ -59,6 +59,8 @@ if not BASE_CONFIG.exists():
 OVERRIDES = CONFIG_DIR / (f"{PROFILE}.overrides.yaml" if PROFILE else "overrides.yaml")
 PRICING = CONFIG_DIR / "pricing.yaml"
 REFERENCE = CONFIG_DIR / "reference.yaml"
+# Verdicts by hand on agents that looked up the benchmark's answer (lookups.py); shared by every profile.
+ANSWER_LOOKUPS = CONFIG_DIR / "answer_lookups.yaml"
 ENV_FILE = Path(os.environ.get("BENCH_ENV_FILE") or ROOT / ".env")
 
 # BENCH_DATA_DIR lets tests (and a second checkout) keep run data elsewhere.
@@ -263,7 +265,7 @@ class LedgerSettings:
 class PrebakeSettings:
     """Pre-baked harness images (bench/prebake): how they are named, built and kept."""
     prefix: str = "benchbake"        # image repository prefix, apart from the probes' benchprobe/
-    build_jobs: int = 4              # builds at once
+    build_jobs: int = 3              # builds at once (no CPU cap: keep them within the bench's cores)
     max_age_days: int = 14           # an older image still runs, with a warning: its apt lists go stale
     keep_days: int = 14              # prune keeps an unwanted image this long
     auto_build: bool = False         # the queue builds missing images before it starts an item

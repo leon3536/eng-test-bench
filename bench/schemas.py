@@ -14,7 +14,7 @@ import subprocess
 import threading
 from typing import Any
 
-from . import harnesses, keys
+from . import harnesses, keys, procs
 from .harnesses import DOLLAR_CAPS, MISPRICED_CAP, TURN_CAPS  # noqa: F401  re-exported for runs and server
 from .settings import ROOT, Arm, Config, harbor_executable
 
@@ -57,7 +57,7 @@ def agent_schema(agent: str) -> dict[str, Any]:
     proc = subprocess.run(
         [harbor_executable(), "agents", "schema", agent, "--json"],
         cwd=ROOT, env=keys.child_env(None), stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, creationflags=procs.NO_WINDOW,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"harbor agents schema {agent} failed: {proc.stderr.strip()[-500:]}")

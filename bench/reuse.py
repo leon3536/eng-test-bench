@@ -32,7 +32,10 @@ REPORT tab decides it, from report.analysis_rows:
   pools every profile, and the cell pins everything a profile could change.
   Two arms of one cell in a design never reuse the same trial.
 
-A task is covered when it has spec.attempts usable trials. resolve()
+A task is covered when it has spec.attempts usable trials, at least one of
+them run while the host CPU was not busy (or not known to be): the report
+leaves the time of a trial on a busy host out, so a task with only such
+trials has no time and runs again. resolve()
 materialises this into the spec: covered tasks leave the arm's task list and
 are listed with the trials they reuse under spec.reused, so the hash a
 person approves is what runs. An arm left with no task stays in the spec and
@@ -116,6 +119,7 @@ class Coverage:
     cell_trials: int = 0            # usable trials of this cell on any task
     fallback: int = 0               # trials of this cell the report counts, set aside for another model's tokens
     other_harbor: int = 0           # trials of this cell set aside because another Harbor ran them
+    host_busy: dict[str, int] = field(default_factory=dict)  # task -> usable trials, all on a busy host
 
 
 def coverage(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> list[Coverage]:
@@ -164,11 +168,15 @@ def coverage(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, A
                 found[task].append(r)
         for task in dict.fromkeys(arm.tasks):
             # Full usage first, then the oldest: a later trial changes what a spec reuses only by
-            # replacing one that was cut short.
+            # replacing one that was cut short, or (below) one that ran on a busy host.
             trials = sorted(found.get(task, []), key=lambda r: (r.get("usage_status") != "full",
                                                                 str(r.get("started_at") or "~"),
                                                                 str(r.get("trial_key"))))
-            if len(trials) >= attempts:
+            if len(trials) >= attempts and all(r.get("cpu_contended") for r in trials):
+                cov.host_busy[task] = len(trials)  # enough trials, but none has a usable time
+            elif len(trials) >= attempts:
+                # A trial with a usable time first, so the reused ones always time the task.
+                trials.sort(key=lambda r: bool(r.get("cpu_contended")))
                 cov.covered[task] = trials[:attempts]
                 claimed[cov.config_hash].update(str(r.get("trial_key")) for r in cov.covered[task])
             elif trials:
@@ -308,6 +316,7 @@ def summary(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, An
             "cost_avoided_usd": arm_figures.get("cost_avoided_usd", 0.0), "skipped": bool(reused) and not runs,
             "cell_trials": cov.cell_trials, "reused": reused,
             "short": [{"task": t, "usable": n} for t, n in cov.short.items()],
+            "host_busy": [{"task": t, "usable": n} for t, n in cov.host_busy.items()],
         })
     notes = []
     if cut_short:
@@ -317,6 +326,11 @@ def summary(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, An
     if short:
         notes.append(f"{short} task{'s have' if short != 1 else ' has'} some usable trials but fewer than "
                      f"{attempts} (attempts); {'they run' if short != 1 else 'it runs'} in full.")
+    host_busy = sum(len(a["host_busy"]) for a in arms_out)
+    if host_busy:
+        notes.append(f"{host_busy} task{'s have' if host_busy != 1 else ' has'} enough usable trials, but all ran "
+                     f"while the host CPU was busy, so the report has no time for {'them' if host_busy != 1 else 'it'}"
+                     f"; {'they run' if host_busy != 1 else 'it runs'} again.")
     if figures.get("unpriced_tasks"):
         notes.append(f"{figures['unpriced_tasks']} reused task(s) have no measured cost, so the cost avoided "
                      "leaves them out.")
@@ -347,12 +361,13 @@ def summary(cfg: Config, spec: Mapping[str, Any], rows: Sequence[Mapping[str, An
 
 
 def fingerprint(rows: Sequence[Mapping[str, Any]]) -> str:
-    """What resolving reads from the ledger: each trial, whether it is usable
-    and its usage status, and the Harbor installed now. A cached check of a
+    """What resolving reads from the ledger: each trial, whether it is usable,
+    its usage status and whether its host was busy, and the Harbor installed now. A cached check of a
     reuse spec keys on this, because report.ledger_fingerprint hashes trial
     keys only, so an exclusion or a trial finishing under its key leaves it
     unchanged."""
-    keys = sorted(f"{r.get('trial_key')}|{int(usable(r))}|{r.get('usage_status')}" for r in rows)
+    keys = sorted(f"{r.get('trial_key')}|{int(usable(r))}|{r.get('usage_status')}|{int(bool(r.get('cpu_contended')))}"
+                  for r in rows)
     text = "\n".join(keys) + "\nharbor:" + harbor_version()
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 

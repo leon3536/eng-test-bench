@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "d-speed-check-rerun-10-slo-bef0",
+  "title": "Speed check: rerun 10 slow trials + 2 controls on a quiet host",
+  "created_at": "2026-11-02T08:53:59+00:00",
+  "updated_at": "2026-11-02T08:53:59+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-02T08:53:59+00:00",
+      "spec_hash": "sha256:c3bfc82d661557f8da8f944dd9eb1447f71c31a753b64dfca1ef2aad3de0f557",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    }
+  }
+}

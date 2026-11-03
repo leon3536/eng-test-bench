@@ -94,7 +94,8 @@ class ShippedConfigTests(BenchTestCase):
                   "cline": ("bench.agents.cline:PinnedClineCli", "cline-cli"),
                   "goose": ("bench.agents.goose:PinnedGoose", "goose"),
                   "opencode": ("bench.agents.opencode:OpenCodeBunEpipe", "opencode"),
-                  "kilo": ("bench.agents.kilo:KiloCode", "kilo-code")}
+                  "kilo": ("bench.agents.kilo:KiloCode", "kilo-code"),
+                  "dsh": ("bench.agents.dsh:DeepSeekHarness", "deepseek-harness")}
     FACTORY = {"factory": "bench_strands_factory:create_agent",
                "factory_path": "harnesses/strands_factory", "version": "1.57.2"}
 
@@ -129,7 +130,7 @@ class ShippedConfigTests(BenchTestCase):
         self.check_arms(cfg, design_only={"bench.agents.pi:PiProviders": "pi"})
         self.assertEqual(cfg.arm("strands").options["factory_kwargs"],
                          {"model_spec": "anthropic/claude-opus-5-5", "effort": "medium"})
-        self.assertEqual((cfg.designs.max_budget_usd, cfg.designs.max_arms), (1000, 48))  # the 5-model race
+        self.assertEqual((cfg.designs.max_budget_usd, cfg.designs.max_arms), (1000, 64))  # the merged race
         self.assertEqual(cfg.assistant, settings.AssistantSettings())
         self.assertEqual(cfg.stats, settings.StatsSettings())
         self.assertEqual(cfg.queue, settings.QueueSettings())

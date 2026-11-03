@@ -171,7 +171,7 @@ ledger:
 # and built FROM the local task image with Harbor's own install commands.
 prebake:
   prefix: benchbake           # image repository prefix (benchprobe/ is the prototypes')
-  build_jobs: 4               # builds at once; Claude Code's take 7-11 min each
+  build_jobs: 3               # builds at once; Claude Code's take 7-11 min each
   max_age_days: 14            # older images still run, with a warning: their apt lists go stale
   keep_days: 14               # prune keeps an image no arm wants this long
   auto_build: false           # true: the queue builds missing images before it starts an item

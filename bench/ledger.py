@@ -41,8 +41,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from . import classify, extract, pricing, settings
+from . import classify, extract, lookups, pricing, settings
 from .extract import RunContext, ScanRoot, TrialFacts
+from .fsutil import canonical_json
 
 SCHEMA_VERSION = 3
 BUSY_TIMEOUT_MS = 15000
@@ -542,6 +543,7 @@ class Ledger:
         try:
             if self._stale_rows():
                 self.rederive()
+            self.apply_lookup_verdicts()
         except Exception as exc:
             self.set_error("rederive", exc)
         try:
@@ -882,6 +884,7 @@ class Ledger:
                     self._note_guessed_provider(job_dir, ctx.run_key, prefixes, skipped)
             if reparse:
                 self.rederive(force=True)
+            self.apply_lookup_verdicts()
             summary = {"at": at, "scanned": totals["scanned"], "inserted": totals["inserted"],
                        "upgraded": totals["upgraded"], "unchanged": totals["unchanged"],
                        "incomplete": totals["incomplete"], "skipped": skipped,
@@ -956,6 +959,39 @@ class Ledger:
                     {"at": _now(), "rows": done, "folders_missing": len(missing), "missing": missing[:50]}))
         return done
 
+    def apply_lookup_verdicts(self, verdicts: Mapping[str, Mapping[str, str]] | None = None) -> int:
+        """Bring the stored verdicts by hand in line with
+        config/answer_lookups.yaml and re-classify the rows they change,
+        without a re-parse: the rows the file names, and those that carry a
+        verdict it no longer names. Returns the number of rows changed."""
+        self._require()
+        verdicts = lookups.load_verdicts() if verdicts is None else verdicts
+        keys = sorted(verdicts)
+        with self._conn() as conn:
+            ids = {r[0] for r in conn.execute("SELECT id FROM trials WHERE flags_json LIKE ?",
+                                               (f'%"{lookups.VERDICT_FLAG}"%',))}
+            for start in range(0, len(keys), 500):
+                chunk = keys[start:start + 500]
+                ids.update(r[0] for r in conn.execute(
+                    f"SELECT id FROM trials WHERE trial_key IN ({', '.join('?' * len(chunk))})", chunk))
+        changed = 0
+        for row_id in sorted(ids):
+            with self._write() as conn:
+                row = conn.execute("SELECT * FROM trials WHERE id = ?", (row_id,)).fetchone()
+                if row is None:
+                    continue
+                flags = _loads(row["flags_json"], {}) or {}
+                fresh = lookups.with_verdict(flags, row["trial_key"], verdicts)
+                if fresh == flags:
+                    continue
+                values = {"flags_json": canonical_json(fresh)}
+                outcome, reason = classify.classify({**dict(row), **values})
+                values.update(outcome=outcome, outcome_reason=reason, updated_at=_now())
+                conn.execute(f"UPDATE trials SET {', '.join(f'{c} = :{c}' for c in sorted(values))} "
+                             "WHERE id = :row_id", {**values, "row_id": row_id})
+                changed += 1
+        return changed
+
     def _trial_folder(self, trial_dir: str) -> Path:
         path = Path(trial_dir)
         return path if path.is_absolute() else self.root / path
@@ -983,7 +1019,8 @@ class Ledger:
             facts = extract.facts_from_result(extract.inflate(row["raw_result_z"]),
                                               extract.inflate(row["raw_lock_z"]), job_lock,
                                               trial_dir=row["trial_dir"], ctx=ctx, prefixes=prefixes,
-                                              prebake=_loads(row.get("prebake_json")), log=log, stored=stored)
+                                              prebake=_loads(row.get("prebake_json")), log=log, stored=stored,
+                                              host=extract.trial_hostload(folder, ctx))
             fresh = {c: getattr(facts, c) for c in _FACT_COLUMNS if c not in _KEEP_ON_REDERIVE}
             if fresh["usage_json"] != row["usage_json"]:
                 # Priced again, or 'as ingested' reports and run spend would keep the old usage's figure.
@@ -1045,7 +1082,10 @@ class Ledger:
             "outcome": r["outcome"], "outcome_reason": r["outcome_reason"], "harbor_cause": r["harbor_cause"],
             "exception_type": r["exception_type"],
             "exception_head": r["exception_head"][:300] if r["exception_head"] else None,
-            "reward": r["reward"], "passed": None if r["passed"] is None else bool(r["passed"]),
+            # A trial that looked up the answer is a fail whatever the verifier said, scored or not (validity
+            # counts it); reward stays the raw fact.
+            "reward": r["reward"],
+            "passed": False if r["outcome"] == "answer_lookup" else None if r["passed"] is None else bool(r["passed"]),
             "n_input": n_input, "n_cache": n_cache, "n_output": n_output, "usage_status": status,
             "tokens_total": (n_input or 0) + (n_output or 0) if measured else None,
             "cost_usd": cost, "cost_at_ingest_usd": None if status == "unmeasured" else r["cost_at_ingest_usd"],

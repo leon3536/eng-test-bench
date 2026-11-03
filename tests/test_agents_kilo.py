@@ -120,6 +120,17 @@ class KiloAgent(BenchTestCase):
                     with self.assertRaises(AgentAuthenticationError):
                         self.run_agent(self.agent(), Execs(container_text=text))
 
+    def test_a_network_or_rate_limit_phrase_after_a_finished_run_is_kept(self) -> None:
+        # Harbor's network and rate-limit patterns matched two verified passes on hf-model-inference (2026-11-01).
+        from harbor.agents.installed.base import ApiRateLimitError, NetworkConnectionError
+
+        for error in (NetworkConnectionError, ApiRateLimitError):
+            failed = error("Command failed (exit 1): kilo run ...")
+            with self.subTest(error=error.__name__), mock.patch.object(KiloCode, "_run_harness", side_effect=failed):
+                self.run_agent(self.agent(), Execs(container_text=f"{EPIPE}{STOP}\n"))
+                with self.assertRaises(error):
+                    self.run_agent(self.agent(), Execs(container_text=EPIPE))  # never finished
+
     def test_an_error_event_fails_the_run(self) -> None:
         agent = self.agent()
         (agent.logs_dir / "kilo.txt").write_text(json.dumps({"type": "error", "error": {"name": "APIError"}}) + "\n",

@@ -65,7 +65,8 @@ class HarborCauses(unittest.TestCase):
                 names += 1
                 with self.subTest(name=name):
                     self.assertEqual(classify.harbor_cause(name), policy.cause.value)
-                    self.assertEqual(classify.classify(facts(exception_type=name))[0], expected)
+                    unscored = {"reward": None} if expected == "provider_failure" else {}
+                    self.assertEqual(classify.classify(facts(exception_type=name, **unscored))[0], expected)
         self.assertGreater(names, 40)
 
     def test_no_exception_means_no_cause(self) -> None:
@@ -80,9 +81,24 @@ class Rules(unittest.TestCase):
     def test_named_cases(self) -> None:
         self.assertEqual(self.outcome(exception_type="AgentTimeoutError"), "agent_limit")
         self.assertEqual(self.outcome(exception_type="VerifierTimeoutError"), "verifier_failure")
-        self.assertEqual(self.outcome(exception_type="ApiRateLimitError"), "provider_failure")
+        self.assertEqual(self.outcome(exception_type="ApiRateLimitError", reward=None), "provider_failure")
         self.assertEqual(self.outcome(exception_type="CancelledError"), "infra")
         self.assertEqual(self.outcome(exception_type="SomethingNewError"), "agent_crash")
+
+    def test_a_timeout_on_a_busy_host_is_infra(self) -> None:
+        busy = {"host_cpu_mean": 91.2, "host_cpu_hot_share": 0.62, "host_cpu_samples": 120, "cpu_contended": True}
+        quiet = {**busy, "host_cpu_hot_share": 0.1, "cpu_contended": False}
+        for given in ({"flags": busy}, {"flags_json": json.dumps(busy)}):
+            outcome, reason = classify.classify(facts(exception_type="AgentTimeoutError", **given))
+            self.assertEqual(outcome, "infra")
+            self.assertEqual(reason, "AgentTimeoutError while the host CPU was busy (62% of the agent's time at >=90%)")
+        self.assertEqual(classify.validity("infra"), classify.Validity(False, False, False))  # rerun, never counted
+        self.assertEqual(self.outcome(exception_type="AgentTimeoutError", flags=quiet), "agent_limit")
+        self.assertEqual(self.outcome(exception_type="AgentTimeoutError", flags={}), "agent_limit")  # unknown
+        self.assertEqual(self.outcome(exception_type="AgentTimeoutError", flags_json="not json"), "agent_limit")
+        # Only the timeout: a busy host does not excuse a crash or a failed task.
+        self.assertEqual(self.outcome(exception_type="SomethingNewError", flags=busy), "agent_crash")
+        self.assertEqual(self.outcome(reward=0.0, flags=busy), "failed")
 
     def test_no_exception(self) -> None:
         self.assertEqual(classify.classify(facts(reward=1.0)), ("passed", "reward 1"))
@@ -128,7 +144,8 @@ class ValidityTable(unittest.TestCase):
     def test_default_policy(self) -> None:
         table = {o: tuple(asdict(classify.validity(o)).values()) for o in classify.OUTCOMES}
         self.assertEqual(table, {
-            "passed": (True, True, True), "failed": (True, True, True), "agent_limit": (True, True, True),
+            "passed": (True, True, True), "failed": (True, True, True), "answer_lookup": (True, True, True),
+            "agent_limit": (True, True, True),
             "agent_crash": (True, True, True), "misconfigured_cap": (False, False, False),
             "verifier_failure": (True, False, True), "provider_failure": (False, False, False),
             "setup_failure": (False, False, False), "infra": (False, False, False),
@@ -178,7 +195,7 @@ class UsageStatus(unittest.TestCase):
         self.assertEqual(self.status(), "full")
         self.assertEqual(self.status(reward=1.0, **zero), "unmeasured")  # the agent ran; nothing was recorded
         self.assertEqual(self.status(exception_type="NonZeroAgentExitCodeError", **zero), "full")  # setup failure
-        self.assertEqual(self.status(exception_type="ApiRateLimitError", agent_exec_sec=5.0, **zero),
+        self.assertEqual(self.status(exception_type="ApiRateLimitError", agent_exec_sec=5.0, reward=None, **zero),
                          "full")  # never answered
         self.assertEqual(self.status(exception_type="CancelledError"), "lower_bound")
         self.assertEqual(self.status(exception_type="CancelledError", **zero), "unmeasured")
@@ -207,6 +224,13 @@ class UsageStatus(unittest.TestCase):
                 self.assertTrue(classify.classify(f)[1].endswith("; no usage recorded"))
                 self.assertFalse(classify.validity(classify.classify(f)[0], usage="unmeasured").tokens)
 
+    def test_a_provider_error_the_verifier_scored_keeps_its_score(self) -> None:
+        # Harbor's phrases also match the agent's own tool output (two verified passes, 2026-11-01), and a
+        # stalled provider fails the task like any other failure.
+        self.assertEqual(classify.classify(facts(exception_type="NetworkConnectionError", reward=1.0)),
+                         ("passed", "reward 1 after NetworkConnectionError"))
+        self.assertEqual(classify.classify(facts(exception_type="ApiRateLimitError", reward=0.0))[0], "failed")
+
     def test_a_provider_failure_after_real_work_is_unmeasured(self) -> None:
         # The exception type alone makes it a provider failure, so a harness
         # may have worked for 40 minutes before a rate limit stopped it.
@@ -214,13 +238,13 @@ class UsageStatus(unittest.TestCase):
                                  (None, "unmeasured")):
             with self.subTest(exec_sec=exec_sec):
                 f = facts(exception_type="ApiRateLimitError", n_input=None, n_cache=None, n_output=None,
-                          agent_exec_sec=exec_sec)
+                          agent_exec_sec=exec_sec, reward=None)
                 outcome, reason = classify.classify(f)
                 self.assertEqual(outcome, "provider_failure")
                 self.assertEqual(classify.usage_status(f), status)
                 self.assertEqual(reason.endswith("; tokens not reported"), status == "unmeasured")
         never = facts(exception_type="ApiRateLimitError", n_input=None, n_output=None, agent_started=0,
-                      agent_exec_sec=None)
+                      agent_exec_sec=None, reward=None)
         self.assertEqual(classify.usage_status(never), "full")
 
     def test_reasons_say_when_nothing_was_recorded(self) -> None:
@@ -260,7 +284,7 @@ class UsageStatus(unittest.TestCase):
 class Versions(BenchTestCase):
     def test_versions_are_integers(self) -> None:
         self.assertIsInstance(classify.CLASSIFIER_VERSION, int)
-        self.assertEqual(len(set(classify.OUTCOMES)), 10)
+        self.assertEqual(len(set(classify.OUTCOMES)), 11)
 
     def test_unrecorded_usage_rules_bumped_the_versions(self) -> None:
         # Version 2 judges usage (classifier) and recovers killed trials' usage

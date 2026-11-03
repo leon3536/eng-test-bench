@@ -192,7 +192,7 @@ class Coverage(PlannerCase):
                                   coverage.coverage_options(self.cfg))
         for family in ("pi", "terminus-2"):
             with self.subTest(family):
-                comp = next(c for c in rep["comparisons"] if c["group"].endswith(f"|{family}"))
+                comp = next(c for c in rep["comparisons"] if c["group"].split("|")[2] == family)
                 cell = self.cell(cov, family)
                 for metric, key in (("cost", "cost_multiple"), ("tokens_total", "tokens_multiple")):
                     m = comp["metrics"][metric]
@@ -222,7 +222,7 @@ class Coverage(PlannerCase):
         rep = report.build_report(self.world.ledger, narrow, Filters(models=("openrouter:z-ai/glm-5.3",),
                                                                       tasks=tuple(SAMPLE[:2])),
                                   coverage.coverage_options(narrow))
-        comp = next(c for c in rep["comparisons"] if c["group"].endswith("|pi"))
+        comp = next(c for c in rep["comparisons"] if c["group"].split("|")[2] == "pi")
         self.assertEqual(self.cell(cov, "pi")["trials"], next(g for g in rep["groups"]
                                                                if g["key"] == comp["group"])["trials"]["total"])
         self.assertLess(self.cell(cov, "pi")["trials"], self.cell(full, "pi")["trials"])
@@ -499,7 +499,7 @@ class PairingRule(PlannerCase):
     def report_pairs(self, family: str) -> int:
         rep = report.build_report(self.world.ledger, self.cfg, Filters(models=("openrouter:z-ai/glm-5.3",)),
                                   coverage.coverage_options(self.cfg))
-        comp = next(c for c in rep["comparisons"] if c["group"].endswith(f"|{family}"))
+        comp = next(c for c in rep["comparisons"] if c["group"].split("|")[2] == family)
         return comp["coverage"]["pairs"]
 
     def test_a_task_run_in_versions_that_do_not_pair_is_run_again_on_both_sides(self) -> None:

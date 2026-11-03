@@ -153,12 +153,12 @@ const times = (v) => (isNum(v) ? `${multiple(v)}×` : DASH);
 // A multiple's baseline in a heading ("Cost vs Claude Code"): claude-code as its product name, others as they are.
 const harnessLabel = (name) => (name === 'claude-code' ? 'Claude Code' : name || 'baseline');
 // The same for a baseline model ("Cost vs Opus 5.5"): a Claude id as its product name (any provider prefix dropped
-// when it is Anthropic's), others as given.
+// when it is Anthropic's), keeping an effort after it ("Opus 5.5 low"), others as given.
 const modelLabel = (id) => {
   const s = String(id || '');
-  const m = s.match(/^(?:([\w-]+):)?claude-(opus|sonnet|haiku)-(\d+)-(\d+)$/);
+  const m = s.match(/^(?:([\w-]+):)?claude-(opus|sonnet|haiku)-(\d+)-(\d+)( [\w-]+)?$/);
   if (!m) return s || 'baseline model';
-  return `${m[1] && m[1] !== 'anthropic' ? `${m[1]}:` : ''}${titleCase(m[2])} ${m[3]}.${m[4]}`;
+  return `${m[1] && m[1] !== 'anthropic' ? `${m[1]}:` : ''}${titleCase(m[2])} ${m[3]}.${m[4]}${m[5] || ''}`;
 };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -214,6 +214,9 @@ function niceCeil(v) {
 }
 
 const outcomeOf = (t) => (t.error ? 'error' : t.passed === true ? 'pass' : t.passed === false ? 'fail' : 'unscored');
+/** A pass that looked up the benchmark's answer counts as a fail (results.read_trial sets passed false). */
+const lookupNote = (t) => (t.answer_lookup
+  ? `Looked up the answer (fail): ${((t.answer_lookup.urls || [])[0] || t.answer_lookup.note || '').slice(0, 120)}` : null);
 const trialCost = (t) => (isNum(t.computed_cost) ? t.computed_cost : isNum(t.reported_cost) ? t.reported_cost : null);
 const trialKey = (t) => `${t.arm}/${t.trial || t.task}`;
 
@@ -3472,6 +3475,7 @@ function laneCells(a, L, nConc) {
       [`${minutes(t.minutes)} min`, 'duration'],
       [usageValue((t.n_input || 0) + (t.n_output || 0), t.usage_status, tokens), 'tokens'],
       t.error ? `${t.error}: ${(t.error_message || '').slice(0, 120)}` : null,
+      lookupNote(t),
     ].filter(Boolean));
   });
   const pendingDetail = Math.max(0, a.trials_done - keys.length);
@@ -3948,6 +3952,7 @@ function taskMatrix(run, data) {
               [usageValue(trialCost(t), t.usage_status), 'cost'], [`${minutes(t.minutes)} min`, 'duration'],
               [usageValue((t.n_input || 0) + (t.n_output || 0), t.usage_status, tokens), 'tokens'],
               t.error ? `${t.error}: ${(t.error_message || '').slice(0, 120)}` : null,
+              lookupNote(t),
             ].filter(Boolean), true)
             : cell(''));
         }

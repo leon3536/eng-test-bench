@@ -40,7 +40,12 @@ _WINDOWS = os.name == "nt"
 
 # A console Ctrl+C goes to every process attached to the console, except those
 # started as a new process group: Windows starts them with Ctrl+C ignored.
-NO_CTRL_C: int = subprocess.CREATE_NEW_PROCESS_GROUP if _WINDOWS else 0
+# CREATE_NO_WINDOW: a bench with no console of its own (started detached, or
+# outliving the terminal that started it) would otherwise open a visible window
+# for every harbor and docker child, and keys typed or a close click there reach
+# that child (2026-11-01).
+NO_WINDOW: int = subprocess.CREATE_NO_WINDOW if _WINDOWS else 0
+NO_CTRL_C: int = (subprocess.CREATE_NEW_PROCESS_GROUP | NO_WINDOW) if _WINDOWS else 0
 
 ALREADY_RUNNING = ("The bench is already running for this profile. "
                    "Use the dashboard URL printed by that process.")

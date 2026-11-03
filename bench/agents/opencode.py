@@ -8,18 +8,20 @@ ended on a `step_finish` with reason `stop`, and still failed as an agent
 crash. The same fix is in a Harbor fork (zendo-ai/harbor PR #33).
 
 This subclass accepts exit 1 only when all of these hold, else the failure
-stands: the exception is Harbor's plain NonZeroAgentExitCodeError (not a
-provider error it recognised), opencode.txt holds Bun's EPIPE trace and
+stands: the exception is Harbor's plain NonZeroAgentExitCodeError or one it
+named from a phrase in the output (below), opencode.txt holds Bun's EPIPE trace and
 nothing else outside OpenCode's JSON events, no event is an `error`, and the
 last event is a `step_finish` with reason `stop`. A timeout or kill never
 reaches here as exit 1. Everything else is Harbor's OpenCode unchanged.
 
-AgentAuthenticationError is accepted on the same terms. Harbor scans the whole
-output for auth phrases, including its GitHub pattern ("could not read
-Username for 'https://github.com"), which also matches a `git clone` the agent
-itself ran inside a tool call (2026-10-31, build-cython-ext on Sonnet 5.5,
-twice). A run that ended on `stop` with no error event never failed to
-authenticate with its model.
+Every error Harbor names from its ERROR_PATTERNS is accepted on the same terms.
+Harbor scans the whole output for those phrases, and they also match what the
+agent's own tool calls printed: its GitHub auth pattern ("could not read
+Username for 'https://github.com") matched a `git clone` (2026-10-31,
+build-cython-ext on Sonnet 5.5, twice), and a network and a rate-limit pattern
+matched two verified passes on hf-model-inference (2026-11-01, Kilo on DeepSeek,
+OpenCode on GPT-6.1 Terra). A run that ended on `stop` with no error event
+never failed at its provider.
 
 It also registers Fireworks for an arm on a Fireworks model. OpenCode knows
 Fireworks as `fireworks-ai` (models.dev), but Harbor selects the model as
@@ -50,7 +52,7 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from harbor.agents.installed.base import AgentAuthenticationError, NonZeroAgentExitCodeError
+from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.agents.installed.opencode import OpenCode
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
@@ -123,7 +125,7 @@ class OpenCodeBunEpipe(OpenCode):
         try:
             await self._run_harness(instruction, environment, context)
         except NonZeroAgentExitCodeError as exc:
-            accepted = (NonZeroAgentExitCodeError, AgentAuthenticationError)
+            accepted = {NonZeroAgentExitCodeError, *(p.exception for p in self.ERROR_PATTERNS)}
             if type(exc) not in accepted or not str(exc).startswith("Command failed (exit 1):"):
                 raise
             if not finished_despite_epipe(await self._output_text(environment)):

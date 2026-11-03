@@ -97,6 +97,8 @@
     ]},
   ];
   const DEMO_MODELS = new Set(MODELS.map((m) => `${m.provider}:${m.model}`));
+  // Each harness's agent run time ÷ the baseline's, on the same task.
+  const SPEED = {'claude-code': 1, 'terminus-2': 0.78, 'mini-swe-agent': 0.9, pi: 0.62, strands: 1.15};
 
   // Helpers -------------------------------------------------------------------
 
@@ -127,7 +129,9 @@
   const clone = (x) => JSON.parse(JSON.stringify(x));
   const profile = () => (demo.config() && demo.config().profile) || 'default';
   const modelKey = (m) => `${m.provider}:${m.model}`;
-  const groupKey = (m, family) => `fam:${m.provider}|${m.model}|${family}`;
+  // Every demo trial ran at medium effort, and the report keeps each effort a line of its own (report.group_key).
+  const EFFORT = 'medium';
+  const groupKey = (m, family) => `fam:${m.provider}|${m.model}|${family}|e:${EFFORT}`;
 
   /** The inverse normal CDF (Acklam), for scaling the 90% intervals to another CI level. */
   function probit(p) {
@@ -179,6 +183,37 @@
 
   /** Claude Code's own cost ÷ the computed cost: equal on Opus, low on Sonnet (as its cache-read price is). */
   const reportedFactor = (m) => (m.model === 'claude-sonnet-5-5' ? 0.93 : 1.002);
+
+  /** The host's CPU load over a fake trial's agent time: about one arm trial in nine ran on a busy host. */
+  function hostOf(row, m, i) {
+    const sec = row.phases.agent_exec_sec;
+    const nth = hash(`${row.family}${row.task}${m.model}${i}host`) % 9;
+    if (nth === 0 && row.family !== BASELINE && row.outcome !== 'agent_limit') {
+      return {host_cpu_mean: 93.4, host_cpu_hot_share: 0.62, host_cpu_samples: Math.round(sec / 5), cpu_contended: true};
+    }
+    return {host_cpu_mean: 28 + nth * 4, host_cpu_hot_share: 0, host_cpu_samples: Math.round(sec / 5), cpu_contended: false};
+  }
+
+  /** A task's agent seconds on one side over its counted trials whose host was not busy, and how many were busy. */
+  function timeOf(rows) {
+    const counted = rows.filter((r) => ['passed', 'failed', 'agent_limit'].includes(r.outcome));
+    const ok = counted.filter((r) => !r.flags.cpu_contended && r.phases.agent_exec_sec > 0).map((r) => r.phases.agent_exec_sec);
+    return {sec: ok.length ? ok.reduce((t, v) => t + v, 0) / ok.length : null,
+      busy: counted.filter((r) => r.flags.cpu_contended).length};
+  }
+
+  /** A pair's time fields as _pairs_table gives them: per side the mean agent seconds and the trials left out for a
+   *  busy host, and the multiple. */
+  function pairTime(armRows, baseRows) {
+    const a = timeOf(armRows);
+    const b = timeOf(baseRows);
+    return {arm: {time_sec: a.sec === null ? null : round(a.sec, 1), time_contended: a.busy},
+      baseline: {time_sec: b.sec === null ? null : round(b.sec, 1), time_contended: b.busy},
+      ratio_time: a.sec && b.sec ? round(a.sec / b.sec, 3) : null};
+  }
+
+  /** The host left a side of this pair with no time. */
+  const hostBusy = (p) => [p.arm, p.baseline].some((s) => !s.time_sec && s.time_contended > 0);
 
   /** The ingest cost checks (TrialRow.flags) a few fake trials carry, one of each kind the dashboard shows. */
   function flagsOf(row, m, i) {
@@ -276,7 +311,7 @@
         id: nextId++, trial_key: `${job}/${name}`, run_key: `${prof}/${runId}`, profile: prof, run_id: runId, source: 'bench',
         arm: armFor(runId, family), trial_name: name, attempt: i + 1, family, implementation: 'builtin',
         harness_version: family === BASELINE ? '2.1.312' : family === 'pi' ? '1.4.0' : '2.0.0', harbor_version: '0.25.0',
-        provider: m.provider, model: m.model, effort: 'medium', effort_label: 'medium',
+        provider: m.provider, model: m.model, effort: EFFORT, effort_label: EFFORT,
         config_hash: hex(hash(`${modelKey(m)}${family}cfg`), 16), config_label: `${family} · ${modelKey(m)} · effort=medium`,
         options: {max_turns: 150}, cautions: [], dataset: 'terminal-bench@2.0', dataset_snapshot: 'local:terminal-bench@2.0@2026-10-29T05:29:58+00:00',
         task, task_digest_short: hex(hash(`${task}digest`), 12), outcome,
@@ -292,12 +327,14 @@
         reported_cost_usd: family === BASELINE && usage !== 'unmeasured' ? round(cost * reportedFactor(m)) : null,
         unpriced_models: [], primary_share: 1.0, started_at: isoAgo((40 - i) * 3600e3), finished_at: isoAgo((40 - i) * 3600e3 - 14 * 60e3),
         phases: {env_setup_sec: 3.1, agent_setup_sec: setup.seconds,
-          agent_exec_sec: outcome === 'agent_limit' ? 900.2 : 640.5, verifier_sec: 22.7},
+          agent_exec_sec: outcome === 'agent_limit' ? 900.2
+            : round(640.5 * (SPEED[family] || 1) * (0.6 + (hash(`${task}${m.model}`) % 80) / 100) * (0.92 + (hash(name) % 16) / 100), 1),
+          verifier_sec: 22.7},
         setup: setup.row, setup_mode: setup.row.mode, flags: {},
         total_sec: outcome === 'agent_limit' ? 964.4 : 704.7, exclusion: null,
         log_url: runArms.has(runId) ? `/api/runs/${runId}/log/${armFor(runId, family)}` : null,
       };
-      row.flags = flagsOf(row, m, i);
+      row.flags = {...flagsOf(row, m, i), ...hostOf(row, m, i)};
       trials.set(row.trial_key, row);
       return row;
     };
@@ -368,15 +405,19 @@
             const ac = mean(counted, 'cost_usd');
             const bt = mean(base, 'tokens_total');
             const bc = mean(base, 'cost_usd');
+            const time = pairTime(rows, base);
             pairs.push({
               task, digest_short: rows[0].task_digest_short, run_key: rows[0].run_key === base[0].run_key ? rows[0].run_key : null,
               same_run: rows[0].run_key === base[0].run_key,
               arm: {trials: rows.length, valid: rows.filter((x) => x.outcome !== 'setup_failure').length,
                 tokens_total: spec.tokens && spec.tokens.notMeasured ? null : round(at, 0), cost: round(ac),
-                pass: rows.filter((x) => x.passed).length / rows.length, trial_keys: rows.map((x) => x.trial_key)},
+                pass: rows.filter((x) => x.passed).length / rows.length, trial_keys: rows.map((x) => x.trial_key),
+                ...time.arm},
               baseline: {trials: base.length, valid: base.length, tokens_total: round(bt, 0), cost: round(bc),
-                pass: base.filter((x) => x.passed).length / base.length, trial_keys: base.map((x) => x.trial_key)},
+                pass: base.filter((x) => x.passed).length / base.length, trial_keys: base.map((x) => x.trial_key),
+                ...time.baseline},
               ratio_tokens: spec.tokens && spec.tokens.notMeasured ? null : round(at / bt, 3), ratio_cost: round(ac / bc, 3),
+              ratio_time: time.ratio_time,
             });
           }
         }
@@ -434,7 +475,8 @@
       trials: i ? Math.max(1, Math.floor(rows.length / 3)) : rows.length - (nConfigs > 1 ? Math.max(1, Math.floor(rows.length / 3)) : 0),
     }));
     return {
-      key: groupKey(m, family), label: `${family} · ${modelKey(m)}`, name: family, provider: m.provider, model: m.model, family,
+      key: groupKey(m, family), label: `${family} · ${modelKey(m)} · ${EFFORT}`, name: family, provider: m.provider, model: m.model, family,
+      effort: EFFORT,
       implementation: spec.implementation === null ? null : 'builtin', config_hash: null,
       harness_version: family === BASELINE ? '2.1.312' : null, is_baseline: isBaseline,
       configs, config_diff: nConfigs > 1 ? (family === 'mini-swe-agent' ? {implementation: ['builtin', 'bench.agents.mini_swe_agent:MiniSweAgentWithMcp']} : {max_budget_usd: [null, '1']}) : {},
@@ -458,7 +500,7 @@
   // The report for one request ---------------------------------------------------
 
   const DEFAULT_OPTIONS = {
-    group_by: 'family', split_harness_versions: false, baseline: {family: BASELINE, config: null, model: null},
+    group_by: 'family', split_harness_versions: false, baseline: {family: BASELINE, config: null, model: null, effort: 'medium'},
     compare: 'harnesses',
     pairing: {match_on: 'digest', same_run_only: false}, policy: {crashes: 'include', misconfigured_cap: 'exclude', exclusions: true},
     pricing: 'current', ci_level: 0.9, bootstrap: {resamples: 2000, seed: 20261028}, min_pairs: {estimate: MIN_ESTIMATE, verdict: MIN_VERDICT},
@@ -647,10 +689,12 @@
       const withheld = metrics.cost.reference && metrics.cost.reference.withheld;
       return {
         key: c.key, provider: m.provider, model: m.model, group: c.group, baseline_group: c.baseline_group, arm_name: s.family, baseline_name: BASELINE,
-        headline: `${s.family} vs ${BASELINE} on ${modelKey(m)}: ${n} paired task${n === 1 ? '' : 's'}; ${head}${metrics.cost.status === 'low_n' ? ' (low n)' : ''}${withheld ? `; verdict withheld: ${withheld}` : ''}`,
+        effort: EFFORT, baseline_effort: EFFORT,
+        headline: `${s.family} vs ${BASELINE} on ${modelKey(m)} at ${EFFORT} effort: ${n} paired task${n === 1 ? '' : 's'}; ${head}${metrics.cost.status === 'low_n' ? ' (low n)' : ''}${withheld ? `; verdict withheld: ${withheld}` : ''}`,
         pairs: {n_tasks: n, same_run_fraction: sameRun(c.key, n), arm_only_tasks: c.armOnly, baseline_only_tasks: [],
           dropped: {no_arm_valid: s.setup > 0 ? 1 : 0, no_baseline_valid: 0, usage_not_recorded: 0, tokens_not_reported: s.tokens && s.tokens.notMeasured ? n : 0, unpriced: 0, zero_value: 0}},
         metrics, pass, coverage: cov, caveats,
+        time: pairedTime(((w.pairsBy[c.key] || {}).pairs || []).slice(0, n), scale),
       };
     });
     // The setup option: stock counts fallbacks too; a trial with no recorded setup only under 'any'.
@@ -722,14 +766,15 @@
         trial_keys: rows.map((r) => r.trial_key)};
     };
     return w.order.filter((t) => arm.has(t) && base.has(t)).map((task) => {
-      const a = side(arm.get(task));
-      const b = side(base.get(task));
+      const time = pairTime(arm.get(task), base.get(task));
+      const a = {...side(arm.get(task)), ...time.arm};
+      const b = {...side(base.get(task)), ...time.baseline};
       const first = arm.get(task)[0];
       const same = first.run_key === base.get(task)[0].run_key;
       return {task, digest_short: first.task_digest_short, run_key: same ? first.run_key : null, same_run: same,
         arm: a, baseline: b,
         ratio_tokens: a.tokens_total && b.tokens_total ? round(a.tokens_total / b.tokens_total, 3) : null,
-        ratio_cost: a.cost && b.cost ? round(a.cost / b.cost, 3) : null};
+        ratio_cost: a.cost && b.cost ? round(a.cost / b.cost, 3) : null, ratio_time: time.ratio_time};
     });
   }
 
@@ -745,6 +790,32 @@
     const ratio = ok.reduce((t, p) => t + p.arm[armKey], 0) / ok.reduce((t, p) => t + p.baseline[baseKey], 0);
     const rom = [round(ratio, 3), round(ratio * Math.exp(-half * 1.1), 3), round(ratio * Math.exp(half * 1.1), 3)];
     return metric({g, rom}, ok.length, false, scale, kind);
+  }
+
+  /** The agent time multiple in compare_time's shape: paired tasks whose host was busy on a side are left out. */
+  function pairedTime(pairs, scale) {
+    const ok = pairs.filter((p) => isFinite(p.ratio_time) && p.ratio_time > 0);
+    const busy = pairs.filter(hostBusy).length;
+    const n = ok.length;
+    const status = n < MIN_ESTIMATE ? 'insufficient' : n < MIN_VERDICT ? 'low_n' : 'ok';
+    const out = {status, n, need: status === 'insufficient' ? MIN_ESTIMATE - n : status === 'low_n' ? MIN_VERDICT - n : 0,
+      geomean: null, ratio_of_means: null, per_task: null,
+      dropped: {no_arm_valid: 0, no_baseline_valid: 0, host_busy: busy, no_time: pairs.length - n - busy},
+      host_busy_tasks: busy, contended_trials: pairs.reduce((t, p) => t + p.arm.time_contended + p.baseline.time_contended, 0), basis: 'agent_exec_sec'};
+    if (status === 'insufficient') return out;
+    const logs = ok.map((p) => Math.log(p.ratio_time));
+    const mu = logs.reduce((t, v) => t + v, 0) / n;
+    const sd = Math.sqrt(logs.reduce((t, v) => t + (v - mu) ** 2, 0) / Math.max(1, n - 1)) || SD_LOG;
+    const half = scale * Z90 * sd / Math.sqrt(n);
+    const ratio = ok.reduce((t, p) => t + p.arm.time_sec, 0) / ok.reduce((t, p) => t + p.baseline.time_sec, 0);
+    const sorted = ok.map((p) => p.ratio_time).sort((x, y) => x - y);
+    const q = (f) => sorted[Math.min(n - 1, Math.round(f * (n - 1)))];
+    out.geomean = {estimate: round(Math.exp(mu), 3), lo: round(Math.exp(mu - half), 3), hi: round(Math.exp(mu + half), 3),
+      sd_log: round(sd, 3), gsd: round(Math.exp(sd), 3), method: 't_on_log_ratios'};
+    out.ratio_of_means = {estimate: round(ratio, 3), lo: round(ratio * Math.exp(-half * 1.1), 3),
+      hi: round(ratio * Math.exp(half * 1.1), 3), method: 'task_bootstrap'};
+    out.per_task = {min: sorted[0], q1: q(0.25), median: q(0.5), q3: q(0.75), max: sorted[n - 1]};
+    return out;
   }
 
   /** Pass rate on the paired tasks, model − baseline model, in passBlock()'s shape, with no reference. */
@@ -768,22 +839,23 @@
     const metrics = {tokens_total: tokens('tokens_total'), tokens_uncached: tokens('tokens_uncached'),
       cost: pairedMetric(pairs, 'ratio_cost', 'cost', 'cost', scale, 'cost')};
     const n = pairs.length;
-    const who = `${g.model} vs ${base.model} with ${g.family}`;
+    const [armName, baseName] = [`${g.model} ${g.effort}`, `${base.model} ${base.effort}`];
+    const who = `${armName} vs ${baseName} with ${g.family}`;
     const gm = metrics.cost.geomean;
     const settle = metrics.cost.status === 'low_n' ? `; ${metrics.cost.need} more for a settled figure` : '';
     const headline = gm
-      ? `${who}: ${g.model} used ${gm.estimate.toFixed(2)}x the cost of ${base.model} (${Math.round(ci * 100)}% CI `
+      ? `${who}: ${armName} used ${gm.estimate.toFixed(2)}x the cost of ${baseName} (${Math.round(ci * 100)}% CI `
         + `${gm.lo.toFixed(2)}-${gm.hi.toFixed(2)}x, ${n} tasks)${settle}`
       : `${who}: ${n} paired task${n === 1 ? '' : 's'}; ${MIN_ESTIMATE - n} more for an estimate`;
     const target = spec.options.coverage_target.ratio_halfwidth || 1.25;
     return {
       key, compare: 'models', provider: g.provider, model: g.model, baseline_provider: base.provider,
-      baseline_model: base.model, harness: g.family, group: g.key, baseline_group: base.key, arm_name: g.model,
-      baseline_name: base.model, headline,
+      baseline_model: base.model, harness: g.family, group: g.key, baseline_group: base.key, arm_name: armName,
+      baseline_name: baseName, effort: g.effort, baseline_effort: base.effort, headline,
       pairs: {n_tasks: n, same_run_fraction: n ? round(pairs.filter((x) => x.same_run).length / n, 3) : null,
         arm_only_tasks: [], baseline_only_tasks: [], dropped: {no_arm_valid: 0, no_baseline_valid: 0,
           usage_not_recorded: 0, tokens_not_reported: 0, unpriced: 0, zero_value: 0}},
-      metrics, pass: pairedPass(pairs, scale),
+      metrics, pass: pairedPass(pairs, scale), time: pairedTime(pairs, scale),
       coverage: coverageFor({key, group: g.key, baseline_group: base.key}, n, {...w, pairsBy: modelPairsBy}, g, base,
         target),
       caveats: [...flagCaveats(`${g.family} on ${g.model}`, rowsOf(w, g.key)),
@@ -797,6 +869,7 @@
     const scale = probit((1 + ci) / 2) / Z90;
     const f = spec.filters;
     const baseModel = spec.options.baseline.model;
+    const baseEffort = spec.options.baseline.effort || EFFORT;
     const keepModel = (g) => !f.models.length || f.models.includes(modelKey(g)) || modelKey(g) === baseModel;
     const keepFamily = (family) => !f.families.length || f.families.includes(family);
     const groups = clone(w.groups.filter((g) => keepModel(g) && keepFamily(g.family)));
@@ -809,8 +882,15 @@
     const comparisons = [];
     for (const family of [...new Set(groups.map((g) => g.family))].sort()) {
       const mine = groups.filter((g) => g.family === family);
-      const base = mine.find((g) => g.is_baseline);
+      // The baseline model at the baseline effort, else (report._pick_model_baselines) its group with the most
+      // valid trials, named in a warning. Each demo harness has one group on the baseline model.
+      const base = mine.find((g) => g.is_baseline && g.effort === baseEffort) || mine.find((g) => g.is_baseline);
+      for (const g of mine) g.is_baseline = g === base;
       const others = mine.filter((g) => !g.is_baseline);
+      if (base && base.effort !== baseEffort && others.length) {
+        warnings.push(`No ${baseModel} trials at ${baseEffort} effort with ${family}, so its baseline is ${base.label} `
+          + '(most valid trials).');
+      }
       if (!base && others.length) {
         const one = others.length === 1;
         warnings.push(`No trials on ${baseModel} with ${family}, so ${others.length} group${one ? '' : 's'} there `
@@ -902,11 +982,13 @@
     let rows;
     if (level === 'pairs') {
       rows = [['comparison', 'task', 'digest_short', 'same_run', 'arm_tokens_total', 'baseline_tokens_total',
-        'arm_cost', 'baseline_cost', 'ratio_tokens', 'ratio_cost', 'direction', 'filters']];
+        'arm_cost', 'baseline_cost', 'arm_time_sec', 'baseline_time_sec', 'ratio_tokens', 'ratio_cost', 'ratio_time',
+        'direction', 'filters']];
       for (const c of report.comparisons) {
         for (const p of (getWorld().pairsBy[c.key] || {pairs: []}).pairs) {
           rows.push([c.key, p.task, p.digest_short, p.same_run, p.arm.tokens_total, p.baseline.tokens_total, p.arm.cost,
-            p.baseline.cost, p.ratio_tokens, p.ratio_cost, report.provenance.direction, used]);
+            p.baseline.cost, p.arm.time_sec, p.baseline.time_sec, p.ratio_tokens, p.ratio_cost, p.ratio_time,
+            report.provenance.direction, used]);
         }
       }
     } else if (level === 'trials') {

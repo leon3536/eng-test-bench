@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import datasets, designs, extract, harnesses, pricing, report, stats
-from .settings import SCHEDULE_TASKS, Config, Price, RunSettings
+from .settings import EFFORT_INHERIT, EFFORT_OMIT, SCHEDULE_TASKS, Config, Price, RunSettings
 from .spec import ArmSpec, race_lane_slots, race_peak, spec_from_design
 
 REPLICATES = 2000
@@ -905,11 +905,15 @@ def inflight_allowance(spec: Mapping[str, Any], plan: Mapping[str, Any] | None, 
 
 
 def _task_means(rows: Sequence[Mapping[str, Any]], family: str, provider: str, model: str, metric: str,
-                o: report.Options) -> dict[tuple[str, ...], float]:
-    """Mean metric per pair key (pair_key) for one family on one model."""
+                o: report.Options, effort: str | None) -> dict[tuple[str, ...], float]:
+    """Mean metric per pair key (pair_key) for one family on one model at
+    one effort (report.effort_of; None for the harness default), the report's
+    line for it."""
     values: dict[tuple[str, ...], list[float]] = defaultdict(list)
     for r in rows:
         if r.get("family") != family or r.get("provider") != provider or r.get("model") != model:
+            continue
+        if report.effort_of(r) != effort:
             continue
         v = metric_value(r, metric)
         if v is not None:
@@ -917,23 +921,56 @@ def _task_means(rows: Sequence[Mapping[str, Any]], family: str, provider: str, m
     return {k: math.fsum(vs) / len(vs) for k, vs in sorted(values.items())}
 
 
+def _efforts(rows: Sequence[Mapping[str, Any]], family: str, provider: str, model: str) -> set[str | None]:
+    return {report.effort_of(r) for r in rows
+            if r.get("family") == family and r.get("provider") == provider and r.get("model") == model}
+
+
+def _arm_effort(run: RunSettings, arm: ArmSpec, ran: set[str | None]) -> str | None:
+    """The effort an arm's trials record (report.effort_of), of those its
+    trials on the model ran at: the arm's or the run's effort, else the
+    level in its options (opencode's variant, strands's factory effort) for
+    a harness that takes no effort setting, else none (the harness default).
+    The schema that says which applies is not read here, so the first the
+    ledger holds wins; with none of them, the arm's or the run's."""
+    value = run.effort if arm.effort == EFFORT_INHERIT else arm.effort
+    levels = [harnesses.effective_effort({"effort": None if value == EFFORT_OMIT else value,
+                                          "options": arm.options}),
+              harnesses.effective_effort({"options": arm.options}), None]
+    return next((level for level in levels if level in ran), levels[0])
+
+
+def _baseline_effort(o: report.Options, effort: str | None, ran: set[str | None]) -> str | None:
+    """The effort of the baseline family's line an arm at this effort pairs
+    with, as report.pick_baselines picks it: the same effort; else, for a
+    known effort, the baseline's of unknown effort; for an unknown one, its
+    line at the baseline effort, else the effort it ran most (the first)."""
+    if effort in ran or not ran:
+        return effort
+    if effort is not None:
+        return None if None in ran else effort
+    return o.baseline_effort if o.baseline_effort in ran else sorted(ran, key=str)[0]
+
+
 def _spreads(rows: Sequence[Mapping[str, Any]], base_family: str, metric: str, o: report.Options
              ) -> list[tuple[str, str, str, float, int]]:
     """(provider, model, family, sd of per-task log ratios, n) for every
-    family paired with the baseline on at least 3 tasks."""
+    family paired with the baseline at the same effort on at least 3 tasks,
+    each effort a family ran counted apart."""
     out = []
     models = sorted({(str(r.get("provider")), str(r.get("model"))) for r in rows})
     for provider, model in models:
-        base = _task_means(rows, base_family, provider, model, metric, o)
-        if not base:
-            continue
         families = sorted({str(r.get("family")) for r in rows if r.get("provider") == provider
                            and r.get("model") == model} - {base_family})
-        for family in families:
-            arm = _task_means(rows, family, provider, model, metric, o)
-            logs = [math.log(arm[k]) - math.log(base[k]) for k in sorted(set(base) & set(arm))]
-            if len(logs) >= report.MIN_SD_PAIRS:
-                out.append((provider, model, family, statistics.stdev(logs), len(logs)))
+        for effort in sorted(_efforts(rows, base_family, provider, model), key=lambda e: (e is None, str(e))):
+            base = _task_means(rows, base_family, provider, model, metric, o, effort)
+            if not base:
+                continue
+            for family in families:
+                arm = _task_means(rows, family, provider, model, metric, o, effort)
+                logs = [math.log(arm[k]) - math.log(base[k]) for k in sorted(set(base) & set(arm))]
+                if len(logs) >= report.MIN_SD_PAIRS:
+                    out.append((provider, model, family, statistics.stdev(logs), len(logs)))
     return out
 
 
@@ -974,12 +1011,15 @@ def _pairing(cfg: Config, spec: Any, rows: Sequence[Mapping[str, Any]]) -> list[
         base_family = base_arm.family if base_arm is not None else ledger_base
         if arm is base_arm or arm.family == base_family:
             continue
+        # The report pairs each effort apart, so the arm pairs at its own effort with the baseline's line there.
+        effort = _arm_effort(spec.run, arm, _efforts(rows, arm.family, arm.provider, arm.model))
+        base_effort = _baseline_effort(o, effort, _efforts(rows, base_family, arm.provider, arm.model))
         metric = "cost"
-        base_vals = _task_means(rows, base_family, arm.provider, arm.model, "cost", o)
-        arm_vals = _task_means(rows, arm.family, arm.provider, arm.model, "cost", o)
+        base_vals = _task_means(rows, base_family, arm.provider, arm.model, "cost", o, base_effort)
+        arm_vals = _task_means(rows, arm.family, arm.provider, arm.model, "cost", o, effort)
         if not (set(base_vals) & set(arm_vals)):
-            tok_base = _task_means(rows, base_family, arm.provider, arm.model, "tokens", o)
-            tok_arm = _task_means(rows, arm.family, arm.provider, arm.model, "tokens", o)
+            tok_base = _task_means(rows, base_family, arm.provider, arm.model, "tokens", o, base_effort)
+            tok_arm = _task_means(rows, arm.family, arm.provider, arm.model, "tokens", o, effort)
             if set(tok_base) & set(tok_arm):
                 metric, base_vals, arm_vals = "tokens", tok_base, tok_arm
         # Spreads are measured against a baseline family, which can differ by arm.

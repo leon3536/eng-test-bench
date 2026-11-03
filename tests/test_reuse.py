@@ -283,6 +283,27 @@ class Resolution(ReuseCase):
         found = reuse.coverage(self.cfg, spec, self.rows(raw))[0]
         self.assertEqual(found.short, {"task-b": 1})
 
+    def test_a_task_timed_only_on_a_busy_host_runs_again(self) -> None:
+        spec = self.spec([CC], tasks=["task-a", "task-b"], attempts=2)
+        cc = self.cell(spec, "cc")
+        busy = {"cpu_contended": True, "host_cpu_samples": 10, "host_cpu_hot_share": 0.6}
+        a1, a2 = (dict(trial("task-a", cc), flags=busy) for _ in range(2))
+        b_busy, b_quiet, b_late = dict(trial("task-b", cc), flags=busy), trial("task-b", cc), trial("task-b", cc)
+        raw = [a1, a2, b_busy, b_quiet, b_late]
+        rows = self.rows(raw)
+        self.assertTrue(all(reuse.usable(r) for r in rows))  # still counted for pass rate and tokens
+        found = reuse.coverage(self.cfg, spec, rows)[0]
+        self.assertEqual(found.host_busy, {"task-a": 2})
+        # task-b has a usable time, and the quiet trials are reused before the older busy one
+        self.assertEqual([r["trial_key"] for r in found.covered["task-b"]], [b_quiet["trial_key"], b_late["trial_key"]])
+        resolved = reuse.resolve(self.cfg, spec, rows)
+        self.assertEqual(resolved["arms"][0]["tasks"], ["task-a"])
+        summary = reuse.summary(self.cfg, resolved, rows)
+        self.assertEqual(summary["arms"][0]["host_busy"], [{"task": "task-a", "usable": 2}])
+        self.assertTrue(any("host CPU was busy" in n and "runs again" in n for n in summary["notes"]), summary["notes"])
+        quiet = self.rows([dict(r, flags=None) for r in raw])
+        self.assertNotEqual(reuse.fingerprint(quiet), reuse.fingerprint(rows))
+
     def test_any_profile_counts(self) -> None:
         spec = self.spec([CC], tasks=["task-a"])
         resolved = self.resolve(spec, [trial("task-a", self.cell(spec, "cc"), run_key="dev/20261029-055852-pilot")])

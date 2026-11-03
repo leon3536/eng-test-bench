@@ -85,7 +85,7 @@ class PlanImagesTests(BuilderTestCase):
         self.assertIn("no pinned version", pi["prebake"]["reason"])
         top = p["prebake"]
         self.assertEqual((top["mode"], top["images"], top["build_min"], top["build_gb"], top["jobs"]),
-                         ("prefer", 2, 22.0, 4.37, 4))
+                         ("prefer", 2, 22.0, 4.37, 3))
         self.assertEqual((top["task_images"], top["pull"], top["error"]), (2, [], None))
 
     def test_every_image_ready_drops_the_net_and_plans_pre_baked_minutes(self) -> None:

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-grok-reruns-2-infra-reru-a7d4",
+  "title": "Grok reruns + 2 infra reruns",
+  "created_at": "2026-11-02T15:24:05+00:00",
+  "updated_at": "2026-11-02T15:24:20+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-02T15:24:05+00:00",
+      "spec_hash": "sha256:12d7468e879b9d15c63c5fa2aad755ab14259431930ed10978f4f71c54cd6f61",
+      "change_note": "",
+      "approved_at": "2026-11-02T15:24:17+00:00",
+      "runs": [
+        "20261102-072420-grok-reruns-2-in-v1"
+      ]
+    }
+  }
+}

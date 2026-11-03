@@ -12,7 +12,8 @@
 /* Outcomes ------------------------------------------------------------------ */
 
 #view-report .rp-o-passed { --o: var(--kelly); }
-#view-report .rp-o-failed { --o: var(--red); }
+#view-report .rp-o-failed,
+#view-report .rp-o-answer_lookup { --o: var(--red); }
 #view-report .rp-o-agent_limit,
 #view-report .rp-o-agent_crash,
 #view-report .rp-o-misconfigured_cap,

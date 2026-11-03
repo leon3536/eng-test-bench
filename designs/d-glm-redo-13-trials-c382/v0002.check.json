@@ -1,0 +1,1985 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 3 models (anthropic/claude-opus-5-5, fireworks/glm-5p3, fireworks/deepseek-v4p1-flash-1017). Pairs form only within one model and provider, so each comparison needs its baseline on the same model",
+      "Arm 'claude-code' is skipped: the ledger already holds enough usable trials of all 27 of its tasks",
+      "Arm 'terminus-2-glm' runs 3 of the design's 27 tasks",
+      "Arm 'pi-glm' runs 3 of the design's 27 tasks",
+      "Arm 'cline-glm' runs 3 of the design's 27 tasks",
+      "Arm 'goose-glm' runs 2 of the design's 27 tasks",
+      "Arm 'opencode-glm' runs 1 of the design's 27 tasks",
+      "Arm 'kilo-glm' runs 1 of the design's 27 tasks",
+      "Arm 'goose-deepseek' runs 1 of the design's 27 tasks"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 14,
+    "budget_usd": 25.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "terminus-2-glm",
+      "pi-glm",
+      "cline-glm",
+      "goose-glm",
+      "opencode-glm",
+      "kilo-glm",
+      "goose-deepseek"
+    ],
+    "arms": [
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "c407c5f85bad",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-session-affinity\\\"] --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "fix-git",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.8,
+            "build_gb": 0.6,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi-glm",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 4.5,
+            "build_gb": 1.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "cline-glm",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\cline-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak version=\\\"3.0.74\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"cline-cli\\\" --ek prebake_version=\\\"3.0.74\\\" --ek prebake_recipe=\\\"075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "cline-cli",
+          "supported": true,
+          "reason": "",
+          "version": "3.0.74",
+          "recipe": "075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299",
+          "variant": "cline-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "mailman",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 6.0,
+            "build_gb": 2.7,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-glm",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-glm --job-name log-summary-date-ranges --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name log-summary-date-ranges --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "log-summary-date-ranges",
+              "kv-store-grpc"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.0,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode-glm",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72c0ddb80c5",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\opencode-glm --job-name kv-store-grpc --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name kv-store-grpc --ak variant=\\\"high\\\" --ak version=\\\"1.19.5\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"opencode\\\" --ek prebake_version=\\\"1.19.5\\\" --ek prebake_recipe=\\\"ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "opencode",
+          "supported": true,
+          "reason": "",
+          "version": "1.19.5",
+          "recipe": "ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e",
+          "variant": "opencode-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "kv-store-grpc"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.0,
+            "build_gb": 0.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo-glm",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72628531661",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo-glm --job-name sanitize-git-repo --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sanitize-git-repo --ak variant=\\\"high\\\" --ak version=\\\"7.8.18\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"kilo-code\\\" --ek prebake_version=\\\"7.8.18\\\" --ek prebake_recipe=\\\"4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "kilo-code",
+          "supported": true,
+          "reason": "",
+          "version": "7.8.18",
+          "recipe": "4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555",
+          "variant": "kilo-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "sanitize-git-repo"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-deepseek",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-deepseek --job-name financial-document-processor --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name financial-document-processor --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "financial-document-processor"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.5,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:2e0d4920ed9975ec7352cb4f0cd00f15bda53a169d2dccfd87b923742af9635f",
+    "warnings": [],
+    "peak_containers": 3,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 14,
+      "build_min": 21.8,
+      "build_wall_min": 7.6,
+      "build_gb": 10.12,
+      "jobs": 3,
+      "task_images": 9,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 9,
+        "arms": 7,
+        "lanes": 14,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 14,
+        "build_wall_min_total": 16.1,
+        "build_wall_min_max": 3.0,
+        "peak_disk_gb": 1.95,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "log-summary-date-ranges",
+            "arms": [
+              "goose-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.57
+          },
+          {
+            "task": "nginx-request-logging",
+            "arms": [
+              "terminus-2-glm",
+              "pi-glm",
+              "cline-glm"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.1,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.95
+          },
+          {
+            "task": "multi-source-data-merger",
+            "arms": [
+              "pi-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.69
+          },
+          {
+            "task": "sanitize-git-repo",
+            "arms": [
+              "kilo-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 3.0,
+            "build_wall_min": 3.0,
+            "disk_gb": 1.49
+          },
+          {
+            "task": "kv-store-grpc",
+            "arms": [
+              "goose-glm",
+              "opencode-glm"
+            ],
+            "images": 2,
+            "build": 2,
+            "build_min": 3.5,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.61
+          },
+          {
+            "task": "fix-git",
+            "arms": [
+              "terminus-2-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 0.6,
+            "build_wall_min": 0.6,
+            "disk_gb": 0.23
+          },
+          {
+            "task": "mailman",
+            "arms": [
+              "cline-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 2.0,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.03
+          },
+          {
+            "task": "cancel-async-tasks",
+            "arms": [
+              "terminus-2-glm",
+              "pi-glm",
+              "cline-glm"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.1,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.95
+          },
+          {
+            "task": "financial-document-processor",
+            "arms": [
+              "goose-deepseek"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.57
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 9,
+      "arms": 7,
+      "lanes": 14,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 14,
+      "build_wall_min_total": 16.1,
+      "build_wall_min_max": 3.0,
+      "peak_disk_gb": 1.95,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "9 task race(s) x 7 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "log-summary-date-ranges",
+          "arms": [
+            "goose-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.57
+        },
+        {
+          "task": "nginx-request-logging",
+          "arms": [
+            "terminus-2-glm",
+            "pi-glm",
+            "cline-glm"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.1,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.95
+        },
+        {
+          "task": "multi-source-data-merger",
+          "arms": [
+            "pi-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.69
+        },
+        {
+          "task": "sanitize-git-repo",
+          "arms": [
+            "kilo-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 3.0,
+          "build_wall_min": 3.0,
+          "disk_gb": 1.49
+        },
+        {
+          "task": "kv-store-grpc",
+          "arms": [
+            "goose-glm",
+            "opencode-glm"
+          ],
+          "images": 2,
+          "build": 2,
+          "build_min": 3.5,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.61
+        },
+        {
+          "task": "fix-git",
+          "arms": [
+            "terminus-2-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 0.6,
+          "build_wall_min": 0.6,
+          "disk_gb": 0.23
+        },
+        {
+          "task": "mailman",
+          "arms": [
+            "cline-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 2.0,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.03
+        },
+        {
+          "task": "cancel-async-tasks",
+          "arms": [
+            "terminus-2-glm",
+            "pi-glm",
+            "cline-glm"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.1,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.95
+        },
+        {
+          "task": "financial-document-processor",
+          "arms": [
+            "goose-deepseek"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.57
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:2e0d4920ed9975ec7352cb4f0cd00f15bda53a169d2dccfd87b923742af9635f",
+    "ledger_fingerprint": "sha256:58cc3b4764e08b39",
+    "seed": 107773378620526,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "terminus-2-glm",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "428907a254d4883b",
+          "options_fingerprint": "c407c5f85bad"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.556514,
+          "p50": 0.463457,
+          "p90": 0.959767
+        },
+        "total": {
+          "p10": 0.963409,
+          "p50": 1.532257,
+          "p90": 2.421221
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 14.47,
+          "p90": 33.57
+        },
+        "arm_minutes": {
+          "p50": 53.87,
+          "p90": 83.21
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.13,
+          "basis": "measured",
+          "trials": 196
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.5441): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "pi-glm",
+        "cell": {
+          "family": "pi",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "77ac746df276e9e3",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.834066,
+          "p50": 0.659287,
+          "p90": 1.497578
+        },
+        "total": {
+          "p10": 1.426359,
+          "p50": 2.265361,
+          "p90": 3.648144
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 14.97,
+          "p90": 31.14
+        },
+        "arm_minutes": {
+          "p50": 53.3,
+          "p90": 84.31
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 30.38,
+          "basis": "measured",
+          "trials": 188
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.8148): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "cline-glm",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "2e7730956daf5f00",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.166294,
+          "p50": 0.943585,
+          "p90": 2.197289
+        },
+        "total": {
+          "p10": 1.994831,
+          "p50": 3.175181,
+          "p90": 5.19068
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 8.25,
+          "p90": 20.02
+        },
+        "arm_minutes": {
+          "p50": 31.77,
+          "p90": 49.86
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 66.17,
+          "basis": "measured",
+          "trials": 217
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($1.1177): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "goose-glm",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "246ef53358a5d0c2",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.711772,
+          "p50": 0.59825,
+          "p90": 1.230207
+        },
+        "total": {
+          "p10": 0.758291,
+          "p50": 1.284799,
+          "p90": 2.256116
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.37,
+          "p90": 26.53
+        },
+        "arm_minutes": {
+          "p50": 29.72,
+          "p90": 49.73
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 1.89,
+          "basis": "measured",
+          "trials": 218
+        },
+        "unpriced_models": [],
+        "notes": [
+          "2 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.7094): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "opencode-glm",
+        "cell": {
+          "family": "opencode",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "harness default",
+          "config_hash": "25d943b03a67908d",
+          "options_fingerprint": "a72c0ddb80c5"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.706141,
+          "p50": 1.416707,
+          "p90": 3.06807
+        },
+        "total": {
+          "p10": 0.610486,
+          "p50": 1.346012,
+          "p90": 2.864747
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.92,
+          "p90": 27.46
+        },
+        "arm_minutes": {
+          "p50": 14.02,
+          "p90": 28.45
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 20.99,
+          "basis": "measured",
+          "trials": 221
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($1.5959): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "kilo-glm",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "harness default",
+          "config_hash": "881b5421cd1be62b",
+          "options_fingerprint": "a72628531661"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.849049,
+          "p50": 1.550655,
+          "p90": 3.399976
+        },
+        "total": {
+          "p10": 0.718889,
+          "p50": 1.574827,
+          "p90": 3.475646
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 13.14,
+          "p90": 28.22
+        },
+        "arm_minutes": {
+          "p50": 13.71,
+          "p90": 29.68
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 21.07,
+          "basis": "measured",
+          "trials": 214
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($1.8842): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "goose-deepseek",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6c70065df64baa26",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on fireworks:deepseek-v4p1-flash-1017",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-133138-pilot-deepseek-v-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.218549,
+          "p50": 0.176685,
+          "p90": 0.403835
+        },
+        "total": {
+          "p10": 0.090274,
+          "p50": 0.193498,
+          "p90": 0.410366
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 3.6,
+          "p90": 8.15
+        },
+        "arm_minutes": {
+          "p50": 4.43,
+          "p90": 8.19
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 1.89,
+          "basis": "measured",
+          "trials": 218
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($0.2359): such trials often ran to the time limit."
+        ]
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 9.75055,
+        "p50": 12.371612,
+        "p90": 15.704534
+      },
+      "budget_usd": 25.0,
+      "p_within_budget": 0.9995,
+      "suggested_budget_usd": 18.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "terminus-2-glm",
+        "pi-glm",
+        "cline-glm",
+        "goose-glm",
+        "opencode-glm",
+        "kilo-glm",
+        "goose-deepseek"
+      ],
+      "inflight_allowance_usd": 20.399856,
+      "wall_minutes": {
+        "p50": 169.15,
+        "p90": 212.83
+      },
+      "peak_containers": 3,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 9,
+        "arms": 7,
+        "max_containers": 6,
+        "build_wall_min_total": 16.1,
+        "build_wall_min_max": 3.0,
+        "peak_disk_gb": 1.95,
+        "images_to_build": 14
+      }
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "cline-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-deepseek",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3608,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": {
+      "tasks": 27,
+      "trials": 27,
+      "cost_avoided_usd": 3.96129,
+      "unpriced_tasks": 0,
+      "arms": [
+        {
+          "arm": "claude-code",
+          "tasks": 27,
+          "trials": 27,
+          "cost_avoided_usd": 3.96129,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "openssl-selfsigned-cert",
+              "trials": 1,
+              "cost_avoided_usd": 0.083931
+            },
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.637019
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.246791
+            },
+            {
+              "task": "mteb-retrieve",
+              "trials": 1,
+              "cost_avoided_usd": 0.084975
+            },
+            {
+              "task": "sparql-university",
+              "trials": 1,
+              "cost_avoided_usd": 0.149109
+            },
+            {
+              "task": "sqlite-with-gcov",
+              "trials": 1,
+              "cost_avoided_usd": 0.082314
+            },
+            {
+              "task": "sqlite-db-truncate",
+              "trials": 1,
+              "cost_avoided_usd": 0.077968
+            },
+            {
+              "task": "hf-model-inference",
+              "trials": 1,
+              "cost_avoided_usd": 0.084277
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.069416
+            },
+            {
+              "task": "git-multibranch",
+              "trials": 1,
+              "cost_avoided_usd": 0.094454
+            },
+            {
+              "task": "log-summary-date-ranges",
+              "trials": 1,
+              "cost_avoided_usd": 0.07933
+            },
+            {
+              "task": "nginx-request-logging",
+              "trials": 1,
+              "cost_avoided_usd": 0.077884
+            },
+            {
+              "task": "multi-source-data-merger",
+              "trials": 1,
+              "cost_avoided_usd": 0.0866
+            },
+            {
+              "task": "reshard-c4-data",
+              "trials": 1,
+              "cost_avoided_usd": 0.496532
+            },
+            {
+              "task": "sanitize-git-repo",
+              "trials": 1,
+              "cost_avoided_usd": 0.173243
+            },
+            {
+              "task": "kv-store-grpc",
+              "trials": 1,
+              "cost_avoided_usd": 0.069625
+            },
+            {
+              "task": "fix-git",
+              "trials": 1,
+              "cost_avoided_usd": 0.083192
+            },
+            {
+              "task": "mailman",
+              "trials": 1,
+              "cost_avoided_usd": 0.220607
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.102016
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.082455
+            },
+            {
+              "task": "financial-document-processor",
+              "trials": 1,
+              "cost_avoided_usd": 0.410157
+            },
+            {
+              "task": "fix-code-vulnerability",
+              "trials": 1,
+              "cost_avoided_usd": 0.051339
+            },
+            {
+              "task": "git-leak-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.05878
+            },
+            {
+              "task": "headless-terminal",
+              "trials": 1,
+              "cost_avoided_usd": 0.127108
+            },
+            {
+              "task": "modernize-scientific-stack",
+              "trials": 1,
+              "cost_avoided_usd": 0.086843
+            },
+            {
+              "task": "pypi-server",
+              "trials": 1,
+              "cost_avoided_usd": 0.0742
+            },
+            {
+              "task": "regex-log",
+              "trials": 1,
+              "cost_avoided_usd": 0.071125
+            }
+          ]
+        }
+      ]
+    },
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 41,
+    "trials_reused": 27,
+    "trials_to_run": 14,
+    "cost_avoided_usd": 3.96129,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "c701410eb884a0d9",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 27,
+        "tasks_to_run": 0,
+        "trials_reused": 27,
+        "cost_avoided_usd": 3.96129,
+        "skipped": true,
+        "cell_trials": 33,
+        "reused": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.083931,
+            "lower_bound": 0
+          },
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/cobol-modernization__MfqKr8W"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.637019,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/build-cython-ext__nCUkH5h"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.246791,
+            "lower_bound": 0
+          },
+          {
+            "task": "mteb-retrieve",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/mteb-retrieve__EgAULDF"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.084975,
+            "lower_bound": 0
+          },
+          {
+            "task": "sparql-university",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sparql-university__zMmheqp"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.149109,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-with-gcov__RhBi6sU"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.082314,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-db-truncate",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-db-truncate__hByEfNX"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.077968,
+            "lower_bound": 0
+          },
+          {
+            "task": "hf-model-inference",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/hf-model-inference__2iGv9TG"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.084277,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/db-wal-recovery__8ZXwy2P"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.069416,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-multibranch",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/git-multibranch__ryNeHBR"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.094454,
+            "lower_bound": 0
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/log-summary-date-ranges__BbjVLyf"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.07933,
+            "lower_bound": 0
+          },
+          {
+            "task": "nginx-request-logging",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/nginx-request-logging__QVsw8ES"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.077884,
+            "lower_bound": 0
+          },
+          {
+            "task": "multi-source-data-merger",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/multi-source-data-merger__FeQb87y"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.0866,
+            "lower_bound": 0
+          },
+          {
+            "task": "reshard-c4-data",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/reshard-c4-data__WSLaSnr"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.496532,
+            "lower_bound": 0
+          },
+          {
+            "task": "sanitize-git-repo",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sanitize-git-repo__3B2fok4"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.173243,
+            "lower_bound": 0
+          },
+          {
+            "task": "kv-store-grpc",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/kv-store-grpc__nSuHGzU"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.069625,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-git",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/fix-git__HvfSQNN"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.083192,
+            "lower_bound": 0
+          },
+          {
+            "task": "mailman",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/mailman__tzSxhRF"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.220607,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/cancel-async-tasks__f78Ag9V"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.102016,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/constraints-scheduling__9JqKTZy"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.082455,
+            "lower_bound": 0
+          },
+          {
+            "task": "financial-document-processor",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/financial-document-processor__skRhE7U"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.410157,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/fix-code-vulnerability__XnMckjv"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.051339,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-leak-recovery",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/git-leak-recovery__LHPLUsg"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.05878,
+            "lower_bound": 0
+          },
+          {
+            "task": "headless-terminal",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/headless-terminal__fNLMVdQ"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.127108,
+            "lower_bound": 0
+          },
+          {
+            "task": "modernize-scientific-stack",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/modernize-scientific-stack__uspXQ8x"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.086843,
+            "lower_bound": 0
+          },
+          {
+            "task": "pypi-server",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/pypi-server__9qnstYd"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.0742,
+            "lower_bound": 0
+          },
+          {
+            "task": "regex-log",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/regex-log__gVRGR5Y"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.071125,
+            "lower_bound": 0
+          }
+        ],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "terminus-2-glm",
+        "family": "terminus-2",
+        "config_hash": "428907a254d4883b",
+        "harness_version": "harbor",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "pi-glm",
+        "family": "pi",
+        "config_hash": "77ac746df276e9e3",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "cline-glm",
+        "family": "cline-cli",
+        "config_hash": "2e7730956daf5f00",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "goose-glm",
+        "family": "goose",
+        "config_hash": "246ef53358a5d0c2",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "opencode-glm",
+        "family": "opencode",
+        "config_hash": "25d943b03a67908d",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "kilo-glm",
+        "family": "kilo-code",
+        "config_hash": "881b5421cd1be62b",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "goose-deepseek",
+        "family": "goose",
+        "config_hash": "6c70065df64baa26",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-11-02T16:22:54+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:28b507cb72c30ac8bcb76487e543f654562f908eb8b48a2a1b1922c9c69752a8",
+  "ledger_fingerprint": "sha256:58cc3b4764e08b39",
+  "reuse_fingerprint": "sha256:da1e051f3a30ab1d"
+}

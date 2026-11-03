@@ -1,0 +1,4454 @@
+{
+  "schema": 1,
+  "design_id": "d-five-models-27-tasks-x-8-7e23",
+  "version": 5,
+  "parent_version": 4,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-01T06:51:05+00:00",
+  "profile": "default",
+  "title": "Five models + Opus low/high: 27 tasks x 8-9 harnesses",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "Same plan; reuse the finished openssl task. Restarted to build 3 images at a time (CPU).",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 1000.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-deepseek",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-deepseek",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-deepseek",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-deepseek",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-deepseek",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "mteb-retrieve",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-deepseek",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-glm",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-glm",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-glm",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-glm",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-glm",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-glm",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-glm",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-kimi",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-kimi",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-kimi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-kimi",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-kimi",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-kimi",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-kimi",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-kimi",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-terra",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {},
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-terra",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-terra",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-terra",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "openai/gpt-6.1-terra",
+            "effort": "medium"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-terra",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-terra",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-terra",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-terra",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-grok",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "session_id_headers": [
+            "x-grok-conv-id"
+          ]
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-grok",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "session_id_headers": [
+            "x-grok-conv-id"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-grok",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-grok",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "medium"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-grok",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-grok",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-grok",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-grok",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "claude-code-opus-low",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-opus-low",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {},
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-opus-low",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-opus-low",
+        "agent": "pi",
+        "family": "pi",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-opus-low",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "anthropic/claude-opus-5-5",
+            "effort": "low"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-opus-low",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-opus-low",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-opus-low",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "low",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-opus-low",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "low",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "claude-code-opus-high",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-opus-high",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {},
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-opus-high",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-opus-high",
+        "agent": "pi",
+        "family": "pi",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-opus-high",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "anthropic/claude-opus-5-5",
+            "effort": "high"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-opus-high",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-opus-high",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-opus-high",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-opus-high",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/cobol-modernization__MfqKr8W"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/build-cython-ext__nCUkH5h"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/mteb-retrieve__EgAULDF"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sparql-university__zMmheqp"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-with-gcov__RhBi6sU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-db-truncate__hByEfNX"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/hf-model-inference__2iGv9TG"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/db-wal-recovery__8ZXwy2P"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-multibranch__ryNeHBR"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/log-summary-date-ranges__BbjVLyf"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/nginx-request-logging__QVsw8ES"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/multi-source-data-merger__FeQb87y"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/reshard-c4-data__WSLaSnr"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sanitize-git-repo__3B2fok4"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/kv-store-grpc__nSuHGzU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-git__HvfSQNN"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/mailman__tzSxhRF"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/cancel-async-tasks__f78Ag9V"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/constraints-scheduling__9JqKTZy"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/financial-document-processor__skRhE7U"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-code-vulnerability__XnMckjv"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-leak-recovery__LHPLUsg"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/headless-terminal__fNLMVdQ"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/modernize-scientific-stack__uspXQ8x"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/pypi-server__9qnstYd"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/regex-log__gVRGR5Y"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        }
+      ],
+      "terminus-2-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "cc4c0096-ebb4-4113-a70b-de9fe4410133/openssl-selfsigned-cert__TNMbqJD"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "754b58a6-445a-40dc-9ba0-9e54f0d15240/cobol-modernization__AHyQRLM"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "41869671-3546-477e-9794-02c5ba0d7b9c/build-cython-ext__PfiEXtu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "ba0c47f3-a0d9-4fab-a422-40ca0884c8d3/mteb-retrieve__gFFNJZM"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "5642a1b7-eec4-423e-a85e-4130f6006c43/sparql-university__9Q4N2pA"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "mini-swe-agent-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "53a89d6b-048a-4534-a2b4-36e7f497536d/openssl-selfsigned-cert__Hy2XDMB"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "eaa236ce-cbc9-45e0-97ec-29b73e002e30/cobol-modernization__5A7kPpr"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "3f25740d-b4df-466d-bf5b-64f99b1da323/build-cython-ext__snowg2X"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "5368c88d-102a-4481-9c30-e6ea4764781a/mteb-retrieve__Bt8XjbD"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "8d7b6971-8b6c-435e-bc5a-7b3d125e3733/sparql-university__wvKj4kD"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "pi-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f4d53465-7d65-4365-a3db-9790ebb58df5/openssl-selfsigned-cert__Whida7o"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "c5a397e1-e09f-45b8-84ca-0756db46ea1e/cobol-modernization__Bg6vPWn"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "6ef4f04f-387c-4f0e-b5dc-321e6d672dbf/build-cython-ext__EHHBGsf"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "414f6cfd-fb68-45db-ab53-eaf6e425f34c/mteb-retrieve__qAT4Nfz"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "5bd12509-c6c4-4e66-96b5-10f8a2753422/sparql-university__jCxUyiy"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "strands-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a5da778b-fd02-4e10-9a00-b04c9ae66d81/openssl-selfsigned-cert__Cyck85b"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "4671c107-1550-49ba-a237-0d440d66f4a2/cobol-modernization__ffAKVmQ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "1da26390-6bef-40b5-8062-81cc756da98c/build-cython-ext__jG56WXM"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "ac1f2e62-eb93-4c55-b3a9-c86f6701c1c6/mteb-retrieve__kmY4ehu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "53e048fa-9fd4-4b87-930e-14d9d73b1da1/sparql-university__452AASu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "cline-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "956ea5bf-2612-4890-a71a-0ec939464480/openssl-selfsigned-cert__XqM7LeK"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "ff173c0b-0e15-439c-9dc1-e2c4681bc0f8/cobol-modernization__u52iwfX"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "204112f9-7e32-4f11-ba84-e3e89220fb09/build-cython-ext__YFWVwHu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "338ea3e2-fdab-4df4-87e9-a5e80c8009b2/mteb-retrieve__qEBU5cv"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "d405dee7-b8db-4ebb-bd89-8c0b8dc33b3f/sparql-university__WiqBVnn"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "goose-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "ca1e34b8-5ecd-4f72-ae16-5b64064e1a11/openssl-selfsigned-cert__nJXt6W9"
+          ],
+          "runs": [
+            "dev/20261031-133138-pilot-deepseek-v-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "bb9f8aaf-4a4d-4891-b046-c68014d6aa2c/cobol-modernization__wDsfTtt"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "02efdc46-8676-4146-aba7-b58f537c7ba9/build-cython-ext__8X62qWQ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "9cb9f5a2-adbc-4222-b5f9-70d5acc657a3/mteb-retrieve__4S3XDYY"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "cd13f7ac-a1f7-4ade-ad15-222442e515a0/sparql-university__HSDtRs8"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "opencode-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5fe4b407-f76a-40c7-aacb-db21a4851518/openssl-selfsigned-cert__gczTe6D"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "6f9be352-44ec-4ccf-8cd4-74df6c7a1d9c/cobol-modernization__A9qyD3V"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "a647ddf3-a054-4b03-984a-2e50d9012af6/build-cython-ext__8FMzBpj"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "acf6fccc-3b35-42d8-a7b3-b1bb611595bd/sparql-university__NThGbVF"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "kilo-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "eadf450c-3462-4471-9c4a-236f5f8ec673/openssl-selfsigned-cert__joWwLiU"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "95737248-9d38-44e3-9e2a-c1c4d48d1055/cobol-modernization__t45yd7A"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "b6f95442-27f3-4936-924f-99e7fafa6071/build-cython-ext__BfVnKSi"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "8556bd04-c4d8-4881-b806-ed8e57ddfb0b/mteb-retrieve__ZQm9Hu7"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "f7b8cbc2-df25-4cf7-8595-58b0dab19a84/sparql-university__BAcMeZR"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "terminus-2-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "557380f1-d36d-4e36-a235-a4cf18fe7188/openssl-selfsigned-cert__ddKKUJW"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "adf777ca-3077-4b99-b609-9d672ce55d20/cobol-modernization__MijEBg9"
+          ],
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "14f47786-a30d-4ac9-8991-a68ae6229b1a/build-cython-ext__D57uYbs"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "75033339-feb3-443d-9d55-293f30cb6dd2/mteb-retrieve__niTCy66"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "0e4e982f-6158-4680-a903-f00574ebe2f9/sparql-university__EpeHrzp"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "mini-swe-agent-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "bc872b74-944b-4109-a674-b78747ffe4d0/openssl-selfsigned-cert__3uME8kq"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "09b762d4-dfbc-476f-8a7a-da79876772f4/cobol-modernization__WG5h8GG"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "309794e5-b515-494a-a02a-04b8d183eac2/build-cython-ext__C5b4sAF"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "0b89b21e-1084-4af0-a63e-9c1b215022f8/mteb-retrieve__fnDpouu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "c26724fb-4cb2-4d26-b9b4-45db180b598a/sparql-university__xgSjtbj"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "pi-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "37d5e9dd-962b-4fdf-baf7-bab796f28633/openssl-selfsigned-cert__Yfhzpgj"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "1c162e1d-5e96-4bcf-9bef-b937570e8d41/cobol-modernization__vsT3dCy"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "9369dfb6-da5d-4644-8c80-cca1479bb675/build-cython-ext__cXwdDYJ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "850706e7-a479-4b6b-8967-1e6ada18b2c5/mteb-retrieve__iEo996k"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "3c005750-a216-449d-adb9-af1d1c719792/sparql-university__yiL7F7h"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "strands-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "d64149bc-5e7f-4da4-ba87-460405c9a6ee/openssl-selfsigned-cert__Y8JYjZW"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "0e43c992-50a3-48e5-acdd-2e64de9ac122/cobol-modernization__qgdGSLG"
+          ],
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "2f166634-2e63-4ae5-82f2-b965b17b7cc0/build-cython-ext__5WAcr2G"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "8d5231d8-e116-4eca-b82c-02e9e69f3d6b/mteb-retrieve__7QgBida"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "ea7cce42-3e90-442f-8eba-06c29d73ef29/sparql-university__AR6UN2S"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "cline-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5dec28e3-127b-4764-a5ab-671d226f9fe7/openssl-selfsigned-cert__BZULGfm"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "b69b0deb-a12f-400e-ac59-2eb63c915c15/cobol-modernization__pBexkwr"
+          ],
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "a5410d5c-c0b0-4c28-a63f-dcf03c9c3a3d/build-cython-ext__7LK4Sh4"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "cbf0f6ef-ab8a-48a6-b4c5-1f4538ec6e37/mteb-retrieve__N25WKum"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "a538ecb6-d312-4108-8724-c70faa0db9ad/sparql-university__bRF4jE8"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "goose-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "dc248eaa-7c33-4384-a07f-4bc151687ae4/openssl-selfsigned-cert__gM3dAxw"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "7d15f363-cab5-42fa-9dcf-5248266b38fd/cobol-modernization__DxfUvEp"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "a5178641-b882-4fc6-b08c-e30587037454/build-cython-ext__kCyBf6A"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "8f1016c2-5049-4e42-af78-1174799e48f5/mteb-retrieve__sWsvVei"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "25e9a45f-4450-4986-8521-db22dc07704d/sparql-university__GhqkAVN"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "opencode-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "01faaacb-512e-4ed3-9d60-e8394d65150e/openssl-selfsigned-cert__FEhBMPM"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "2d517352-79f3-44d0-b355-3f9e67c49686/cobol-modernization__98wp4ts"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "4e22c38a-687d-49e9-bfe3-8a115fb27f29/build-cython-ext__Q9xTJER"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "8459eab7-9ac3-4801-aaac-e9b814dc5873/mteb-retrieve__XwDK6w6"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "5577d1d4-2165-4d16-a8dc-ced0bd0bdec1/sparql-university__Pg5Lfst"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "kilo-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "359e9cf1-ae3a-4ff4-bc9b-c4ad9f93168d/openssl-selfsigned-cert__inwNHw9"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "6322a995-f2e4-4751-a24f-9165394fa38f/cobol-modernization__Hkt3zjA"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "cfa45cdf-4c63-4553-a9a2-a634ae1f5967/build-cython-ext__C7GhB77"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "61d60da7-6b19-4c74-9d26-fd3c240264e8/mteb-retrieve__4LKYp3Z"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "c6bb6154-b4b9-47cb-bb51-3876fdff591f/sparql-university__KJJRYGS"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "terminus-2-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "74fd6842-cad4-485f-85f7-d8930dc783fe/openssl-selfsigned-cert__35tcVsn"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "14677289-b43e-4f93-b7f6-81196c7cf75f/cobol-modernization__eC84o5q"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "355f4935-e28e-41b7-a5b1-fdf411e6f2f7/build-cython-ext__JjdUmzN"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "22033aff-0b71-4160-8acf-dea4cf82ef5b/mteb-retrieve__fJZ3Hwe"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "c687d0a3-c975-4236-b61c-0cc71cc5f2e5/sparql-university__zb5B748"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "mini-swe-agent-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "91ae93e0-187c-4449-b486-620f9dd41644/openssl-selfsigned-cert__QFNDRMG"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "c07d8398-9531-45d0-812e-eea16d475f40/cobol-modernization__EBa6sin"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "bc8c9a33-3466-4c19-9c5d-06099b211646/build-cython-ext__iZU2AAn"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "612bf036-9e9a-4308-9e0b-074abbf4f3fa/mteb-retrieve__8ue97am"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "59a239b4-ad3b-4711-b38e-1a7987968b5e/sparql-university__EDTomW2"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "pi-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0dd832f5-3ffa-488f-8d23-6f4ce4fbe321/openssl-selfsigned-cert__qxNnSpj"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "f7e3c28b-5346-4183-bc5c-993e83dd1b05/cobol-modernization__gNdpwM4"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "e9518e35-8d13-4509-958a-e8214fef9a96/build-cython-ext__X6yreHJ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "82b82f9f-cb9e-44cb-ac78-f7aafdf09a8f/mteb-retrieve__yKUvZmF"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "e71fe130-2507-456c-a984-c0769a06bdde/sparql-university__fhUySFX"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "strands-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "6ee5bdc6-f88b-4693-b4c5-3d5bff2d65c9/openssl-selfsigned-cert__PX3r5Lw"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "9fa303c2-bb1d-4aa7-8d54-c6f53fb71bc6/cobol-modernization__dkcNT9G"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "170868e7-72c8-4b36-b8c2-30f66afabe41/build-cython-ext__UAvUpkx"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "6a62a348-2424-4c79-ab11-128a7c5d58c7/mteb-retrieve__QLGoDP9"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "095f439c-ba51-4083-a430-c62343d099c0/sparql-university__zMZ36jM"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "cline-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "b1d5aaae-7dac-4ee5-bac3-58b1b1b4b629/openssl-selfsigned-cert__pTHR6zy"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "074f569d-4726-4676-8db2-ff61ae2a34bf/cobol-modernization__MRxJJAJ"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "9b1a4991-e109-45d5-b0f8-cc5744262f05/build-cython-ext__Szhpsyk"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "3507cae2-1380-480c-9392-28de3cd2f553/mteb-retrieve__vpRg7cu"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "416c3738-c259-4214-b86b-c57d8c866f31/sparql-university__DD9krzZ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "goose-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "3eab16a9-c410-4383-94e2-128658b3b964/openssl-selfsigned-cert__u7Ccje7"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "6de17f7c-cb82-4495-bd48-2444e66b1a15/cobol-modernization__UJithxa"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "6dbd2ab0-01f1-4979-9083-f26497e26140/build-cython-ext__RwVkvF5"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "4961fbbb-294d-4aa2-9615-c059896a1479/mteb-retrieve__TF9Qfsf"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "5010a654-c887-4a90-a30c-3a57ec10b817/sparql-university__D5h8X3E"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "opencode-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a3b5abe0-c9c6-4383-a5f0-82aee3a25342/openssl-selfsigned-cert__4znPb5L"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "7b3d211c-b20f-4233-a3bf-64a9c9c84847/cobol-modernization__T49YNje"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "0902b32e-3c9f-4079-99b9-141e34bf6e29/build-cython-ext__dyzs4pi"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "cd817670-9818-4bcd-993f-05caa9b6ffbd/mteb-retrieve__tpcLtw6"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "224dbb89-e7c1-4bec-93ba-2ebae8f6badd/sparql-university__SqWfwzp"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "kilo-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "7bc8d91e-e5bb-418f-a636-0b4ec411f0ee/openssl-selfsigned-cert__rYZXA7U"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "7f4034f2-7fa9-41bc-8a24-b8f04992f66e/cobol-modernization__mBfLMKB"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "88d3d473-009e-48fd-8d55-871ff9349325/build-cython-ext__YwFrEVv"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "e430c336-8a5f-492b-a781-e7fe4eb890a3/mteb-retrieve__sy5nqpo"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "7cf950f9-c790-4a4d-add7-dfe48f548032/sparql-university__BBE8zpU"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "terminus-2-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f8cc8008-a47e-4385-a73e-bfff2dd9e915/openssl-selfsigned-cert__XRc9dDd"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "09ce17e3-df26-45d7-bf4a-7f9beee160d5/cobol-modernization__kRvk2Wf"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "cc535ae0-d8f4-4ac4-814c-08b44efc8fd0/build-cython-ext__q8Z9dMQ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "7d5ff446-c648-4b8c-9d83-3f11b48984a1/mteb-retrieve__rkdce4Y"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "8fa2bb9c-1f0e-43f3-b0ec-e88467acf261/sparql-university__XeSnZmE"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "mini-swe-agent-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "1b485a20-358a-48f1-8bec-925e5e96a4ac/openssl-selfsigned-cert__AVxA4iU"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "476bf51f-f2d4-4ad4-9f27-94cc5957d866/cobol-modernization__MJ7FG76"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "d8db1d03-fdd9-46a2-83a5-0d153ab01ed5/build-cython-ext__9ZFTTVL"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "c2e2bfcf-fc6b-4c8f-8617-18bfb6b3e0f2/mteb-retrieve__hrtX9g2"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "72f1bf50-9139-43d7-a6da-6f3db8b71aa4/sparql-university__SoMPm7R"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "pi-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "18ac4d5f-dba2-4240-88fb-cd4def359bf4/openssl-selfsigned-cert__fQLCvWs"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "28eb2b2a-f38c-446a-adc2-70dfeaef5641/cobol-modernization__P2pnPJ3"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "ef75c7be-001d-461c-888c-043880329908/build-cython-ext__DtyK8Lq"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "edb5b6b9-ec57-4e08-900a-5f6ea5a58dc1/mteb-retrieve__FXtXFev"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "217a571a-bd0b-4b96-ac96-471d2c456309/sparql-university__oMbfQvj"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "strands-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "7db9f74c-0abc-4b26-bd25-e9b6d0db4867/openssl-selfsigned-cert__3yteQif"
+          ],
+          "runs": [
+            "dev/20261031-140719-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "58ac803f-0d2b-48e5-a3c3-cf55883e06db/cobol-modernization__38ahTR2"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "8668614e-f999-4d8a-86b7-8fe051b75578/build-cython-ext__9X34ZPZ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "4926c404-84dc-464f-b25c-279cae898cb0/mteb-retrieve__GcNA8Eo"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "cline-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "22e295e9-3e79-40c6-a73c-4671b9680307/openssl-selfsigned-cert__UCSZmkn"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "4f87f9d0-d04c-44c4-8912-7ccaff518878/cobol-modernization__qrW46kx"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "318b2744-3155-4394-817b-376f4ac854e4/build-cython-ext__wxSzEcU"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "fe8e17cf-3e20-4bdd-b9d1-79893572e29f/mteb-retrieve__kQk87xA"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "goose-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "3504b5f3-8451-46de-9b05-7a21e00d8491/openssl-selfsigned-cert__j7ni4qX"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "dabb8294-92e6-4aeb-900b-d3c0de83cc15/cobol-modernization__wxv8kcF"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "46f2ce1f-32fa-4cd9-b289-790ea6f6dadd/build-cython-ext__2dqmh7w"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "52f915a2-0bb5-4545-b1d7-2befea3fdb89/mteb-retrieve__QbmgK7F"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "072e3473-c271-40ef-9869-9df469baada5/sparql-university__8VX2boZ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "opencode-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "8197eaba-88c0-4cc9-a739-7258102db251/openssl-selfsigned-cert__mqDBAa3"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "d011964a-092c-4ce1-8826-7b38fcfd9c28/cobol-modernization__DrnCqAy"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "a84103fa-8e6a-430a-90a1-3d9346bdd293/build-cython-ext__s8TGL3z"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "490324a7-ca1f-409a-b08f-2b1b3fd59647/mteb-retrieve__rkpzokk"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "kilo-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5afa1549-bb16-499b-8c03-3c1c6467fb37/openssl-selfsigned-cert__5QCMwak"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "d19ba95c-6536-436b-8cf5-19215f5bfaac/cobol-modernization__gYXCAhk"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "8d30e3a2-93b5-45c6-8926-ea9ac8eb25ed/build-cython-ext__t9naxtS"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "dcbc9d25-1038-4e42-806d-8ba924356d71/mteb-retrieve__BZgdhdR"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "terminus-2-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "56b23fc6-00fe-42bb-9294-57167cbd50ca/openssl-selfsigned-cert__A8rKk6J"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "e47f477a-0ae5-4ec4-8ffb-451ad28d5253/cobol-modernization__qSaLuwe"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "45d45b00-0c51-489c-9988-48d0cb6897f5/build-cython-ext__mFvMpTp"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "d9329c87-dbda-4b21-83e9-30ec2069159d/mteb-retrieve__hDaYfJC"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "mini-swe-agent-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a7d7bb4d-6655-41c5-b3f8-a50b806c6e9f/openssl-selfsigned-cert__tY6FdyJ"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "e0adc23d-5e20-479c-a960-fd4ef386f870/cobol-modernization__Xdxb3CB"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "8db69a0f-855d-4033-8b2c-9bf847d540ee/build-cython-ext__Ypavkpo"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "74a290c3-ae7a-404e-aca0-8cbd2299b1be/mteb-retrieve__3asgLgo"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "pi-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "675dc7f4-132f-4ef9-81ba-012320e4387d/openssl-selfsigned-cert__AnVbHod"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "8820fc84-788d-4a66-a299-b1ce204caca0/cobol-modernization__kxmhYs4"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "17dbd8b7-e299-4ab2-86f8-7acf1d60a7a4/build-cython-ext__8jtx2Gt"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "2f703a54-31a0-4659-b87c-5d4446933b55/mteb-retrieve__q7q9bn9"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "strands-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f652ca5a-9799-4729-b3fe-fc1882e87d56/openssl-selfsigned-cert__487WDv7"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "98797f1b-c029-4535-acf1-feb74fd24e7a/cobol-modernization__vuC82tA"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "c35ab20e-b010-492e-93e3-ca18d215ec4b/build-cython-ext__GrzGKwJ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "ebe81603-5e7c-4fee-9824-f4f06b70e90b/mteb-retrieve__Gw2ngAg"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "cline-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "4e60e32c-9c4e-4ab1-a45d-9201fbac6405/openssl-selfsigned-cert__Fw9qaSn"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "9168af16-c265-4d82-b1c7-21a05ebb3bef/cobol-modernization__L5nmqLc"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "099f5a40-fe61-401e-bc17-7f82c2b38dbb/build-cython-ext__PpZ4idv"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "fc390b98-8262-4f5d-b1ed-6e038d51de79/mteb-retrieve__aeSdptc"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "goose-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0eb69241-8ab7-4d6f-91f3-81969b2e4d7f/openssl-selfsigned-cert__HSeGLNB"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "1104097c-21b2-4a54-b335-3ef3c08b37cb/cobol-modernization__F5BwcnZ"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "cbdee058-3e52-41eb-9a64-937cab509eaa/build-cython-ext__PRLXAdf"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "129eb764-e45f-49a7-8cbe-5012cb5159f4/mteb-retrieve__iFq7ssy"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "opencode-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "aae35a9e-d1a3-43ea-bfac-99d373d20886/openssl-selfsigned-cert__AkqK98B"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "5bf7492d-6575-41e8-81f8-596d161f1a72/cobol-modernization__vBPCE4N"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "1d734c5b-ea0a-41a1-adbe-e2e4fbf2a7fc/build-cython-ext__fgvmzbQ"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "kilo-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "79202ed9-3593-42c2-9e35-cc9d8db607ad/openssl-selfsigned-cert__VVoksbt"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "199a1a38-8c60-43b7-84c7-22764fe037c2/cobol-modernization__A7UNrQC"
+          ],
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "111019d4-9947-413b-ae45-4811d2b1fb7c/build-cython-ext__4c6VyRc"
+          ],
+          "runs": [
+            "default/20261031-194013-five-models-27-t-v3"
+          ]
+        }
+      ],
+      "claude-code-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "4ce806b3-cb6f-42ce-bfbf-7a59fa43661f/openssl-selfsigned-cert__CRTRGVZ"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "terminus-2-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "00a4c71f-2391-4d28-9329-75119b9311f9/openssl-selfsigned-cert__KTftSRo"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "mini-swe-agent-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "00f7131e-1c60-46dd-9829-c2f113b77f10/openssl-selfsigned-cert__rmpFH8h"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "pi-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "83ce0b4d-8570-43db-be86-92330fc9b6c0/openssl-selfsigned-cert__Ybvy4NZ"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "strands-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f5fceb3e-bcdf-4f4f-bcd9-32569238dca4/openssl-selfsigned-cert__cZoWqyC"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "cline-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "bc59661e-7900-4435-8433-5db678c2c7f3/openssl-selfsigned-cert__WLKk2nJ"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "goose-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "464b0bf1-1077-4966-ad28-f6002ea4098d/openssl-selfsigned-cert__KZNC5wU"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "opencode-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "2d16b022-109f-4af4-b95f-2d6847332586/openssl-selfsigned-cert__VXyHneN"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "kilo-opus-low": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0c9b826a-7a75-47e7-bb11-3f5dd0e69552/openssl-selfsigned-cert__VR9xkwF"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "claude-code-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a520c1fa-8c79-4b62-99cb-360234d9070c/openssl-selfsigned-cert__msnZxXg"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "terminus-2-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "d47a16d4-1c26-45a7-952d-11882d6c52e2/openssl-selfsigned-cert__ZaT2Y4i"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "mini-swe-agent-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "144c88a9-85e1-4459-9be8-e52d444260ef/openssl-selfsigned-cert__ViFH6zg"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "pi-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "477ad520-a07d-48dc-85f8-bc1140a6ab61/openssl-selfsigned-cert__CuDcXfH"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "strands-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "672b7c16-386f-4b7c-abe6-03e1dd38fba0/openssl-selfsigned-cert__dmuFb7a"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "cline-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "841f3e22-5068-4349-b45b-82f96887002a/openssl-selfsigned-cert__4wocRRa"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "goose-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "ea5a5a2e-325a-4da3-a117-05266e4810a2/openssl-selfsigned-cert__UsTSj8R"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "opencode-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "84dbb5b1-b4ba-46c0-b338-91670d2066d8/openssl-selfsigned-cert__YZSbaye"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ],
+      "kilo-opus-high": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "76797acc-1eba-4edd-8c44-a80ada420763/openssl-selfsigned-cert__YdcRUc6"
+          ],
+          "runs": [
+            "default/20261031-231855-five-models-27-t-v4"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:a9e34b135b79ef2c560ed5a00ed2ed35171eeb169898c96cf06c1495d73926de"
+}

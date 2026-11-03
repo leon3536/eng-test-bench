@@ -23,11 +23,20 @@ from typing import Any
 from harbor.models.trial.error_policy import policy_for
 
 from .harnesses import cap_misprices_for
+from .hostload import HOT_CPU
 
-CLASSIFIER_VERSION = 3
+# 4: a provider error the verifier still scored keeps its score (passed/failed). Harbor names provider errors
+#    from phrases anywhere in the output, which also match the agent's own tool output; and a model whose
+#    provider stalls has failed the task like any other failure (2026-11-01).
+# 5: an agent timeout while the host CPU was busy for much of the agent's time (flags cpu_contended, from
+#    the run's hostload.jsonl) is infra: the host, not the model, ran out the clock (2026-11-02).
+# 6: an agent that fetched the benchmark's own answer files and used them (flags answer_lookup, or a verdict
+#    by hand in config/answer_lookups.yaml; see lookups.py) is answer_lookup, a fail whatever the verifier
+#    said (2026-11-02).
+CLASSIFIER_VERSION = 6
 
-OUTCOMES = ("passed", "failed", "agent_limit", "agent_crash", "misconfigured_cap", "verifier_failure",
-            "provider_failure", "setup_failure", "infra", "incomplete")
+OUTCOMES = ("passed", "failed", "answer_lookup", "agent_limit", "agent_crash", "misconfigured_cap",
+            "verifier_failure", "provider_failure", "setup_failure", "infra", "incomplete")
 
 # A harness that ran this briefly and reported no tokens never got going.
 SETUP_MAX_EXEC_SEC = 60.0
@@ -46,7 +55,8 @@ _CUT_SHORT_EXCEPTIONS = ("AgentTimeoutError",)
 # Reached only once the agent phase ran (a reward, a timeout, the harness's
 # own stop or crash), whatever the timing fields say: an external job or an
 # older Harbor may not record agent_execution.
-_AGENT_RAN = ("passed", "failed", "verifier_failure", "agent_limit", "misconfigured_cap", "agent_crash")
+_AGENT_RAN = ("passed", "failed", "answer_lookup", "verifier_failure", "agent_limit", "misconfigured_cap",
+              "agent_crash")
 
 
 @dataclass(frozen=True)
@@ -130,12 +140,53 @@ def _cap_option(f: Mapping[str, Any]) -> str | None:
     return (CAP_SIGNATURES.get(f.get("family") or "") or {}).get(marker)
 
 
+def _flags(f: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The trial's flags (extract.trial_flags and the host load), as a
+    mapping or flags_json text; {} when the facts carry none."""
+    flags = f.get("flags")
+    if isinstance(flags, Mapping):
+        return flags
+    raw = f.get("flags_json")
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, Mapping) else {}
+    return {}
+
+
+def answer_lookup(f: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """The trial's answer lookup when it counts: a verdict by hand
+    (answer_lookup_verdict) wins over the scan's own (answer_lookup.used).
+    None when there was none, it was allowed, or it was not used."""
+    flags = _flags(f)
+    found = flags.get("answer_lookup") if isinstance(flags.get("answer_lookup"), Mapping) else {}
+    by_hand = flags.get("answer_lookup_verdict") if isinstance(flags.get("answer_lookup_verdict"), Mapping) else {}
+    if by_hand.get("verdict") == "allowed":
+        return None
+    if by_hand.get("verdict") == "lookup" or found.get("used") is True:
+        return {**found, **by_hand}
+    return None
+
+
+def _lookup_reason(lookup: Mapping[str, Any]) -> str:
+    urls = [u for u in (lookup.get("urls") or []) if isinstance(u, str)]
+    where = urls[0] if urls else (lookup.get("note") or "")
+    return "looked up the benchmark's answer" + (f" ({where})" if where else "")
+
+
 def classify(f: Mapping[str, Any]) -> tuple[str, str]:
     """(outcome, reason) for one trial's facts. First matching rule wins.
     A finished trial whose usage is unknown says so at the end of its reason."""
     if not f.get("finished_at"):
         return "incomplete", "killed before finishing"
     outcome, reason = _classify(f)
+    lookup = answer_lookup(f)
+    if lookup is not None:
+        # Policy, not a heuristic about the run: whatever else happened, it is a fail that counts.
+        return "answer_lookup", (f"{_lookup_reason(lookup)}; otherwise {outcome}: {reason}"
+                                 + _unrecorded(f, "answer_lookup"))
     return outcome, reason + _unrecorded(f, outcome)
 
 
@@ -149,10 +200,18 @@ def _classify(f: Mapping[str, Any]) -> tuple[str, str]:
             return "passed", f"reward {reward:g}"
         return "failed", f"reward {reward:g}"
 
+    flags = _flags(f)
+    if exception_type in _CUT_SHORT_EXCEPTIONS and flags.get("cpu_contended") is True:
+        # Other work on the host slowed the agent: its timeout is the host's, so the trial is run again.
+        hot = flags.get("host_cpu_hot_share")
+        share = f"{100 * hot:.0f}% of the agent's time" if isinstance(hot, (int, float)) else "much of the agent's time"
+        return "infra", f"{exception_type} while the host CPU was busy ({share} at >={HOT_CPU:g}%)"
     cause = f.get("harbor_cause") or harbor_cause(exception_type)
     if cause in _INFRA:
         return "infra", f"{exception_type} ({cause})"
     if cause == "model_provider_failed":
+        if reward is not None:  # the verifier scored the work regardless
+            return ("passed" if reward >= 1.0 else "failed"), f"reward {reward:g} after {exception_type}"
         return "provider_failure", f"{exception_type}: the model provider failed"
     if cause == "verifier_failed":
         return "verifier_failure", f"{exception_type}: the verifier failed"
@@ -196,8 +255,8 @@ def validity(outcome: str, *, crashes: str = "include", misconfigured_cap: str =
         raise ValueError("misconfigured_cap must be include or exclude")
     if usage not in USAGE_STATUSES:
         raise ValueError(f"usage must be one of {', '.join(USAGE_STATUSES)}")
-    if outcome in ("passed", "failed", "agent_limit"):
-        v = Validity(True, True, True)
+    if outcome in ("passed", "failed", "answer_lookup", "agent_limit"):
+        v = Validity(True, True, True)  # answer_lookup is a fail: never passed (Ledger._trial_row)
     elif outcome == "agent_crash":
         ok = crashes == "include"
         v = Validity(ok, ok, ok)
