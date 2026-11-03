@@ -177,7 +177,8 @@ arms:
   # routed, so it has no Opus arm. Telemetry and the title-generator call are
   # off. No turn or dollar cap: the task time limit is its only bound.
   # Version 0.2.1-rc.5 (2026-10-29) is newer than the two-week pin habit; dsh
-  # has no non-rc release. Not yet smoke-tested, hence off.
+  # has no non-rc release. Smoke-tested 2/2 and raced on 27 tasks 2026-11-02.
+  # No pre-bake adapter yet, so it sets up stock in every trial.
   - name: dsh
     agent: bench.agents.dsh:DeepSeekHarness
     family: deepseek-harness

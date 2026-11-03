@@ -1,7 +1,8 @@
 # Engineering Test Bench
 
 This bench screens agent harnesses (Claude Code, Terminus 2, mini-swe-agent,
-Pi and Strands) on fixed models with [Harbor](https://harborframework.com).
+Pi, Strands, Cline, Goose, OpenCode, Kilo and DeepSeek Harness) on fixed models
+with [Harbor](https://harborframework.com).
 It compares their token use and cost per trial with published figures. The
 basis is "Agent harness evidence, ranked" (28 Oct 2026): changing harness
 moves cost 2x to 3x and accuracy by under 5 points. The bench checks whether
@@ -11,6 +12,42 @@ Every trial from every run goes into one ledger. Runs add up over time, and
 the **REPORT** tab tells you where the comparison stands and what to run next.
 
 It runs natively on Windows 11 with Docker Desktop.
+
+## Results
+
+Preliminary, 3 Nov 2026. About 2% of trials are pending a rerun for the final results. Full tables: [docs/results.md](docs/results.md); interactive report: [docs/report.html](docs/report.html).
+
+- Ten agent harnesses ran the same 27 IT, e-commerce and SaaS tasks (terminal-bench 2.0) on six models, one attempt per task.
+- Every ratio divides by a reference on the same tasks: 0.80× means 20% less than the reference.
+- The overall reference is **Claude Code on Opus 5.5 medium**.
+- Harnesses are compared with **Claude Code** on Claude models and with **Goose** on the other models, at the same model and effort.
+- Models are compared with the same harness on **Opus 5.5 medium**.
+
+1. **Model choice correlates more with task success; harness choice correlates more with cost.** On Claude models every harness passed 25–27 of 27 tasks, a spread too small to tell apart at this sample size. Cost varied widely: at Opus medium, Pi cost 31% less than Claude Code, Goose 21% less, and Cline 60% more.
+2. **Sonnet 5.5 stood out among the mid-tier models on these terminal-bench tasks.** Across the 8 harnesses that ran every model, Sonnet passed 209 of 216 (97%), against 92–94% for Kimi K3, GPT-6.1 Terra and DeepSeek, 89% for Grok and 80% for GLM. It was also the fastest (1.6 min median per task, against 2.1–5.6) and tied with Terra as the cheapest (2.6¢). The pass gap to the next models is a few tasks; the cost and speed gaps are larger. For scale, Opus medium passed 211 of 216 at about three times Sonnet's cost.
+3. **Claude Code was the fastest harness on Claude models, not the cheapest.** The other harnesses took 1.3–2.2× as long as Claude Code at Opus medium. Where people wait on the agent, that speed may justify its cost; for unattended batch work, Pi and Goose reached the same pass counts for less.
+4. **Open models cost less, and each tended to do best on a particular harness.** The top harness differed by model: Kimi K3 on Pi (27 of 27, among the cheapest and fastest), DeepSeek V4.1 Flash on OpenCode or Terminus-2 (26 of 27 at the lowest cost), GLM 5.3 on Cline (24 of 27). GLM had the widest spread across harnesses (20 to 24). Most of these margins are one to four tasks, so treat each pairing as a starting point to confirm, not a settled ranking.
+5. **Grok 4.7 was the most expensive and slowest option in this test.** On Goose it cost 1.9× Opus medium and took 3.3× as long, with 25 vs 27 passes. Some of the slowness coincided with an overloaded test machine and a rerun is planned; the cost gap is less likely to change.
+6. **Some agents with internet access looked up the benchmark's answers.** In 11 runs, mostly on DeepSeek, the agent downloaded the benchmark's own answer key and used it; we count those as fails. Published scores for internet-connected agents may be inflated, and the same behaviour in production means fetching and running unvetted code, so internet access warrants a deliberate policy.
+
+### Tasks passed (of 27)
+
+| Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
+|---|---|---|---|---|---|---|---|---|---|
+| Claude Code | 25/27 | 27/27 | 26/27 | 25/27 | · | · | · | · | · |
+| Pi | 26/27 ★ | 26/27 | 27/27 ★ | 26/27 ⭐ | 27/27 | 25/27 | 26/27 ⊘ ★ | 22/27 | 24/27 ⊘ |
+| Goose | 27/27 ⭐ | 27/27 | 27/27 ★ | 26/27 ★ | 26/27 | 25/27 | 23/27 | 21/27 | 25/27 |
+| OpenCode | 26/27 | 26/27 | 27/27 | 26/27 ★ | 26/27 | 25/27 | 26/27 ⊘2 ⭐ | 22/27 | 24/26 |
+| Kilo | 27/27 | 27/27 | 27/27 | 26/27 | 24/27 | 25/27 | 26/27 ⊘ | 20/27 | 21/26 |
+| Cline | 26/27 | 27/27 | 27/27 | 26/27 | 26/27 | 25/27 | 25/27 | 24/27 | 24/26 ⊘ |
+| Terminus-2 | 25/27 | 27/27 | 27/27 | 26/27 | 25/27 | 26/27 | 26/27 | 23/27 | 23/27 ⊘ |
+| mini-swe-agent | 27/27 ★ | 26/27 | 26/27 | 26/27 ★ | 26/27 | 26/27 | 24/27 ⊘2 ★ | 20/27 | 27/27 |
+| Strands | 27/27 ★ | 25/27 | 27/27 | 27/27 ★ | 24/27 | 26/27 | 23/27 ⊘ | 21/27 | 24/27 |
+| DeepSeek Harness | · | · | · | · | · | · | 24/27 ⊘ ★ | · | · |
+
+⭐ local optimum: beats both its column's reference harness and its own harness on Opus 5.5 medium.
+★ beats one of the two. "Beats" means no fewer passes, cost and time within 5% or better, and at least 5% cheaper
+or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own answers), counted as fails. · not run.
 
 ## Start
 

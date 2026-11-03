@@ -33,7 +33,9 @@ from .hostload import HOT_CPU
 # 6: an agent that fetched the benchmark's own answer files and used them (flags answer_lookup, or a verdict
 #    by hand in config/answer_lookups.yaml; see lookups.py) is answer_lookup, a fail whatever the verifier
 #    said (2026-11-02).
-CLASSIFIER_VERSION = 6
+# 7: a provider-type error before the agent started (no model call: e.g. the harness install could not
+#    resolve github.com) is setup_failure, ours to rerun, not provider_failure (2026-11-03).
+CLASSIFIER_VERSION = 7
 
 OUTCOMES = ("passed", "failed", "answer_lookup", "agent_limit", "agent_crash", "misconfigured_cap",
             "verifier_failure", "provider_failure", "setup_failure", "infra", "incomplete")
@@ -212,6 +214,8 @@ def _classify(f: Mapping[str, Any]) -> tuple[str, str]:
     if cause == "model_provider_failed":
         if reward is not None:  # the verifier scored the work regardless
             return ("passed" if reward >= 1.0 else "failed"), f"reward {reward:g} after {exception_type}"
+        if not f.get("agent_started"):  # no model call yet: the network failed during setup
+            return "setup_failure", f"{exception_type} before the agent started"
         return "provider_failure", f"{exception_type}: the model provider failed"
     if cause == "verifier_failed":
         return "verifier_failure", f"{exception_type}: the verifier failed"

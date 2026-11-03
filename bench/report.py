@@ -382,16 +382,8 @@ def _current_cost(row: Mapping[str, Any], table: Mapping[str, Any] | None) -> tu
 
 
 def _usable_reported(row: Mapping[str, Any]) -> float | None:
-    """The harness's (or OpenRouter's billed) figure, unless this harness
-    prices this provider's models at another provider's rates. $0 for a
-    trial that used tokens is a harness that could not price the model
-    (LiteLLM does this), not a billed cost."""
-    reported = row.get("reported_cost_usd")
-    used_tokens = bool((row.get("n_input") or 0) + (row.get("n_output") or 0))
-    if (reported is not None and (float(reported) > 0 or not used_tokens)
-            and not harnesses.reports_mispriced_cost(row.get("family") or "", row.get("provider") or "")):
-        return float(reported)
-    return None
+    """The harness's own figure when it can be trusted (harnesses.usable_reported_cost)."""
+    return harnesses.usable_reported_cost(row)
 
 
 def _chosen_cost(row: Mapping[str, Any], current: float | None, mode: str) -> float | None:
@@ -1849,7 +1841,7 @@ def _compute(ledger: Any, cfg: Config, f: Filters, o: Options) -> _Analysis:
     ids = tuple(excl[2]) if o.apply_exclusions else ()
     outcomes = Counter(r["outcome"] for r in used)
     # A floor set aside from the means was still spent.
-    spend = math.fsum(next((v for v in (r["cost"], r["floor_cost"], r.get("reported_cost_usd")) if v is not None), 0.0)
+    spend = math.fsum(next((v for v in (r["cost"], r["floor_cost"], _usable_reported(r)) if v is not None), 0.0)
                       for r in used)
     report = {
         "spec": {"filters": filters_dict(f), "options": options_dict(o)},

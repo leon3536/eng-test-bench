@@ -359,3 +359,36 @@
 @media (max-width: 760px) {
   #view-report .rp-pass .rp-frow { grid-template-columns: 84px minmax(0, 1fr); }
 }
+
+/* Verdicts against the baseline (one per metric in the comparison table) ------------- */
+
+#view-report .rp-vsbase { white-space: nowrap; }
+
+/* Print / PDF (printReport sets body.rp-print): the strip and the Report sub-tab, light, one column. ---------- */
+
+@media print {
+  body.rp-print {
+    color-scheme: light;
+    --bg: #fff; --bg-grid: transparent; --panel: #fff; --panel-2: #f5f6f5; --panel-3: #eceeec; --inset: #f5f6f5;
+    --line: #d6dbd7; --line-2: #c3cac4; --line-3: #959f97;
+    --text: #111511; --text-2: #2c332e; --muted: #57615a; --faint: #79837c;
+    --kelly: #2b7a0b; --kelly-hi: #2b7a0b; --kelly-lo: #8fc472; --kelly-wash: rgba(43, 122, 11, .08);
+    --amber: #8f5d00; --amber-lo: #d6b064; --amber-wash: rgba(143, 93, 0, .08);
+    --red: #b42318; --red-lo: #e2a099; --red-wash: rgba(180, 35, 24, .08);
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  html:has(> body.rp-print) { background: #fff; }
+  body.rp-print > header.bar, body.rp-print > footer.statusline, body.rp-print #scrim, body.rp-print #drawer,
+  body.rp-print #assistant, body.rp-print #tooltip, body.rp-print #toast, body.rp-print #demo-banner,
+  body.rp-print #view-report .rp-tabs, body.rp-print #view-report .rp-rail, body.rp-print #view-report .rp-side,
+  body.rp-print #view-report .rp-scrim, body.rp-print #view-report .rp-strip-actions, body.rp-print #view-report .btn {
+    display: none !important;
+  }
+  body.rp-print main, body.rp-print #view-report { padding: 0; margin: 0; }
+  body.rp-print #view-report .rp-layout { display: block; }
+  body.rp-print #view-report .scroll, body.rp-print #view-report .table-scroll { overflow: visible; }
+  body.rp-print #view-report .panel { clip-path: none; break-inside: auto; }
+  body.rp-print #view-report .rp-card, body.rp-print #view-report .rp-frow { break-inside: avoid; }
+}

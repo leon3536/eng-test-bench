@@ -117,6 +117,8 @@ class ResultsTestCase(BenchTestCase):
 # Tokens and cost of the dev pilot's claude-code-deepseek trial.
 CC_DS = dict(n_in=92805, n_cache=61056, n_out=49969, cost_usd=1.438498)
 CC_DS_COMPUTED = ((92805 - 61056) * 0.045 + 61056 * 0.006 + 49969 * 0.50) / 1e6
+# The same at the shipped config/pricing.yaml rates (OpenRouter cache read 0.012 since 2026-11-03).
+CC_DS_SHIPPED = ((92805 - 61056) * 0.045 + 61056 * 0.012 + 49969 * 0.50) / 1e6
 
 
 class SpendTests(ResultsTestCase):
@@ -573,7 +575,7 @@ class LegacyPilotTests(ResultsTestCase):
         self.assertEqual(by_arm["strands-deepseek"]["excluded"], 1)
         self.assertIsNone(by_arm["strands-deepseek"]["mean_tokens"])
         rows = {t["arm"]: t for t in out["trials"]}
-        self.assertAlmostEqual(results.spend(rows["claude-code-deepseek"]), CC_DS_COMPUTED, places=4)
+        self.assertAlmostEqual(results.spend(rows["claude-code-deepseek"]), CC_DS_SHIPPED, places=4)
         comparison = {c["arm"]: c for c in out["comparison"]}
         self.assertIn("pi-deepseek", comparison)
         self.assertIsNone(comparison["pi-deepseek"]["tokens_verdict"])  # not a Claude model

@@ -45,6 +45,16 @@ class CapTests(BenchTestCase):
         self.assertFalse(harnesses.reports_mispriced_cost("pi", "openrouter"))
         self.assertFalse(harnesses.reports_mispriced_cost("mini-swe-agent", "anthropic"))
 
+    def test_usable_reported_cost(self) -> None:
+        # The spend totals fall back to this for unpriced trials, so a mispriced figure must not reach them.
+        row = {"family": "pi", "provider": "openrouter", "n_input": 10, "n_output": 5, "reported_cost_usd": 0.02}
+        self.assertEqual(harnesses.usable_reported_cost(row), 0.02)
+        self.assertIsNone(harnesses.usable_reported_cost({**row, "family": "claude-code"}))
+        self.assertIsNone(harnesses.usable_reported_cost({**row, "reported_cost_usd": 0.0}))  # tokens but $0
+        self.assertEqual(harnesses.usable_reported_cost({**row, "n_input": 0, "n_output": 0,
+                                                         "reported_cost_usd": 0.0}), 0.0)
+        self.assertIsNone(harnesses.usable_reported_cost({**row, "reported_cost_usd": None}))
+
 
 if __name__ == "__main__":
     import unittest

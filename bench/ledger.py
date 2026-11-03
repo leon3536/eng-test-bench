@@ -41,7 +41,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from . import classify, extract, lookups, pricing, settings
+from . import classify, extract, harnesses, lookups, pricing, settings
 from .extract import RunContext, ScanRoot, TrialFacts
 from .fsutil import canonical_json
 
@@ -1209,9 +1209,9 @@ class Ledger:
                 "mode": r["mode"], "status": r["status"], "created_at": r["created_at"],
                 "finished_at": r["finished_at"], "budget_usd": r["budget_usd"],
                 "trials": dict(Counter(t["outcome"] for t in rows)),
-                # The cost at ingest, or the harness's own figure for unpriced trials.
+                # The cost at ingest, or for unpriced trials the harness's own figure when it can be trusted.
                 "spend_usd": round(sum(t["cost_at_ingest_usd"] if t["cost_at_ingest_usd"] is not None
-                                       else (t["reported_cost_usd"] or 0.0) for t in rows), 6),
+                                       else (harnesses.usable_reported_cost(dict(t)) or 0.0) for t in rows), 6),
                 # spend_usd is a lower bound while any of these, or trials['incomplete'], is above 0:
                 # finished trials that ran but recorded no usage, and ones cut short whose usage
                 # covers completed calls only.

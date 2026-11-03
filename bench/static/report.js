@@ -56,6 +56,20 @@
     insufficient: ['…', 'too few pairs', '', 'Too few paired tasks for a verdict.'],
     not_applicable: ['–', 'n/a for this model', '', 'The published figures were measured on Claude models.'],
   };
+  // A comparison against its own baseline, per metric: [glyph, word, tag tone]. Read off the interval the server
+  // computed, and only once there are enough pairs for a verdict (status 'ok'), so 'low n' reads not enough data.
+  const VS_BASELINE = {
+    better: ['✓', 'better', 'ok'],
+    worse: ['✗', 'worse', 'bad'],
+    same: ['≈', 'possibly the same', ''],
+    few: ['…', 'not enough data', ''],
+  };
+  // What "better" means for each metric. Multiples are harness ÷ baseline, so under 1× is less; pass is in points.
+  const BETTER_MEANS = {tokens_total: 'Fewer tokens', cost: 'Cheaper', time: 'Faster', pass: 'Passes more tasks'};
+  const WORSE_MEANS = {tokens_total: 'More tokens', cost: 'Costs more', time: 'Slower', pass: 'Passes fewer tasks'};
+  // A timed-out trial whose harness recorded zero usage: no model call completed in its whole time limit.
+  const HUNG_TEXT = 'The agent used its whole time limit and no model call completed: the harness, or the '
+    + 'model provider under it, stopped answering. It counts as a fail, like any other timeout.';
   const POSITION = {inside: 'estimate inside the band', above: 'estimate above the band', below: 'estimate below the band'};
   const USAGE = {lower_bound: ['≥ lower bound', 'warn'], unmeasured: ['usage not recorded', 'bad']};
   const TABS = [['report', 'Report'], ['ledger', 'Ledger'], ['runs', 'Runs'], ['exclusions', 'Exclusions'], ['snapshots', 'Snapshots']];
@@ -204,7 +218,20 @@
     renderBanner();
   }
 
-  function outcomeTag(outcome) {
+  /**
+   * The harness hung: Harbor's agent timeout (outcome agent_limit, so not a busy host) on a trial whose harness
+   * recorded zeros for its usage, so no model call completed in its whole time limit. Null tokens are left out:
+   * some harnesses write their usage only when they exit, so a timeout there says nothing about a hang.
+   */
+  const isHung = (t) => Boolean(t && t.outcome === 'agent_limit' && t.exception_type === 'AgentTimeoutError'
+    && t.agent_started !== false && (t.n_input === 0 || t.n_output === 0) && (t.n_input || 0) + (t.n_output || 0) === 0);
+
+  /** The outcome as a glyph and label; a trial (t) whose harness hung says so instead of a plain limit. */
+  function outcomeTag(outcome, t = null) {
+    if (isHung(t)) {
+      return tip(h('span', {class: `rp-otag rp-o-${outcome} rp-hung`}, h('b', {'aria-hidden': 'true'}, '⏸'), 'harness hung'),
+        'Harness hung', [HUNG_TEXT]);
+    }
     return h('span', {class: `rp-otag rp-o-${outcome}`}, h('b', {'aria-hidden': 'true'}, glyphOf(outcome)), labelOf(outcome));
   }
 
@@ -394,6 +421,54 @@
   /** A comparison's figure for a forest metric: tokens and cost from c.metrics, agent time from c.time. */
   const metricOf = (c, metric) => (metric === 'time' ? c.time || null : c.metrics ? c.metrics[metric] : null);
 
+  /**
+   * [VS_BASELINE key, why] for one metric of a comparison (m is c.metrics[metric], c.time or c.pass), or null when
+   * the metric was not measured. Better or worse only when the whole interval is on one side of 1× (0 points for
+   * pass rate); a better or worse that the server's own check with trials cut short or unrecorded costed high
+   * (sensitivity.unrecorded_*_high) puts on the other side of 1× reads possibly the same.
+   */
+  function baselineVerdict(m, metric) {
+    if (!m || m.status === 'not_measured') return null;
+    const pass = metric === 'pass';
+    const est = pass ? m.delta_pp : m.geomean;
+    if (m.status !== 'ok' || !est || !isNum(est.estimate)) {
+      return ['few', m.need > 0 ? `${m.need} more paired task${m.need === 1 ? '' : 's'} for a verdict`
+        : 'Too few paired tasks for a verdict.'];
+    }
+    const mid = pass ? 0 : 1;
+    const unit = pass ? '0 points' : '1×';
+    const lowerWins = !pass;  // tokens, cost and time: less is better
+    const lo = isNum(est.lo) ? est.lo : null;
+    const hi = isNum(est.hi) ? est.hi : null;
+    let side = null;
+    if (lo !== null && lo > mid) side = 'up';
+    else if (hi !== null && hi < mid) side = 'down';
+    if (!side) return ['same', `The interval includes ${unit}: it may be no different from the baseline.`];
+    const kind = (side === 'down') === lowerWins ? 'better' : 'worse';
+    const flips = Object.entries(m.sensitivity || {})
+      .filter(([k, v]) => k.startsWith('unrecorded_') && isNum(v) && (side === 'down' ? v >= mid : v <= mid));
+    if (flips.length) {
+      return ['same', `It would read ${unit} or ${side === 'down' ? 'more' : 'less'} had trials cut short or with no usage `
+        + `recorded cost more, so it is possibly the same.`];
+    }
+    return [kind, `${(kind === 'better' ? BETTER_MEANS : WORSE_MEANS)[metric] || kind} than the baseline: the whole `
+      + `interval is ${side === 'down' ? 'below' : 'above'} ${unit}.`];
+  }
+
+  /** The baseline verdict as text for a tooltip row: "✓ better", or '' when not measured. */
+  function vsText(m, metric) {
+    const v = baselineVerdict(m, metric);
+    return v ? `${VS_BASELINE[v[0]][0]} ${VS_BASELINE[v[0]][1]}` : '';
+  }
+
+  /** The baseline verdict as a tag (icon and word), its reason in the tooltip; null when not measured. */
+  function baselineChip(m, metric) {
+    const v = baselineVerdict(m, metric);
+    if (!v) return null;
+    const [glyph, word, tone] = VS_BASELINE[v[0]];
+    return tip(tag(`${glyph} ${word}`, tone), 'Against the baseline', [v[1]], true);
+  }
+
   /** "2 left out: host busy": paired tasks the time multiple dropped because the host CPU was busy. */
   function hostBusyText(t) {
     const n = t && t.host_busy_tasks;
@@ -504,6 +579,9 @@
     }
     // The REPORT always opens on the task scope; "All tasks" lasts until the page is left or reloaded.
     rp.allTasks = false;
+    // It also opens on the profile the server runs (default or dev); another choice lasts until the page is reloaded.
+    const active = ui.state && ui.state.config && ui.state.config.profile;
+    if (active) rp.filters = {...rp.filters, profiles: [active]};
     prefs.set('report.allTasks', null);  // an earlier build saved the switch
     const tab = prefs.get('report.tab', 'report');
     rp.tab = TABS.some(([t]) => t === tab) ? tab : 'report';
@@ -712,6 +790,8 @@
           h('button', {type: 'button', class: 'btn small', disabled: rescanning, onclick: (e) => doRescan(e.currentTarget)},
             rescanning ? [led('warn live'), 'Rescanning…'] : 'Rescan'),
           save,
+          h('button', {type: 'button', class: 'btn small', disabled: !r, onclick: printReport,
+            title: 'Print the Report sub-tab; choose "Save as PDF" in the print dialog for a PDF'}, 'Print / PDF'),
           menu('Export', [
             ['Report trials (CSV)', () => exportReport('trials')],
             ['Report pairs (CSV)', () => exportReport('pairs')],
@@ -1359,6 +1439,24 @@
     poll();
   }
 
+  /**
+   * The Report sub-tab on paper or as a PDF, through the browser's print dialog ("Save as PDF"). body.rp-print
+   * (report.css) prints only the strip and that pane, light; the caveats are opened for it and closed after.
+   */
+  function printReport() {
+    if (rp.tab !== 'report') setTab('report');
+    closeMenus();
+    closeSide();
+    const shut = [...document.querySelectorAll('#rp-pane-report details:not([open])')];
+    for (const d of shut) d.open = true;
+    document.body.classList.add('rp-print');
+    window.addEventListener('afterprint', () => {
+      document.body.classList.remove('rp-print');
+      for (const d of shut) d.open = false;
+    }, {once: true});
+    window.print();
+  }
+
   async function exportReport(level) {
     const name = await download('/api/report/export', {...requestBody(), level});
     toast(`Saved ${name}`);
@@ -1692,6 +1790,7 @@
       [count(m.n), 'paired tasks'],
       busy && [busy, 'paired tasks'],
       metric === 'time' && m.contended_trials > 0 && [count(m.contended_trials), 'trials left out: host CPU busy'],
+      vsText(m, metric) && [vsText(m, metric), `vs ${S.base}`],
       ref && [publishedText(ref), 'published'],
       ref && [verdictText(ref), 'verdict'],
       ref && ref.published && ref.published.source,
@@ -1748,6 +1847,7 @@
         `only ${S.arm} / only ${S.base} passed`],
       isNum(p.mcnemar_p) && [p.mcnemar_p.toFixed(3), 'McNemar p'],
       mde && [mde, 'resolution'],
+      vsText(p, 'pass') && [vsText(p, 'pass'), `vs ${S.base}`],
       ref && [passPublishedText(ref), 'published'],
       ref && [verdictText(ref), 'verdict'],
       ref && ref.published && ref.published.source,
@@ -1811,9 +1911,11 @@
   function compTable(comps, groups, readOnly, baseName, models = false) {
     const S = SIDES[models ? 'models' : 'harnesses'];
     return h('table', {class: 'grid-t compact rp-cmp'},
-      thead(S.Arm, thNum('Pairs'), thNum(`Tokens vs ${baseName}`), thNum(`Cost vs ${baseName}`),
+      thead(S.Arm, thNum('Pairs'),
+        h('th', {title: `Whole interval on one side of 1× (0 points for pass rate), once there are enough pairs`}, `Verdict vs ${baseName}`),
+        thNum(`Tokens vs ${baseName}`), thNum(`Cost vs ${baseName}`),
         h('th', {class: 'num', title: 'Agent run time, setup excluded; trials on a busy host left out'}, `Time vs ${baseName}`), !models && 'Published',
-        !models && 'Verdict', `Pass, ${S.arm} vs ${S.base}`, thNum('Setup failures')),
+        !models && 'Published verdict', `Pass, ${S.arm} vs ${S.base}`, thNum('Setup failures')),
       comps.map((c) => {
         const open = readOnly ? null : () => openPairs(c.key);
         const arm = groups.get(c.group);
@@ -1835,6 +1937,7 @@
               (c.caveats || []).length > 0 && tip(h('span', {class: 'rp-cav'},
                 `⚠ ${plural(c.caveats.length, 'caveat')}`), 'Caveats', caveatsOf(c), true)),
             tdNum(count(c.pairs.n_tasks)),
+            h('td', null, baselineRows(c)),
             metricCell(c.metrics.tokens_total),
             metricCell(c.metrics.cost),
             timeCell(c.time),
@@ -1848,8 +1951,17 @@
               : DASH),
             h('td', null, passCell(c.pass)),
             tdNum(sf ? `${pct(sf.estimate)} ${interval(sf.lo, sf.hi, pct)}` : DASH, sf ? `${plural(sf.trials, 'trial')}, Wilson interval` : null)),
-          h('tr', {class: 'rp-headline'}, h('td', {colspan: models ? 7 : 9}, modelProse(c, c.headline))));
+          h('tr', {class: 'rp-headline'}, h('td', {colspan: models ? 8 : 10}, modelProse(c, c.headline))));
       }));
+  }
+
+  /** The comparison table's verdict cell: one icon and word per metric, against the baseline. */
+  function baselineRows(c) {
+    const rows = [['Tokens', c.metrics.tokens_total, 'tokens_total'], ['Cost', c.metrics.cost, 'cost'],
+      ['Time', c.time, 'time'], ['Pass', c.pass, 'pass']]
+      .map(([name, m, metric]) => [name, baselineChip(m, metric)]).filter(([, chip]) => chip);
+    return rows.length ? rows.map(([name, chip]) => h('div', {class: 'rp-vrow rp-vsbase'}, h('span', {class: 'faint'}, `${name} `), chip))
+      : h('span', {class: 'faint'}, 'not measured');
   }
 
   function caveatList(comps, caveats) {
@@ -2249,7 +2361,7 @@
         h('td', null, sideOf.get(t.trial_key) || DASH),
         h('td', {class: 'mono'}, t.task),
         h('td', {class: 'mono'}, openButton(t, {back: true}, h('span', {class: excluded ? 'rp-struck' : null}, t.trial_name)), ' ', exclusionBadge(t.exclusion)),
-        h('td', null, outcomeTag(t.outcome)),
+        h('td', null, outcomeTag(t.outcome, t)),
         tdNum(usageValue(t.tokens_total, t.usage_status, tokens)),
         tdNum(usageValue(t.cost_usd, t.usage_status)),
         h('td', {class: 'mono'}, t.run_key),
@@ -2269,7 +2381,7 @@
           h('td', null, e.side === 'arm' ? SIDES[comparisonModels() ? 'models' : 'harnesses'].arm : e.side),
           h('td', {class: 'mono'}, e.task),
           h('td', {class: 'mono'}, h('span', {class: manual ? 'rp-struck' : null}, trialName(e.trial_key))),
-          h('td', null, outcomeTag(e.outcome)),
+          h('td', null, outcomeTag(e.outcome, row)),
           h('td', {class: 'rp-wrap'}, e.reason),
           h('td', null, manual && h('button', {type: 'button', class: 'btn ghost small', onclick: () => editExclusion('trial', e.trial_key, 'include', {current: row && row.exclusion})}, 'Include again'),
             row && h('button', {type: 'button', class: 'btn ghost small', onclick: () => openTrial(row.id, {back: true})}, 'Details')));
@@ -2316,10 +2428,11 @@
         showSide('R-05', 'Pairs', []);
         renderPairs();
       }}, '‹ Back to the pairs'),
-      h('div', {class: 'rp-trial-head'}, outcomeTag(t.outcome), usageTag(t.usage_status), exclusionBadge(t.exclusion),
+      h('div', {class: 'rp-trial-head'}, outcomeTag(t.outcome, t), usageTag(t.usage_status), exclusionBadge(t.exclusion),
         t.passed === true ? tag('reward 1', 'ok') : isNum(t.reward) ? tag(`reward ${Math.round(t.reward * 100) / 100}`) : null),
       h('p', {class: 'mono faint rp-key'}, t.trial_key),
       t.outcome_reason && h('p', null, t.outcome_reason),
+      isHung(t) && h('p', {class: 'warn-text'}, HUNG_TEXT),
       t.exception_type && [h('div', {class: 'cmd-name'}, t.exception_type), h('pre', {class: 'cmd'}, t.exception_message || t.exception_head || '')],
       h('div', {class: 'actions rp-trial-acts'},
         exclusionButtons(t),
@@ -2449,7 +2562,7 @@
         h('td', null, h('b', null, t.family), h('span', {class: 'sub mono'}, t.arm)),
         h('td', {class: 'mono'}, t.model, h('span', {class: 'sub'}, t.provider)),
         h('td', {class: 'mono'}, t.task),
-        h('td', null, outcomeTag(t.outcome), t.outcome_reason && h('span', {class: 'sub clip', title: t.outcome_reason}, t.outcome_reason)),
+        h('td', null, outcomeTag(t.outcome, t), t.outcome_reason && h('span', {class: 'sub clip', title: t.outcome_reason}, t.outcome_reason)),
         tdNum(isNum(t.reward) ? String(Math.round(t.reward * 100) / 100) : DASH),
         tdNum(usageValue(t.tokens_total, t.usage_status, tokens), isNum(t.tokens_total) ? count(t.tokens_total) : null),
         h('td', {class: 'num nowrap'}, usageValue(t.cost_usd, t.usage_status), flagMark(t.flags)),

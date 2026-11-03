@@ -12,11 +12,13 @@ fix-code-vulnerability) is allowed, and so is a README.
 
 The scan reads the agent's tool calls in order, with what each returned,
 from Harbor's ATIF trajectory (agent/trajectory.json), which every installed
-harness gets, so one reader serves them all. A call is an answer fetch when
-it names a benchmark source and an answer file (solution.sh, solve.sh,
-solution/, tests/, test_outputs.py, task.yaml, run-tests.sh), or, after a
-bulk download of a source (a git clone, an archive, a dataset snapshot),
-when it reads answer files from that local copy. The fetch was used when:
+harness gets, so one reader serves them all; DeepSeek Harness, which gets
+none, is read from its own event stream (agent/dsh.jsonl) the same way. A
+call is an answer fetch when it names a benchmark source and an answer
+file (solution.sh, solve.sh, solution/, tests/, test_outputs.py, task.yaml,
+run-tests.sh), or, after a bulk download of a source (a git clone, an
+archive, a dataset snapshot), when it reads answer files from that local
+copy. The fetch was used when:
   - something came back: not empty, not only a 404 or an error, and
   - the agent changed something afterwards: a write or edit tool, a shell
     command that writes outside /tmp (a redirect, cp, mv, sed -i, a build,
@@ -25,9 +27,9 @@ when it reads answer files from that local copy. The fetch was used when:
     goes on to run or write what it fetched. A fetch after the agent's last
     change cannot have changed its answer.
 These are heuristics, so a person's verdict per trial in
-config/answer_lookups.yaml wins over them (with_verdict). A trial without an
-ATIF trajectory gets a plain text search of its harness's files; a hit there
-cannot be judged, so it is recorded with used null for a person to decide.
+config/answer_lookups.yaml wins over them (with_verdict). A trial with neither
+log gets a plain text search of its harness's files; a hit there cannot be
+judged, so it is recorded with used null for a person to decide.
 
 Pure apart from reading files.
 """
@@ -160,6 +162,39 @@ def atif_calls(data: Any) -> list[ToolCall] | None:
     return calls
 
 
+def dsh_calls(text: str) -> list[ToolCall] | None:
+    """The tool calls of a DeepSeek Harness --json stream (dsh.jsonl) with
+    their outputs: each tool_call event, in order, with the result of the
+    tool_result event that has its callId (None when none came). None when
+    no line is an event, so an empty or garbled log is searched as text."""
+    calls: list[tuple[Any, str, Any]] = []
+    results: dict[Any, str] = {}
+    events = 0
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, Mapping) or not event.get("type"):
+            continue
+        events += 1
+        if event["type"] == "tool_call":
+            args = event.get("input")
+            if isinstance(args, str):  # an input kept as JSON text
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    pass
+            calls.append((event.get("callId"), str(event.get("tool") or ""), args))
+        elif event["type"] == "tool_result" and event.get("callId") is not None:
+            results[event["callId"]] = _content(event.get("result"))
+    if not events:
+        return None
+    return [ToolCall(name=name, text="\n".join(_strings(args)), runs="\n".join(_strings(args, _PROSE_KEYS)),
+                     output=results.get(call_id) if call_id is not None else None)
+            for call_id, name, args in calls]
+
+
 def _received(output: str | None) -> bool | None:
     """Whether a fetch brought something back; None when nothing was logged."""
     if output is None:
@@ -236,7 +271,8 @@ def judge(calls: Sequence[ToolCall], source: str = "agent/trajectory.json") -> d
 
 def _fallback(agent: Path) -> dict[str, Any] | None:
     """A plain text search of the harness's own files, for a trial without
-    an ATIF trajectory: a hit cannot be judged, so used is None."""
+    a step-by-step log (no ATIF trajectory, no dsh.jsonl): a hit cannot be
+    judged, so used is None."""
     for path in sorted(agent.rglob("*")):
         rel = path.relative_to(agent)
         if "snapshot" in rel.parts or not path.is_file() or path.suffix in (".pack", ".idx"):
@@ -255,17 +291,32 @@ def _fallback(agent: Path) -> dict[str, Any] | None:
     return None
 
 
+# The step-by-step logs scan reads, in order: the file in the agent folder and its reader.
+_LOGS = (("trajectory.json", lambda raw: atif_calls(json.loads(raw))),
+         ("dsh.jsonl", lambda raw: dsh_calls(raw.decode("utf-8", "ignore"))))
+
+
+def log_path(agent: Path) -> Path | None:
+    """The step-by-step log scan would read in the agent folder, or None."""
+    for name, _read in _LOGS:
+        path = Path(agent) / name
+        if path.is_file():
+            return path
+    return None
+
+
 def scan(agent: Path) -> dict[str, Any] | None:
     """The answer_lookup flag for a trial's agent folder, or None."""
-    trajectory = Path(agent) / "trajectory.json"
-    calls = None
-    if trajectory.is_file():
+    for name, read in _LOGS:
+        path = Path(agent) / name
+        if not path.is_file():
+            continue
         try:
-            calls = atif_calls(json.loads(trajectory.read_bytes()))
+            calls = read(path.read_bytes())
         except (OSError, ValueError):
             calls = None
-    if calls is not None:
-        return judge(calls)
+        if calls is not None:
+            return judge(calls, "agent/" + name)
     return _fallback(Path(agent))
 
 

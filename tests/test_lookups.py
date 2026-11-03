@@ -49,6 +49,32 @@ def judge(*steps: dict) -> dict | None:
     return lookups.judge(lookups.atif_calls(trajectory(*steps)) or [])
 
 
+def dsh_stream(*calls: tuple[str, dict, str | None]) -> str:
+    """A DeepSeek Harness --json stream (dsh.jsonl): each (tool, input, result)
+    as a tool_call event and, unless result is None, its tool_result, between
+    the thinking and status events the harness also writes."""
+    events: list[dict[str, Any]] = [{"type": "session", "sessionId": "s1", "cwd": "/app"}]
+    for i, (tool, args, result) in enumerate(calls):
+        events.append({"type": "thinking", "text": "next step"})
+        events.append({"type": "tool_call", "callId": f"call_{i}", "tool": tool, "input": args})
+        if result is not None:
+            events.append({"type": "tool_result", "callId": f"call_{i}", "status": "completed", "result": result})
+        events.append({"type": "status", "phase": "step_end", "usage": {"input": 10, "output": 1}})
+    events.append({"type": "final", "text": "done"})
+    return "\n".join(json.dumps(e) for e in events) + "\n"
+
+
+def dsh_judge(*calls: tuple[str, dict, str | None]) -> dict | None:
+    return lookups.judge(lookups.dsh_calls(dsh_stream(*calls)) or [], "agent/dsh.jsonl")
+
+
+DSH_FETCH = ("bash", {"command": f"python - <<'PY'\nimport urllib.request\nbase='{RAW}/'\n"
+                                 "for f in ['task.yaml','solution.sh']:\n"
+                                 "    print(urllib.request.urlopen(base+f).read())\nPY",
+                      "description": "Fetch the task files"}, SOLUTION)
+DSH_WRITE = ("bash", {"command": "cd /app && python - <<'PY'\nopen('result.txt', 'w').write('x')\nPY"}, "")
+
+
 WRITE_RESULT = call("bash", {"command": "cd /app && python - <<'PY'\nopen('result.txt', 'w').write('x')\nPY"})
 
 
@@ -122,6 +148,51 @@ class Formats(BenchTestCase):
             call("bash", {"command": "find /tmp/tb/terminal-bench-1-main/original-tasks/mteb-retrieve -type f "
                                      "-exec sed -n '1,250p' {} \\;"}, "===== ./solution.sh\n" + SOLUTION),
             WRITE_RESULT)
+
+
+class DeepSeekHarness(BenchTestCase):
+    """dsh writes no ATIF trajectory: its dsh.jsonl tool_call and tool_result
+    events, paired by callId, get the same judgement."""
+
+    def test_a_fetch_then_a_change_is_used(self) -> None:
+        found = dsh_judge(DSH_FETCH, DSH_WRITE)
+        self.assertEqual((found["used"], found["source"]), (True, "agent/dsh.jsonl"))
+        self.assertEqual(found["urls"], [f"{RAW}/"])
+        found = dsh_judge(DSH_FETCH, ("write", {"path": "/app/result.txt", "content": "MTEB"}, "Wrote file"))
+        self.assertIs(found["used"], True)
+
+    def test_results_are_paired_by_call_id(self) -> None:
+        text = "\n".join(json.dumps(e) for e in (
+            {"type": "tool_call", "callId": "a", "tool": "bash", "input": {"command": "ls"}},
+            {"type": "tool_call", "callId": "b", "tool": "read", "input": {"path": "/app/x"}},
+            {"type": "tool_result", "callId": "b", "status": "completed", "result": "x body"},
+            {"type": "tool_result", "callId": "a", "status": "completed", "result": "x"},
+            {"type": "tool_call", "callId": "c", "tool": "bash", "input": json.dumps({"command": "pwd"})},
+            {"type": "status", "phase": "step_end"}))
+        calls = lookups.dsh_calls(text + "\nnot json\n")
+        self.assertEqual([(c.name, c.runs, c.output) for c in calls],
+                         [("bash", "ls", "x"), ("read", "/app/x", "x body"), ("bash", "pwd", None)])
+        self.assertIsNone(lookups.dsh_calls("not json\n"))
+        self.assertEqual(lookups.dsh_calls(json.dumps({"type": "final", "text": "done"})), [])
+
+    def test_the_description_is_prose(self) -> None:
+        (fetch,) = lookups.dsh_calls(dsh_stream(DSH_FETCH))
+        self.assertNotIn("Fetch the task files", fetch.runs)
+        self.assertIn("Fetch the task files", fetch.text)
+
+    def test_an_error_or_a_late_fetch_is_not_used(self) -> None:
+        found = dsh_judge((DSH_FETCH[0], DSH_FETCH[1], "Error: request failed: 404 Not Found"), DSH_WRITE)
+        self.assertEqual((found["used"], found["reason"]), (False, "nothing came back (empty, a 404 or an error)"))
+        found = dsh_judge(DSH_WRITE, DSH_FETCH, ("bash", {"command": "cat /app/result.txt"}, "x"))
+        self.assertIs(found["used"], False)
+        # A call the stream holds no result for counts as having brought something back, as in ATIF.
+        self.assertIs(dsh_judge((DSH_FETCH[0], DSH_FETCH[1], None), DSH_WRITE)["used"], True)
+
+    def test_a_listing_is_not_a_lookup(self) -> None:
+        listing = ("python -c \"import urllib.request; print(urllib.request.urlopen('https://api.github.com/repos/"
+                   "laude-institute/terminal-bench/git/trees/main?recursive=1').read())\"")
+        self.assertIsNone(dsh_judge(("bash", {"command": listing}, "original-tasks/mteb-retrieve/solution.sh"),
+                                    DSH_WRITE))
 
 
 class Heuristics(BenchTestCase):
@@ -202,6 +273,18 @@ class Scan(BenchTestCase):
         self.assertEqual((found["used"], found["source"]), (True, "agent/trajectory.json"))
         self.assertIsNone(lookups.scan(self.tmpdir()))
 
+    def test_scan_reads_dsh_jsonl(self) -> None:
+        agent = self.tmpdir() / "agent"
+        (agent / "dsh-sessions").mkdir(parents=True)
+        (agent / "dsh.jsonl").write_text(dsh_stream(DSH_FETCH, DSH_WRITE), encoding="utf-8")
+        found = lookups.scan(agent)
+        self.assertEqual((found["used"], found["source"]), (True, "agent/dsh.jsonl"))
+        self.assertEqual(lookups.log_path(agent), agent / "dsh.jsonl")
+        # A stream with no events is searched as text, like any other log.
+        (agent / "dsh.jsonl").write_text(f"curl -sL {RAW}/solution.sh\n", encoding="utf-8")
+        found = lookups.scan(agent)
+        self.assertEqual((found["used"], found["source"]), (None, "agent/dsh.jsonl"))
+
     def test_without_a_trajectory_a_hit_is_left_for_a_person(self) -> None:
         agent = self.tmpdir() / "agent"
         (agent / "goose").mkdir(parents=True)
@@ -250,7 +333,7 @@ class Verdicts(BenchTestCase):
         text = settings.ANSWER_LOOKUPS.read_text(encoding="utf-8")
         got = lookups.load_verdicts(settings.ANSWER_LOOKUPS)
         self.assertEqual(len(got), len(re.findall(r"^\s+verdict:", text, re.M)))
-        self.assertEqual(sum(v["verdict"] == "lookup" for v in got.values()), 8)
+        self.assertEqual(sum(v["verdict"] == "lookup" for v in got.values()), 9)  # 9th: dsh mteb-retrieve
 
 
 def facts(flags: dict, **over: Any) -> dict[str, Any]:
@@ -347,7 +430,7 @@ class InTheLedger(LedgerCase):
 class Versions(BenchTestCase):
     def test_answer_lookups_bumped_the_versions(self) -> None:
         self.assertGreaterEqual(classify.CLASSIFIER_VERSION, 6)
-        self.assertGreaterEqual(extract.PARSER_VERSION, 9)
+        self.assertGreaterEqual(extract.PARSER_VERSION, 10)  # 10: dsh.jsonl
         self.assertIn("answer_lookup", classify.OUTCOMES)
 
 
@@ -371,6 +454,18 @@ class OnTheRunPage(ResultsTestCase):
         self.assertEqual(results.summarize(a, [row])["passed"], 0)
         clean = results.read_trial(self.trial_with(a, (WRITE_RESULT,)), self.cfg, a)
         self.assertEqual((clean["passed"], clean["answer_lookup"]), (True, None))
+
+    def test_dsh_is_judged_from_its_stream_and_re_read_when_it_changes(self) -> None:
+        a = arm("dsh-ds", "dsh", "fireworks", "deepseek-v4.1-flash")
+        path = self.write(a.name, trial(reward=1.0))
+        (path.parent / "agent").mkdir()
+        stream = path.parent / "agent" / "dsh.jsonl"
+        stream.write_text(dsh_stream(DSH_WRITE), encoding="utf-8")
+        (path.parent / "config.json").write_text(json.dumps({"job_id": "job-1"}), encoding="utf-8")
+        self.assertIsNone(results.read_trial(path, self.cfg, a)["answer_lookup"])
+        stream.write_text(dsh_stream(DSH_FETCH, DSH_WRITE), encoding="utf-8")  # the live log grew
+        row = results.read_trial(path, self.cfg, a)
+        self.assertEqual((row["passed"], row["answer_lookup"]["used"]), (False, True))
 
     def test_a_verdict_by_hand_wins(self) -> None:
         a = arm("pi-ds", "pi", "fireworks", "deepseek-v4.1-flash")

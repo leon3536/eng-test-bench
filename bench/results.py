@@ -49,7 +49,7 @@ _DEFAULT_TOLERANCE = 1.5
 # trial's log no longer changes, and the run view re-reads every result.json on each refresh.
 _WRITES: dict[str, tuple[tuple[int, int], dict[str, tuple[int, int]]]] = {}
 _WRITES_KEEP = 4096
-# Trial folder -> (trajectory.json's (mtime, size), lookups.scan's flag), for the same reason.
+# Trial folder -> (its step-by-step log's (mtime, size), lookups.scan's flag), for the same reason.
 _LOOKUPS: dict[str, tuple[tuple[int, int], dict[str, Any] | None]] = {}
 
 
@@ -96,7 +96,7 @@ def _answer_lookup(trial: Path, trial_name: Any) -> dict[str, Any] | None:
     (lookups.scan, then a verdict by hand in config/answer_lookups.yaml)."""
     agent = trial / "agent"
     try:
-        st = (agent / "trajectory.json").stat()
+        st = (lookups.log_path(agent) or agent / "trajectory.json").stat()
         stamp = (st.st_mtime_ns, st.st_size)
     except OSError:
         stamp = (-1, -1)

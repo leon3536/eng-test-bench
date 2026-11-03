@@ -51,7 +51,9 @@ from .harnesses import is_import_path, reports_mispriced_cost
 #    hostload.jsonl, so time a busy host took is not counted as the model's.
 # 9: answer lookups (flags_json answer_lookup) from the agent's tool calls in its ATIF trajectory, and the
 #    verdict by hand from config/answer_lookups.yaml (answer_lookup_verdict); see lookups.py.
-PARSER_VERSION = 9
+# 10: DeepSeek Harness's answer lookups judged from the tool calls and results in its dsh.jsonl, which has
+#    no ATIF trajectory: they were a text search left for a person (used null).
+PARSER_VERSION = 10
 
 # Text in a failed trial's message that means the harness never got going.
 SETUP_SIGNATURES: tuple[str, ...] = ("No module named", "ModuleNotFoundError", "command not found",

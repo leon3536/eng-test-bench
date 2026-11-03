@@ -52,6 +52,19 @@ def reports_mispriced_cost(family: str, provider: str) -> bool:
                for (f, _option), priced_for in CAP_PRICED_FOR.items())
 
 
+def usable_reported_cost(row: Mapping[str, Any]) -> float | None:
+    """The harness's (or OpenRouter's billed) figure, unless this harness
+    prices this provider's models at another provider's rates. $0 for a
+    trial that used tokens is a harness that could not price the model
+    (LiteLLM does this), not a billed cost."""
+    reported = row.get("reported_cost_usd")
+    used_tokens = bool((row.get("n_input") or 0) + (row.get("n_output") or 0))
+    if (reported is not None and (float(reported) > 0 or not used_tokens)
+            and not reports_mispriced_cost(row.get("family") or "", row.get("provider") or "")):
+        return float(reported)
+    return None
+
+
 def _options(row: Mapping[str, Any]) -> Mapping[str, Any]:
     """A trial's options, parsed ('options') or as the ledger stores them ('options_json')."""
     options = row.get("options")

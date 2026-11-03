@@ -217,6 +217,154 @@ const find = (p) => handlers.find(([m, q]) => m === 'POST' && q === p)[2];
             self.assertEqual(busy, c["time"]["host_busy_tasks"])  # the drawer's "host busy" rows add up
 
 
+
+def _report_parts(*names: str) -> str:
+    """report.js consts and functions by name (`const X = {...};`, a one-statement `const x = ...;`, or
+    `function x(...) {...}`), as script text node can run."""
+    page = (STATIC / "report.js").read_text(encoding="utf-8")
+    out = []
+    for name in names:
+        match = (re.search(rf"^  const {name} = [{{\[]\n.*?^  [}}\]];$", page, re.S | re.M)
+                 or re.search(rf"^  const {name} = .*?;$", page, re.S | re.M)
+                 or re.search(rf"^  function {name}\(.*?^  }}$", page, re.S | re.M))
+        if not match:
+            raise AssertionError(f"{name} not found in report.js")
+        out.append(match.group(0))
+    return "\n".join(out)
+
+
+def _node(script: str) -> Any:
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, encoding="utf-8", timeout=60,
+                         check=True).stdout
+    return json.loads(out)
+
+
+_IS_NUM = "const isNum = (v) => typeof v === 'number' && Number.isFinite(v);"
+
+
+def _gm(lo: float, hi: float, **extra: Any) -> dict[str, Any]:
+    return {"status": "ok", "n": 12, "need": 0, "geomean": {"estimate": (lo + hi) / 2, "lo": lo, "hi": hi}, **extra}
+
+
+class BaselineVerdict(unittest.TestCase):
+    """The REPORT tab's verdict against the baseline: read off the server's
+    interval (harness / baseline, so under 1x is better; pass rate in points),
+    only once a comparison has status 'ok'."""
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_the_interval_against_1x_decides(self):
+        cases = [
+            (_gm(0.4, 0.8), "cost"),
+            (_gm(1.2, 1.9), "cost"),
+            (_gm(0.7, 1.3), "tokens_total"),
+            (_gm(0.6, 0.9, sensitivity={"unrecorded_arm_high": 1.1, "crashes_excluded": 0.7}), "cost"),
+            (_gm(0.6, 0.9, sensitivity={"unrecorded_arm_high": 0.8, "crashes_excluded": 1.4}), "cost"),
+            ({**_gm(0.4, 0.8), "status": "low_n", "need": 3}, "cost"),
+            ({"status": "insufficient", "n": 2, "need": 6, "geomean": None}, "time"),
+            ({"status": "not_measured", "n": 0, "need": 0}, "cost"),
+            (_gm(1.3, 2.0), "time"),
+            ({"status": "ok", "n": 20, "need": 0, "delta_pp": {"estimate": 12, "lo": 3, "hi": 21}}, "pass"),
+            ({"status": "ok", "n": 20, "need": 0, "delta_pp": {"estimate": -12, "lo": -21, "hi": -3}}, "pass"),
+            ({"status": "ok", "n": 20, "need": 0, "delta_pp": {"estimate": 0, "lo": None, "hi": None}}, "pass"),
+            (None, "cost"),
+        ]
+        script = "\n".join([_IS_NUM, _report_parts("BETTER_MEANS", "WORSE_MEANS", "baselineVerdict"),
+                            f"const cases = {json.dumps(cases)};",
+                            "console.log(JSON.stringify(cases.map(([m, k]) => baselineVerdict(m, k))));"])
+        found = _node(script)
+        self.assertEqual([v and v[0] for v in found], [
+            "better", "worse", "same",
+            "same",    # trials cut short, costed high, put it at 1x or over
+            "better",  # only the unrecorded checks can turn it, not the crash policy
+            "few", "few", None, "worse", "better", "worse", "same", None])
+        self.assertEqual(found[0][1], "Cheaper than the baseline: the whole interval is below 1×.")
+        self.assertEqual(found[5][1], "3 more paired tasks for a verdict")
+        # Plain words: no interval jargon in what the person reads.
+        for v in filter(None, found):
+            self.assertNotRegex(v[1], r"\b(CI|overlaps?|confidence)\b")
+
+    def test_every_comparison_row_shows_it(self):
+        page = (STATIC / "report.js").read_text(encoding="utf-8")
+        words = re.findall(r"^\s+(\w+): \['[^']+', '([^']+)'", _block(page, "VS_BASELINE"), re.M)
+        self.assertEqual(words, [("better", "better"), ("worse", "worse"), ("same", "possibly the same"),
+                                 ("few", "not enough data")])
+        self.assertIn("h('td', null, baselineRows(c))", page)
+        self.assertIn("`Verdict vs ${baseName}`", page)
+        self.assertIn("colspan: models ? 8 : 10", page)  # the headline row spans the added column
+
+
+class HarnessHung(unittest.TestCase):
+    """A timed-out trial with zero usage recorded reads "harness hung"."""
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_only_a_timeout_with_zero_usage_is_a_hang(self):
+        hung = {"outcome": "agent_limit", "exception_type": "AgentTimeoutError", "agent_started": True,
+                "n_input": 0, "n_output": 0}
+        cases = [
+            hung,
+            {**hung, "n_input": None},                       # one side recorded a zero
+            {**hung, "n_input": 1200, "n_output": 40},       # it got answers, then ran out of time
+            {**hung, "n_input": None, "n_output": None},     # the harness writes usage only on exit
+            {**hung, "outcome": "infra"},                    # a busy host's timeout is the host's
+            {**hung, "exception_type": "NonZeroAgentExitCodeError"},
+            {**hung, "agent_started": False},
+            None,
+        ]
+        script = "\n".join([_report_parts("isHung"), f"const cases = {json.dumps(cases)};",
+                            "console.log(JSON.stringify(cases.map(isHung)));"])
+        self.assertEqual(_node(script), [True, True, False, False, False, False, False, False])
+
+    def test_the_drawer_and_tables_pass_the_trial(self):
+        page = (STATIC / "report.js").read_text(encoding="utf-8")
+        self.assertEqual(page.count("outcomeTag(t.outcome, t)"), 3)  # the trial drawer, the ledger, the pairs trials
+        self.assertIn("outcomeTag(e.outcome, row)", page)  # the pairs' "Left out" table
+        self.assertNotIn("outcomeTag(e.outcome)", page)
+        self.assertIn("'harness hung'", page)
+
+
+class ReportPrint(unittest.TestCase):
+    def test_print_button_uses_the_print_stylesheet(self):
+        page = (STATIC / "report.js").read_text(encoding="utf-8")
+        css = (STATIC / "report.css").read_text(encoding="utf-8")
+        self.assertIn("onclick: printReport", page)
+        self.assertIn("window.print()", page)
+        self.assertIn("document.body.classList.add('rp-print')", page)
+        block = css[css.index("@media print"):]
+        for hidden in ("header.bar", ".rp-rail", ".rp-tabs", ".rp-side", ".rp-strip-actions"):
+            self.assertIn(hidden, block)
+
+
+_PROFILE_SCRIPT = r"""
+const unique = (list) => [...new Set(list)];
+const store = {};
+const prefs = {get: (k, d) => (k in store ? store[k] : d), set: (k, v) => { store[k] = v; }};
+let rp;
+let ui;
+%PARTS%
+const out = [];
+for (const [saved, handed] of [[null, null], [{filters: {profiles: ['dev'], models: ['m']}}, null],
+                               [null, {profiles: ['dev']}]]) {
+  for (const k of Object.keys(store)) delete store[k];
+  if (saved) store['report.rail'] = saved;
+  rp = {filters: {}, options: {}, handed};
+  ui = {state: {config: {profile: 'default'}}};
+  loadPrefs();
+  out.push(rp.filters);
+}
+console.log(JSON.stringify(out));
+"""
+
+
+class ReportProfile(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_the_report_opens_on_the_active_profile(self):
+        parts = _report_parts("TABS", "LIST_KEYS", "NULLABLE", "cleanFilters", "loadPrefs", "savePrefs")
+        self.assertEqual(_node(_PROFILE_SCRIPT.replace("%PARTS%", parts)), [
+            {"profiles": ["default"]},
+            {"profiles": ["default"], "models": ["m"]},  # other saved filters stay
+            {"profiles": ["dev"]},                       # filters handed over from another view win
+        ])
+
 def _dig(obj: dict[str, Any], path: str) -> Any:
     for k in path.split("."):
         obj = obj[k]

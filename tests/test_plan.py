@@ -373,6 +373,10 @@ class PlanTestCase(BenchTestCase):
 # Parity ------------------------------------------------------------------------
 
 
+# Shipped arms that set up stock every trial: DeepSeek Harness (2026-11-02) has no pre-bake adapter yet.
+NO_PREBAKE_ADAPTER = frozenset({"deepseek-harness"})
+
+
 class GoldenParityTests(PlanTestCase):
     def test_frozen_copy_reproduces_the_captured_golden(self) -> None:
         cfg = self.golden_config()
@@ -400,6 +404,12 @@ class GoldenParityTests(PlanTestCase):
     def test_shipped_profiles_match_the_frozen_planner(self) -> None:
         for profile in ("bench", "dev"):
             cfg = arms_schedule(self.load_shipped_config(profile))
+            # tests/__init__.py fakes only the Anthropic and OpenRouter keys; since dsh (2026-11-02) the bench
+            # profile ships an enabled Fireworks arm, so every shipped provider's key reads as set here.
+            fake = {p.env_key: "sk-test-2222222222222222abcd" for p in cfg.providers.values()}
+            patcher = mock.patch.dict(os.environ, fake)
+            patcher.start()
+            self.addCleanup(patcher.stop)
             arms = [a.name for a in cfg.arms if a.enabled]
             for mode in cfg.modes:
                 with self.subTest(profile=profile, mode=mode):
@@ -420,7 +430,9 @@ class GoldenParityTests(PlanTestCase):
                         self.assertRegex(entry["options_fingerprint"], r"^[0-9a-f]{12}$")
                         self.assertTrue(entry["reserve_note"])
                         self.assertEqual(entry["prebake"]["mode"], "prefer")
-                        if profile == "bench":
+                        if profile == "bench" and arm.family in NO_PREBAKE_ADAPTER:
+                            self.assertFalse(entry["prebake"]["supported"], entry["prebake"])
+                        elif profile == "bench":
                             # Every arm pins its version, so each can be pre-baked and gets the class.
                             self.assertTrue(entry["prebake"]["supported"], entry["prebake"])
                             self.assertIn(" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek ",

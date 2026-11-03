@@ -231,6 +231,14 @@ class UsageStatus(unittest.TestCase):
                          ("passed", "reward 1 after NetworkConnectionError"))
         self.assertEqual(classify.classify(facts(exception_type="ApiRateLimitError", reward=0.0))[0], "failed")
 
+    def test_a_provider_error_before_the_agent_started_is_setup(self) -> None:
+        # The harness install could not resolve github.com (three Grok trials, 2026-11-02): no model was called.
+        f = facts(exception_type="NetworkConnectionError", agent_started=0, n_input=None, n_output=None,
+                  agent_exec_sec=None, reward=None)
+        self.assertEqual(classify.classify(f), ("setup_failure", "NetworkConnectionError before the agent started"))
+        self.assertEqual(classify.classify(facts(exception_type="NetworkConnectionError", reward=None))[0],
+                         "provider_failure")
+
     def test_a_provider_failure_after_real_work_is_unmeasured(self) -> None:
         # The exception type alone makes it a provider failure, so a harness
         # may have worked for 40 minutes before a rate limit stopped it.
