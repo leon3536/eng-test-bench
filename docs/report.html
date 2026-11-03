@@ -160,12 +160,11 @@ footer { font-size: 0.82rem; color: var(--muted); display: grid; gap: 6px; max-w
   <section>
     <h2>Why this is preliminary</h2>
     <div class="caveats">
-      <div class="caveat"><span class="tag open">Rerun pending</span><h3>Busy host, mostly hurting Grok</h3><p>The test machine was often at 90–100% CPU from other work. The Grok rerun averaged 97%, and 13 of the 14 fails on a busy host are Grok, so Grok's numbers may carry a penalty the others do not. 34 of those trials are pending a rerun for the final results.</p></div>
-      <div class="caveat"><span class="tag open">Rerun pending</span><h3>Three Grok setup failures</h3><p>Three Grok trials on sqlite-db-truncate were first read as provider errors. The harness install could not reach github.com, so they are our fault and will be rerun.</p></div>
       <div class="caveat"><span class="tag done">Checked</span><h3>Prices</h3><p>Every rate used here matches the providers' price pages as of 3 Nov 2026. Costs are token counts × those rates. Long-context price tiers are not applied, so very long requests are priced slightly low.</p></div>
       <div class="caveat"><span class="tag done">Checked</span><h3>Kilo and OpenCode on Opus</h3><p>Their Opus high and medium trials often reused a prompt cache written minutes earlier by another trial, which makes them look cheaper than Opus low. This is real cache behaviour, not a counting bug; costed as if every trial started cold, high and medium would be 1.4–1.9× low.</p></div>
       <div class="caveat"><span class="tag done">Checked</span><h3>Cost records</h3><p>Every trial with token counts is costed, DeepSeek Harness included. The report recomputes cost from tokens rather than trusting each harness's own figure.</p></div>
       <div class="caveat"><span class="tag done">Settled</span><h3>Our own faults and answer lookups</h3><p>Trials lost to our setup were excluded and rerun; provider stalls count as fails. Agents that fetch the benchmark's own answer files are flagged automatically, confirmed by hand and counted as fails. Fetching a real upstream fix, such as a CVE patch, is allowed.</p></div>
+      <div class="caveat"><span class="tag open">Rerun pending</span><h3>37 trials (2%) being rerun</h3><p>Trials that may have failed for reasons on our side are being rerun for the final results: 3 where the harness install could not reach github.com, 14 fails while the test machine's CPU was busy, and 20 timeouts from a period with no CPU record. Ten passes from the same period are rerun alongside as a control.</p></div>
     </div>
   </section>
 
