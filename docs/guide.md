@@ -567,12 +567,18 @@ token as fresh input, and the arm's computed cost is an upper bound. The
 gateway's own spend log has the real split and cost. To use it:
 
 1. **Export** the spend-log rows for the run window from LiteLLM
-   (`LiteLLM_SpendLogs`), one row per model call, filtered to the arm's
-   model and the bench's key, as a CSV with a header row:
+   (`LiteLLM_SpendLogs`), one row per model call, filtered to the bench's
+   key and to the arm's model by `model_group` (the gateway alias the arm
+   names, such as `gpt-6.1-terra`), as a CSV with a header row:
    `start_utc, end_utc, prompt_tokens, cached_prompt_tokens,
    completion_tokens, cost_usd, request_id`. `prompt_tokens` includes the
    cached ones. A time without a zone is read as UTC. An optional `model`
-   column keeps only the arm's model's rows.
+   column keeps only the arm's model's rows; fill it from `model_group`.
+   The spend log's own `model` field holds the deployment's upstream id.
+   That id is accepted too, unless `upstream_models` gives it to more than
+   one of the provider's models (the two DeepSeek arms share one). Such an
+   id cannot tell their calls apart, so those rows are left out. For the
+   same reason, never filter the export on it.
 2. **Dry run**: nothing is written.
 
    ```powershell
@@ -581,12 +587,14 @@ gateway's own spend log has the real split and cost. To use it:
 
    Each row goes to the arm's trial in that run whose agent execution window
    holds the row's start time, give or take `--skew` seconds (default 5) for
-   the gateway's clock. Trials of one arm never overlap in a race. The
-   summary lists each trial with its rows, its corrected input / cached /
+   the gateway's clock. This only works while the arm ran one trial at a
+   time, as in a task race with `n_attempts` 1. The command refuses a run
+   where two of the arm's trials ran at once (`n_concurrent` or
+   `n_attempts` above 1), and names them. The summary lists each trial with its rows, its corrected input / cached /
    output, its cost before and after, and the corrected tokens at list
    price (a check on the gateway's own prices). It also lists rows that fit
    no trial (calls outside the run, or another arm's traffic) and rows that
-   fit two trials. A trial whose logged prompt tokens differ by more than 25%
+   fit two back-to-back trials within the skew. A trial whose logged prompt tokens differ by more than 25%
    from what Claude Code recorded is named: the export may hold other calls,
    or miss some. A request id that appears twice is read once.
 3. **Import**: the same command without `--dry-run`. If any row fits two

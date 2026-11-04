@@ -90,6 +90,9 @@ class SpendCase(BenchTestCase):
         patcher = mock.patch.object(settings, "PRICING", prices)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # No upstream ids unless a test gives some: the repo's config is not read.
+        self.upstream = mock.patch.object(gateway_spend, "upstream_ids", return_value=(None, ())).start()
+        self.addCleanup(mock.patch.stopall)
         self.led = Ledger(self.db, roots=[], root=self.tmp)
         self.led.open()
         self.addCleanup(self.led.close)
@@ -197,6 +200,46 @@ class MatchingTests(SpendCase):
         m = gateway_spend.match(log.rows, self.trials(), model="gpt-6.1-terra")
         self.assertEqual([r.request_id for r in m.other_models], ["r3"])
         self.assertEqual(sum(len(v) for v in m.by_trial.values()), 2)
+
+    def test_the_upstream_id_counts_as_the_arms_model_unless_another_model_streams_as_it(self) -> None:
+        up = "accounts/fireworks/models/gpt-6p1-terra"
+        rows = [dict(BASE_ROWS[0], model=f"fireworks_ai/{up}"), dict(BASE_ROWS[1], model=up),
+                dict(BASE_ROWS[2], model="fireworks_ai/accounts/fireworks/models/kimi-k3")]
+        log = gateway_spend.read_log(self.csv(rows, fields=[*FIELDS, "model"]))
+        m = gateway_spend.match(log.rows, self.trials(), model="gpt-6.1-terra", upstream=up)
+        self.assertEqual(([r.request_id for r in m.other_models], m.shared_upstream), (["r3"], []))
+        self.assertEqual(sum(len(v) for v in m.by_trial.values()), 2)
+        shared = gateway_spend.match(log.rows, self.trials(), model="gpt-6.1-terra", upstream=up,
+                                     shared=("gpt-6.1-terra-translated",))
+        self.assertEqual([r.request_id for r in shared.shared_upstream], ["r1", "r2"])
+        self.assertEqual(shared.by_trial, {})
+
+    def test_a_shared_upstream_id_is_named_in_the_plan(self) -> None:
+        up = "accounts/fireworks/models/gpt-6p1-terra"
+        self.upstream.return_value = (up, ("gpt-6.1-terra-translated",))
+        path = self.csv([dict(r, model=up) for r in BASE_ROWS[:5]], fields=[*FIELDS, "model"])
+        s = gateway_spend.plan(self.led, path, RUN, TERRA)
+        self.upstream.assert_called_with("litellm", "gpt-6.1-terra")
+        self.assertEqual((s["matched"]["calls"], s["shared_upstream"], s["entries"]), (0, 5, []))
+        self.assertTrue(any("cannot tell their calls apart" in w and "model_group" in w for w in s["warnings"]))
+
+    def test_back_to_back_windows_do_not_overlap(self) -> None:
+        self.assertEqual(gateway_spend.overlapping(self.trials()), [])
+
+
+class ConcurrentTrialTests(SpendCase):
+    def test_an_arm_whose_trials_ran_at_the_same_time_is_refused(self) -> None:
+        # t4's window, 90-390 s, runs alongside t1's (and t2's): two attempts of the arm at once.
+        self.trial(self.tmp / "jobs" / RUN / TERRA, "t4", "gpt-6.1-terra", 30, (50_000, 0, 800))
+        self.assertEqual(gateway_spend.overlapping(self.led.arm_trials(RUN_KEY, TERRA)),
+                         [("t1", "t4"), ("t2", "t4")])
+        with self.assertRaisesRegex(ValueError, r"ran at the same time .*t1 and t4, t2 and t4.*n_attempts"):
+            gateway_spend.plan(self.led, self.csv(), RUN, TERRA)
+        for extra in (("--dry-run",), ()):
+            code, out = self.import_csv(None, *extra)
+            self.assertEqual(code, 1, out)
+            self.assertIn("matching by time cannot split their calls", out)
+        self.assertEqual(self.corrections(), [])
 
 
 class DryRunTests(SpendCase):

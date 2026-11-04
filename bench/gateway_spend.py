@@ -14,13 +14,20 @@ real split and the cost the gateway logged, one row per model call.
 The CSV has a header row with start_utc, end_utc, prompt_tokens (cached
 ones included), cached_prompt_tokens, completion_tokens, cost_usd and
 request_id; a model column, if there is one, keeps only the arm's model's
-rows. Each row goes to the trial of that arm in that run whose agent
-execution window holds the row's start time, give or take --skew seconds
-for the gateway's clock against this host's. Trials of one arm never
-overlap in a race, so a row near two windows is first given to the one
-that holds it without the skew; if that still leaves two (or none), the row
-is ambiguous and nothing is written. Rows no trial holds are listed: calls
-outside the run, or traffic that is not this arm's.
+rows. That column (and any filter on the export) is LiteLLM's model_group,
+the gateway alias the arm names: the spend log's own model field holds the
+deployment's upstream id, which is accepted too unless the provider's
+upstream_models gives it to another of its models as well (then it cannot
+tell their calls apart, and those rows are left out). Each row goes to the
+trial of that arm in that run whose agent execution window holds the row's
+start time, give or take --skew seconds for the gateway's clock against this
+host's. Matching by time only works while the arm ran one trial at a time
+(a task race with n_attempts 1): the command refuses a run where two of the
+arm's trials ran at once (n_concurrent or n_attempts above 1). A row near
+two back-to-back windows is first given to the one that holds it without
+the skew; if that still leaves two, the row is ambiguous and nothing is
+written. Rows no trial holds are listed: calls outside the run, or traffic
+that is not this arm's.
 
 Each matched trial gets one row in the ledger's cost_corrections table: the
 summed tokens, cache reads and output, the logged cost, the number of calls
@@ -173,6 +180,7 @@ class Matching:
     unmatched: list[SpendRow] = field(default_factory=list)
     ambiguous: list[tuple[SpendRow, list[str]]] = field(default_factory=list)   # with the trials it fits
     other_models: list[SpendRow] = field(default_factory=list)
+    shared_upstream: list[SpendRow] = field(default_factory=list)   # an upstream id other models stream as too
 
 
 def _same_model(reported: str, model: str) -> bool:
@@ -180,16 +188,56 @@ def _same_model(reported: str, model: str) -> bool:
     return name == model or settings.is_variant(name, model)
 
 
+def _streams_as(reported: str, upstream: str) -> bool:
+    """reported is the upstream id, perhaps behind a LiteLLM provider prefix
+    (fireworks_ai/accounts/fireworks/models/...)."""
+    parts = reported.split("/")
+    return any(settings.streamed_as("/".join(parts[i:]), upstream) for i in range(len(parts)))
+
+
+def upstream_ids(provider: str, model: str) -> tuple[str | None, tuple[str, ...]]:
+    """The upstream id the gateway model streams back as (providers.<p>.
+    upstream_models), and the provider's other models that stream as it too."""
+    try:
+        p = settings.load_config().providers.get(provider)
+    except Exception:
+        return None, ()   # a broken config only loses the upstream-id match
+    upstream = p.upstream_models.get(model) if p is not None else None
+    if not upstream:
+        return None, ()
+    return upstream, tuple(sorted(k for k, v in p.upstream_models.items() if v == upstream and k != model))
+
+
+def overlapping(trials: Sequence[Mapping[str, Any]]) -> list[tuple[str, str]]:
+    """Pairs of trials whose agent windows overlap in time: a match by time
+    cannot split their calls."""
+    spans = sorted((s, e, t["trial_name"]) for t in trials for s, e in t["windows"])
+    pairs: set[tuple[str, str]] = set()
+    for i, (_, end, name) in enumerate(spans):
+        for start, _, other in spans[i + 1:]:
+            if start >= end:
+                break
+            if other != name:
+                pairs.add((min(name, other), max(name, other)))
+    return sorted(pairs)
+
+
 def match(rows: Sequence[SpendRow], trials: Sequence[Mapping[str, Any]], skew_sec: float = DEFAULT_SKEW_SEC,
-          model: str | None = None) -> Matching:
+          model: str | None = None, upstream: str | None = None, shared: Sequence[str] = ()) -> Matching:
     """Each row to the one trial whose agent window (trials[i]['windows'],
-    UTC pairs) holds its start time, within skew_sec either side."""
+    UTC pairs) holds its start time, within skew_sec either side. A row
+    whose model is the upstream id (upstream) counts as the arm's, unless
+    other gateway models stream as it too (shared)."""
     pad = timedelta(seconds=max(float(skew_sec), 0.0))
     out = Matching()
     for row in rows:
         if model and row.model and not _same_model(row.model, model):
-            out.other_models.append(row)
-            continue
+            if not (upstream and _streams_as(row.model, upstream)):
+                out.other_models.append(row)
+                continue
+            if shared:
+                out.shared_upstream.append(row)
+                continue
         near = [t for t in trials if any(s - pad <= row.start <= e + pad for s, e in t["windows"])]
         if len(near) > 1:
             # Back-to-back trials whose padded windows touch: the one that holds it unpadded.
@@ -288,7 +336,15 @@ def plan(ledger: Any, path: Path, run: str, arm: str, skew_sec: float = DEFAULT_
     if direct:
         raise ValueError(f"Arm '{arm}' did not run through a gateway in {run_key} (provider "
                          f"{', '.join(direct)}, no ${{VAR}} base_url); its cost is not corrected from a spend log")
-    m = match(log.rows, trials, skew_sec, model=trials[0]["model"])
+    together = overlapping(trials)
+    if together:
+        shown = ", ".join(f"{a} and {b}" for a, b in together[:5]) + (
+            f" (and {len(together) - 5} more pairs)" if len(together) > 5 else "")
+        raise ValueError(f"Trials of arm '{arm}' ran at the same time in {run_key} ({shown}; n_concurrent or "
+                         "n_attempts above 1): matching by time cannot split their calls. Only a run that ran one "
+                         "trial of the arm at a time, such as a task race with n_attempts 1, can be corrected")
+    upstream, shared = upstream_ids(trials[0]["provider"], trials[0]["model"])
+    m = match(log.rows, trials, skew_sec, model=trials[0]["model"], upstream=upstream, shared=shared)
     file_totals = totals(log.rows)
     price = _price(trials[0]["provider"], trials[0]["model"])
     per_trial, entries, warnings = [], [], []
@@ -333,7 +389,12 @@ def plan(ledger: Any, path: Path, run: str, arm: str, skew_sec: float = DEFAULT_
                         "side): calls outside the run, or another arm's traffic. They are not counted.")
     if m.other_models:
         names = sorted({r.model or "" for r in m.other_models})
-        warnings.append(f"{len(m.other_models)} row(s) are for other models ({', '.join(names)}) and were left out.")
+        warnings.append(f"{len(m.other_models)} row(s) are for other models ({', '.join(names)}) and were left out. "
+                        "The model column should be LiteLLM's model_group, the gateway alias the arm names.")
+    if m.shared_upstream:
+        warnings.append(f"{len(m.shared_upstream)} row(s) carry the upstream id {upstream}, which "
+                        f"{', '.join([trials[0]['model'], *shared])} all stream as, so that column cannot tell "
+                        "their calls apart; they were left out. Export LiteLLM's model_group as the model column.")
     if log.duplicates:
         warnings.append(f"{log.duplicates} row(s) repeat a request id already read and were left out.")
     if m.ambiguous:
@@ -349,7 +410,7 @@ def plan(ledger: Any, path: Path, run: str, arm: str, skew_sec: float = DEFAULT_
         "matched": totals([r for rows in m.by_trial.values() for r in rows]),
         "unmatched": [_row_text(r) for r in m.unmatched],
         "ambiguous": [{**_row_text(r), "trials": names} for r, names in m.ambiguous],
-        "other_models": len(m.other_models),
+        "other_models": len(m.other_models), "shared_upstream": len(m.shared_upstream),
         "before_usd": round(before_total, 6), "after_usd": round(after_total, 6),
         "entries": entries, "writable": not m.ambiguous, "warnings": warnings,
     }
