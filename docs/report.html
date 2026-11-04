@@ -6,7 +6,7 @@
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Harness Bench Preliminary Report</title>
+<title>Harness Bench Report</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -159,7 +159,7 @@ footer { font-size: 0.82rem; color: var(--muted); display: grid; gap: 6px; max-w
   </section>
 
   <section>
-    <h2>Why this is preliminary</h2>
+    <h2>How the results were checked</h2>
     <div class="caveats">
       <div class="caveat"><span class="tag done">Checked</span><h3>Prices</h3><p>Every rate used here matches the providers' price pages as of 3 Nov 2026. Costs are token counts × those rates. Long-context price tiers are not applied, so very long requests are priced slightly low.</p></div>
       <div class="caveat"><span class="tag done">Checked</span><h3>Kilo and OpenCode on Opus</h3><p>Their Opus high and medium trials often reused a prompt cache written minutes earlier by another trial, which makes them look cheaper than Opus low. This is real cache behaviour, not a counting bug; costed as if every trial started cold, high and medium would be 1.4–1.9× low.</p></div>
@@ -197,7 +197,7 @@ DATA.groups.forEach(g => { idx[g.h + "|" + g.m + "|" + g.e] = g; });
 const t = DATA.totals;
 document.getElementById("facts").innerHTML =
   `<span><b>${t.trials.toLocaleString()}</b> trials</span><span><b>$${t.spend_usd.toFixed(0)}</b> model spend</span><span><b>10</b> harnesses</span><span><b>6</b> models</span><span><b>${t.by_outcome.answer_lookup || 0}</b> answer lookups (fails)</span>`;
-document.getElementById("stamp").textContent = "Data from the bench ledger, " + DATA.stamp + ". Numbers will change as the open checks close.";
+document.getElementById("stamp").textContent = "Data from the bench ledger, " + DATA.stamp + ".";
 
 function bucket(v, lo, hi, invert) {
   let f = (v - lo) / (hi - lo); f = Math.max(0, Math.min(1, f)); if (invert) f = 1 - f;

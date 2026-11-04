@@ -1555,7 +1555,7 @@ def caveats_for(comparison: Mapping[str, Any], arm_group: Mapping[str, Any], bas
         ratio = rvc["median_ratio"]
         if ratio is None or REPORTED_RATIO_BAND[0] <= ratio <= REPORTED_RATIO_BAND[1]:
             continue
-        if harnesses.reports_mispriced_cost(g["family"], g["provider"]):
+        if harnesses.reports_mispriced_cost(g["family"], g["provider"], g.get("model")):
             out.append(f"{g['name']} prices {g['provider']} models at its own provider's rates (its reported cost "
                        f"is a median {ratio:.2g}x the computed cost); the computed cost is used.")
             continue

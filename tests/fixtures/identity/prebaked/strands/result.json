@@ -2,7 +2,7 @@
     "id": "dfefc510-3ca8-40d5-9b24-2b53e3cc35c2",
     "task_name": "fix-git",
     "trial_name": "fix-git__pb-strands",
-    "trial_uri": "file:///C:/Users/praem/AppData/Local/Temp/claude/c--Git-EngineeringTestBench/7fdc8d26-4f79-487e-9281-7d1b420770ae/scratchpad/prebake/envclass/trials/fixgit/strands/fix-git__pb-strands",
+    "trial_uri": "file:///C:/Users/user/AppData/Local/Temp/claude/c--Git-EngineeringTestBench/00000000-0000-0000-0000-000000000000/scratchpad/prebake/envclass/trials/fixgit/strands/fix-git__pb-strands",
     "task_id": {
         "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git"
     },
@@ -20,7 +20,7 @@
             "source": "terminal-bench"
         },
         "trial_name": "fix-git__pb-strands",
-        "trials_dir": "C:\\Users\\praem\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\7fdc8d26-4f79-487e-9281-7d1b420770ae\\scratchpad\\prebake\\envclass\\trials\\fixgit\\strands",
+        "trials_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\00000000-0000-0000-0000-000000000000\\scratchpad\\prebake\\envclass\\trials\\fixgit\\strands",
         "install_only": true,
         "timeout_multiplier": 1.0,
         "agent_timeout_multiplier": null,

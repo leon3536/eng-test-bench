@@ -1000,6 +1000,9 @@ class Ledger:
         merged = dict(row)
         hm, model = row["harbor_model"] or "", row["model"] or ""
         bench = row["source"] == "bench"
+        # A gateway arm's planned ${VAR}/route, as stored at ingest: the raw config holds the
+        # address it ran against, which would give the row a new config_hash.
+        planned_url = (_loads(row["options_json"], {}) or {}).get("base_url") if bench else None
         # The run supplied these at ingest; the raw JSON cannot recreate them.
         ctx = RunContext(
             run_key=row["run_key"], profile=row["profile"], run_id=row["run_id"], source=row["source"],
@@ -1008,7 +1011,9 @@ class Ledger:
             effort_label=row["effort_label"], dataset=row["dataset"] if bench else None,
             local_snapshot=row["dataset_snapshot"] if (row["dataset_snapshot"] or "").startswith("local:")
             else None,
-            family=row["family"] if bench else None)
+            family=row["family"] if bench else None,
+            base_url=planned_url if isinstance(planned_url, str) and planned_url.startswith("${") else None,
+            upstream_model=extract.upstream_of(row["provider"], model) if bench else None)
         job_lock = {"harbor": {"version": row["harbor_version"]}, "n_concurrent_trials": row["n_concurrent"]}
         # Cache writes and the log's flags are in the trial folder only; once it is gone, keep what is stored.
         folder = self._trial_folder(row["trial_dir"])

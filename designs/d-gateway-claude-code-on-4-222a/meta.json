@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-gateway-claude-code-on-4-222a",
+  "title": "Gateway: Claude Code on 4 non-Claude models, 27 tasks",
+  "created_at": "2026-11-04T20:40:16+00:00",
+  "updated_at": "2026-11-04T20:40:19+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-04T20:40:16+00:00",
+      "spec_hash": "sha256:a0e778b88ed284bd290e04cf217663d4b7638c66f7f2f552bde37e5bd3ed596d",
+      "change_note": "First version",
+      "approved_at": "2026-11-04T20:40:18+00:00",
+      "runs": [
+        "20261104-124019-gateway-claude-c-v1"
+      ]
+    }
+  }
+}

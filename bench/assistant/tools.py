@@ -517,12 +517,12 @@ def _describe_harness(ctx: ToolContext, args: DescribeHarnessIn) -> _Result:
     family = harness["family"]
     dollar = [n for n in harnesses.DOLLAR_CAPS if n in props]
     turn = [n for n in harnesses.TURN_CAPS if n in props]
-    misprices = bool(args.provider) and any(harnesses.cap_misprices_for(family, args.provider or "", n)
-                                            for n in dollar)
+    misprices = bool(args.provider) and any(
+        harnesses.cap_misprices_for(family, args.provider or "", n, args.model) for n in dollar)
     warnings = []
     if misprices:
         warnings += [f"{n}: {harnesses.MISPRICED_CAP}" for n in dollar
-                     if harnesses.cap_misprices_for(family, args.provider or "", n)]
+                     if harnesses.cap_misprices_for(family, args.provider or "", n, args.model)]
     if args.provider and args.model:
         arm = settings.Arm(name="describe", agent=args.agent, provider=args.provider, model=args.model, family=family)
         warnings += [f"{k}: {v}" for k, v in schemas.model_warnings(arm).items() if k in props]

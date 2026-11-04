@@ -78,7 +78,7 @@ def harbor_cause(exception_type: str | None) -> str | None:
 
 def cap_misprices(family: str, provider: str, model: str, option: str) -> bool:
     """The harness priced its own cap at another provider's rates."""
-    return cap_misprices_for(family, provider, option)
+    return cap_misprices_for(family, provider, option, model)
 
 
 def _options(f: Mapping[str, Any]) -> Mapping[str, Any]:

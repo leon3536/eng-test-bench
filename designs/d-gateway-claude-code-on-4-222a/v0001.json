@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "design_id": "d-gateway-claude-code-on-4-222a",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-04T20:40:16+00:00",
+  "profile": "default",
+  "title": "Gateway: Claude Code on 4 non-Claude models, 27 tasks",
+  "purpose": "Measure Claude Code through a self-hosted LiteLLM gateway on DeepSeek (native and translated), Kimi K3 (Fireworks only) and GPT-6.1 Sol",
+  "rationale": "Smoke test 7/8 passed, priced and single-model; the one fail was the retired kimi-k3 name. Compare with Goose on the same models (direct) and native vs translated DeepSeek.",
+  "change_note": "First version",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-gw-deepseek",
+    "run": {
+      "budget_usd": 20.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash-translated",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "kimi-k3-fireworks",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-sol",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "gpt-6.1-sol",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:a0e778b88ed284bd290e04cf217663d4b7638c66f7f2f552bde37e5bd3ed596d"
+}

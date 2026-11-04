@@ -34,6 +34,16 @@ class CapTests(BenchTestCase):
         self.assertTrue(harnesses.cap_misprices_for("claude-code", "fireworks", "max_budget_usd"))
         self.assertFalse(harnesses.cap_misprices_for("claude-code", "anthropic", "max_budget_usd"))
 
+    def test_claude_code_prices_claude_models_on_any_provider(self) -> None:
+        # The gateway Opus arm keeps the cap; its DeepSeek arm does not.
+        self.assertFalse(harnesses.cap_misprices_for("claude-code", "litellm", "max_budget_usd", "claude-opus-5-5"))
+        self.assertFalse(harnesses.cap_misprices_for("claude-code", "openrouter", "max_budget_usd",
+                                                     "anthropic/claude-sonnet-5-5"))
+        self.assertTrue(harnesses.cap_misprices_for("claude-code", "litellm", "max_budget_usd", "deepseek-v4.1-flash"))
+        self.assertTrue(harnesses.cap_misprices_for("claude-code", "litellm", "max_budget_usd", "kimi-claude-x"))
+        self.assertFalse(harnesses.reports_mispriced_cost("claude-code", "litellm", "claude-opus-5-5"))
+        self.assertTrue(harnesses.reports_mispriced_cost("claude-code", "litellm", "gpt-6.1-sol"))
+
     def test_other_caps_and_harnesses(self) -> None:
         self.assertFalse(harnesses.cap_misprices_for("claude-code", "openrouter", "max_turns"))
         self.assertFalse(harnesses.cap_misprices_for("mini-swe-agent", "openrouter", "cost_limit"))

@@ -40,7 +40,7 @@ from ..environments.prebaked import (
     Want,
     check_candidate,
 )
-from ..settings import PREBAKE_OFF, PREBAKE_PREFER, Config, ConfigError, RunSettings
+from ..settings import PREBAKE_OFF, PREBAKE_PREFER, Config, ConfigError, Provider, RunSettings
 from ..spec import ArmSpec, RunSpec
 from . import ArmPrebake
 from . import resolve as resolve_prebake
@@ -211,18 +211,19 @@ def task_dir(dataset: str, task: str) -> Path | None:
 # Readiness -----------------------------------------------------------------------
 
 
-def arm_kwargs(run: RunSettings, arm: ArmSpec) -> dict[str, Any]:
-    """The agent kwargs Harbor will get for this arm (runs.agent_kwargs)."""
+def arm_kwargs(run: RunSettings, arm: ArmSpec, provider: Provider | None = None) -> dict[str, Any]:
+    """The agent kwargs Harbor will get for this arm (runs.agent_kwargs), as
+    the planner shows them: a gateway arm's base_url still ${VAR}/route."""
     from ..runs import agent_kwargs  # runs imports this package
 
-    return agent_kwargs(run, arm, schemas.agent_schema(arm.agent))[0]
+    return agent_kwargs(run, arm, schemas.agent_schema(arm.agent), provider)[0]
 
 
 def resolve_arm(cfg: Config, run: RunSettings, arm: ArmSpec) -> tuple[ArmPrebake | None, dict[str, Any] | None,
                                                                       str]:
     """(the arm's prebake, its kwargs, why it has none). Never raises."""
     try:
-        kwargs = arm_kwargs(run, arm)
+        kwargs = arm_kwargs(run, arm, cfg.providers.get(arm.provider))
     except (ConfigError, ValueError, TypeError, RuntimeError) as exc:
         return None, None, f"its options did not resolve: {exc}"
     if run.prebake == PREBAKE_OFF:

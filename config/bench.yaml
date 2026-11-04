@@ -27,6 +27,27 @@ providers:
     env_key: OPENROUTER_API_KEY
     model_prefix: openrouter/
     enabled: false
+  # A self-hosted LiteLLM gateway (LiteLLM 1.83.7, added 2026-11-04), to measure what a
+  # gateway changes. Its root URL is LITELLM_URL in .env (never in this file), read when a
+  # job starts; each arm picks a path on it with base_url_route. Its trials carry
+  # base_url, so the report flags them cautioned. litellm_proxy/ is LiteLLM's (and
+  # Harbor's) proxy provider: Claude Code gets the gateway's model name unchanged as
+  # ANTHROPIC_MODEL and the key as a bearer token, never an Anthropic key. Model names on
+  # the gateway, not the providers' ids; priced under litellm in pricing.yaml.
+  litellm:
+    env_key: LITELLM_API_KEY       # a LiteLLM virtual key
+    base_url_env: LITELLM_URL      # the gateway root, e.g. http://<host>:<port>
+    model_prefix: litellm_proxy/
+    # The id each model's streamed replies carry. LiteLLM 1.83.7 puts the gateway name
+    # back on whole replies but not on streams, so Claude Code's message_start reports
+    # the upstream provider's id. The ledger and the run budget count usage under this
+    # id as the arm's own model, priced at the gateway name's row; any other name is
+    # still another model. A fact about the gateway rather than a run: keep an entry
+    # while trials that streamed it are in the ledger. Not part of any config hash.
+    upstream_models:
+      deepseek-v4.1-flash: accounts/fireworks/models/deepseek-v4p1-flash
+      deepseek-v4.1-flash-translated: accounts/fireworks/models/deepseek-v4p1-flash
+      kimi-k3-fireworks: accounts/fireworks/models/kimi-k3
 
 modes:
   pilot:  {n_tasks: 1,  n_attempts: 1}   # prices one trial per arm before committing
@@ -188,6 +209,75 @@ arms:
     enabled: true
     options:
       version: "0.2.1-rc.5"    # npm latest = next; pi-ai pinned to 1.3.0 inside the adapter
+
+  # Claude Code through the LiteLLM gateway (provider litellm). Claude models take
+  # the raw pass-through, /anthropic (body and anthropic-beta forwarded unchanged);
+  # the others the gateway's root, its own /v1/messages, which drops unknown betas
+  # and body fields: that filtering is part of what these arms measure. Pairs:
+  # gw-opus against claude-code (does the gateway itself change anything),
+  # gw-deepseek (Fireworks' Anthropic format) against gw-deepseek-tr (the same
+  # model translated from OpenAI format), gw-deepseek-tr and gw-kimi against the
+  # Goose arms on the same models. kimi-k3-fireworks is Fireworks' Kimi K3 with no
+  # fallback, so a Fireworks failure shows as an error in the trial (the gateway's
+  # kimi-k3, which fell back to OpenRouter, is off the bench keys). DeepSeek and
+  # Kimi run at high, as in the per-model designs: they offer low, high and max,
+  # no medium. Off until a design asks for them.
+  - name: claude-code-gw-opus
+    # Matches claude-code but for the gateway. With a base URL, Harbor points
+    # every model alias and the subagent model at Opus; agent_env puts back
+    # what the direct arm uses: Haiku and Sonnet by name (both on the key),
+    # and no subagent model, so Claude Code picks its own. Fable stays on Opus,
+    # since the key has no Fable model. It keeps Claude Code's dollar cap too:
+    # that prices claude-* models right on any route.
+    agent: claude-code
+    provider: litellm
+    model: claude-opus-5-5
+    enabled: false
+    options:
+      version: "2.1.312"
+      base_url_route: /anthropic
+      agent_env:
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-5-5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5-5
+        CLAUDE_CODE_SUBAGENT_MODEL: ""
+
+  - name: claude-code-gw-deepseek
+    agent: claude-code
+    provider: litellm
+    model: deepseek-v4.1-flash
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-deepseek-tr
+    agent: claude-code
+    provider: litellm
+    model: deepseek-v4.1-flash-translated
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-kimi
+    agent: claude-code
+    provider: litellm
+    model: kimi-k3-fireworks
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-sol
+    # Translated to OpenAI's Responses API. Budgeted thinking fails there
+    # (enabled + budget_tokens becomes an effort Sol rejects); Claude Code's
+    # adaptive thinking works.
+    agent: claude-code
+    provider: litellm
+    model: gpt-6.1-sol
+    enabled: false
+    options:
+      version: "2.1.312"
 
   # Example open-model arm on Fireworks. Fill in the model id from
   # fireworks.ai/models, add its price to config/pricing.yaml, then enable.

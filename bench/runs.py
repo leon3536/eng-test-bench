@@ -53,7 +53,7 @@ import os
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -64,6 +64,7 @@ from . import checks, datasets, fsutil, hostload, keys, prebake, procs, results,
 from .procs import cleanup_containers  # noqa: F401  re-exported: older callers and tests patch runs.cleanup_containers
 from .prebake import ArmPrebake
 from .settings import (
+    AGENT_ENV_OPTION,
     EFFORT_INHERIT,
     EFFORT_OMIT,
     JOBS_DIR,
@@ -71,11 +72,13 @@ from .settings import (
     PREBAKE_REQUIRE,
     PROFILE_NAME,
     ROOT,
+    ROUTE_OPTION,
     RUNS_DIR,
     SCHEDULE_TASKS,
     Arm,
     Config,
     ConfigError,
+    Provider,
     RunSettings,
     harbor_executable,
 )
@@ -177,11 +180,15 @@ def resolve_effort(run: RunSettings, arm: Arm | ArmSpec, schema: dict[str, Any])
     return value, value
 
 
-def agent_kwargs(run: RunSettings, arm: Arm | ArmSpec,
-                 schema: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+def agent_kwargs(run: RunSettings, arm: Arm | ArmSpec, schema: dict[str, Any],
+                 provider: Provider | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     """Returns the kwargs for harbor and where each one came from. Run-level
     caps fill in wherever the harness has a matching option; the arm's own
-    options always win."""
+    options always win. On a gateway provider the arm's route becomes
+    base_url as ${VAR}/route, an arm option like any other, so the options
+    fingerprint and the config hash follow the route but not the address
+    (build_command fills it in). Without the provider the route adds nothing.
+    agent_env is never a kwarg: see arm_agent_env."""
     props = schema.get("properties", {})
     kwargs: dict[str, Any] = {}
     source: dict[str, str] = {}
@@ -198,7 +205,12 @@ def agent_kwargs(run: RunSettings, arm: Arm | ArmSpec,
             if name in props:
                 kwargs[name] = schemas.coerce(schema, name, run.max_turns)
                 source[name] = "run cap"
+    if provider is not None and provider.base_url_env:
+        kwargs["base_url"] = keys.base_url_template(provider, arm.options.get(ROUTE_OPTION))
+        source["base_url"] = "arm option"
     for name, value in arm.options.items():
+        if name in (ROUTE_OPTION, AGENT_ENV_OPTION):
+            continue
         if value is None:
             # None means "pass nothing", as it does in the overrides file, so
             # `max_budget_usd: null` lifts the run cap for this arm and Harbor
@@ -211,10 +223,23 @@ def agent_kwargs(run: RunSettings, arm: Arm | ArmSpec,
     return kwargs, source
 
 
-def options_fingerprint(kwargs: dict[str, Any], source: dict[str, str]) -> str:
+def arm_agent_env(arm: Arm | ArmSpec) -> dict[str, str]:
+    """The arm's agent_env (settings.AGENT_ENV_OPTION): Claude Code's model
+    selectors, passed to Harbor as --ae. Kept out of the kwargs, which Harbor
+    checks against the harness's own options wherever the bench hands them
+    on (pre-bake recording, verify)."""
+    value = arm.options.get(AGENT_ENV_OPTION)
+    return {str(k): str(v) for k, v in sorted(value.items())} if isinstance(value, Mapping) else {}
+
+
+def options_fingerprint(kwargs: dict[str, Any], source: dict[str, str],
+                        agent_env: Mapping[str, str] | None = None) -> str:
     """12 hex of the arm's own options. Effort and run caps are left out, so
-    changing a cap does not split one configuration into two when pooling."""
+    changing a cap does not split one configuration into two when pooling.
+    An arm with no agent_env keeps the fingerprint it had before there was one."""
     own = {k: v for k, v in kwargs.items() if source.get(k) == "arm option"}
+    if agent_env:
+        own[AGENT_ENV_OPTION] = dict(agent_env)
     return fsutil.sha256_hex(fsutil.canonical_json(own))[:12]
 
 
@@ -242,10 +267,12 @@ def prebake_flags(run: RunSettings, arm_prebake: ArmPrebake | None) -> list[str]
 
 def build_command(cfg: Config, spec: RunSpec, arm: ArmSpec, job_root: Path, kwargs: dict[str, Any],
                   dataset_path: Path, dry_run: bool = False, arm_prebake: ArmPrebake | None = None,
-                  job_name: str | None = None) -> list[str]:
+                  job_name: str | None = None, env: dict[str, str] | None = None) -> list[str]:
     """The harbor command for one arm's job: job_root/<job_name, else the arm's
     name>. A task race passes one task's arm (arm.tasks == (task,)), the arm's
-    folder as job_root and the task as job_name."""
+    folder as job_root and the task as job_name. env is the job's child env:
+    given, a gateway arm's ${VAR} base_url is filled in from it; a preview
+    leaves it out and shows ${VAR}."""
     # An import path goes through --agent-import-path, which records the
     # class as agent.import_path in the job's config.json (the ledger reads it
     # there). Harbor 0.25 still honours the flag and logs a deprecation warning.
@@ -267,8 +294,18 @@ def build_command(cfg: Config, spec: RunSpec, arm: ArmSpec, job_root: Path, kwar
     ]
     for task in arm.tasks:
         cmd += ["--include-task-name", task]
+    provider = cfg.providers.get(arm.provider)
+    gateway = provider is not None and bool(provider.base_url_env)
+    if gateway:
+        # Harbor looks for a key under the names it knows for the model's
+        # provider (OPENAI_API_KEY for litellm_proxy/), so name the gateway's.
+        cmd += ["--api-key-name", provider.env_key]  # type: ignore[union-attr]
     for name, value in kwargs.items():
+        if name == "base_url" and gateway and env is not None:
+            value = keys.expand_base_url(value, env)
         cmd += ["--ak", f"{name}={json.dumps(value)}"]
+    for name, value in arm_agent_env(arm).items():
+        cmd += ["--ae", f"{name}={value}"]  # plain text: Harbor does not parse --ae values
     cmd += prebake_flags(spec.run, arm_prebake)
     if dry_run:
         cmd.append("--dry-run")
@@ -604,6 +641,9 @@ def plan_spec(cfg: Config, spec: RunSpec, found: tuple[dict[str, Any], str | Non
                 entry["problems"].append(f"provider '{provider.name}' is turned off in config")
             if not keys.get_secret(provider.env_key):
                 entry["problems"].append(f"{provider.env_key} is not set")
+            url_problem = keys.base_url_problem(provider)
+            if url_problem:
+                entry["problems"].append(url_problem)
             if cfg.price(arm.provider, arm.model) is None:
                 entry["problems"].append(
                     f"no price for '{arm.model}' under '{provider.name}' in config/pricing.yaml; "
@@ -613,14 +653,17 @@ def plan_spec(cfg: Config, spec: RunSpec, found: tuple[dict[str, Any], str | Non
                                      "list it under designs.import_paths in the config")
         try:
             schema = schemas.agent_schema(arm.agent)
-            kwargs, source = agent_kwargs(spec.run, arm, schema)
+            kwargs, source = agent_kwargs(spec.run, arm, schema, provider)
             entry["effort"] = resolve_effort(spec.run, arm, schema)[1]
             entry["kwargs"] = [{"name": k, "value": v, "source": source[k]} for k, v in kwargs.items()]
-            entry["options_fingerprint"] = options_fingerprint(kwargs, source)
+            entry["options_fingerprint"] = options_fingerprint(kwargs, source, arm_agent_env(arm))
             rejected = schemas.model_warnings(arm)  # type: ignore[arg-type]
             entry["warnings"] += [f"{k}: {rejected[k]}" for k in kwargs if k in rejected]
             entry["warnings"] += [f"{k}: {schemas.CAUTIONS[k]}" for k in kwargs
                                   if k in schemas.CAUTIONS and k != "version"]
+            if arm_agent_env(arm):
+                entry["agent_env"] = arm_agent_env(arm)
+                entry["warnings"].append(f"{AGENT_ENV_OPTION}: {schemas.CAUTIONS[AGENT_ENV_OPTION]}")
             entry["warnings"] += [f"{k}: {schemas.MISPRICED_CAP}" for k in schemas.DOLLAR_CAPS
                                   if schemas.cap_misprices(arm, k) and spec.run.per_trial_cap_usd]
             caps = _dollar_caps(kwargs)
@@ -734,7 +777,7 @@ def resolve_arms(cfg: Config, spec: RunSpec, run_id: str,
     out = []
     for arm in spec.arms:
         schema = schemas.agent_schema(arm.agent)
-        kwargs, source = agent_kwargs(spec.run, arm, schema)
+        kwargs, source = agent_kwargs(spec.run, arm, schema, cfg.providers.get(arm.provider))
         value, label = resolve_effort(spec.run, arm, schema)
         arm_prebake, ready = _arm_prebake(cfg, spec.run, arm, kwargs, readiness)
         out.append({
@@ -743,7 +786,8 @@ def resolve_arms(cfg: Config, spec: RunSpec, run_id: str,
             "harbor_model": cfg.harbor_model(arm),  # type: ignore[arg-type]
             "effort": {"setting": arm.effort, "value": value, "label": label},
             "kwargs": [{"name": k, "value": v, "source": source[k]} for k, v in kwargs.items()],
-            "options_fingerprint": options_fingerprint(kwargs, source),
+            "options_fingerprint": options_fingerprint(kwargs, source, arm_agent_env(arm)),
+            **({"agent_env": arm_agent_env(arm)} if arm_agent_env(arm) else {}),
             "tasks": list(arm.tasks),
             "trials": len(arm.tasks) * spec.n_attempts,
             "command": preview_command(cfg, spec, arm, kwargs, display_path, job_root, arm_prebake=arm_prebake),
@@ -1323,7 +1367,7 @@ class RunManager:
         """One harbor job: the arm's (jobs/<run>/<arm>/), or in a task race
         one task's lane, with job_root jobs/<run>/<arm> and the task as job_name."""
         schema = schemas.agent_schema(arm.agent)
-        kwargs, _ = agent_kwargs(spec.run, arm, schema)
+        kwargs, _ = agent_kwargs(spec.run, arm, schema, cfg.providers[arm.provider])
         arm_prebake = prebake.resolve(cfg, spec.run, arm, kwargs)
         env = keys.child_env(cfg.providers[arm.provider])
         job_root = job_root or JOBS_DIR / run.id
@@ -1344,7 +1388,7 @@ class RunManager:
             _append_log(log_path, f"pre-baked images: {_readiness_line(arm_prebake, ready, error)}")
         _append_log(log_path, f"harness setup: {json.dumps(prebake_entry(spec.run, arm_prebake, ready))}")
         preflight = build_command(cfg, spec, arm, job_root, kwargs, dataset_path, dry_run=True,
-                                  arm_prebake=arm_prebake, job_name=job_name)
+                                  arm_prebake=arm_prebake, job_name=job_name, env=env)
         rc = self._supervise(preflight, env, log_path, run, arm_run, watch=None)
         for wait in PREFLIGHT_RETRY_WAITS:
             if rc == 0 or arm_run.status != "preflight" or not _docker_was_slow(log_path):
@@ -1375,7 +1419,7 @@ class RunManager:
         self._save(run)
         local_arm = arm.to_arm()
         rc = self._supervise(build_command(cfg, spec, arm, job_root, kwargs, dataset_path, arm_prebake=arm_prebake,
-                                           job_name=job_name),
+                                           job_name=job_name, env=env),
                              env, log_path, run, arm_run, watch=(cfg, local_arm, job_dir))
         if rc == 0:
             arm_run.cleanup_pending = False  # harbor finished and tore down its own trials
@@ -1412,7 +1456,9 @@ class RunManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         job_dir = watch[2] if watch else None
         with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(f"\n[{_now()}] $ {subprocess.list2cmdline(cmd)}\n")
+            # A gateway arm's command holds its address; the log, which the dashboard
+            # serves, shows ${VAR} instead.
+            log_file.write(f"\n[{_now()}] $ {subprocess.list2cmdline(keys.hide_gateway_urls(cmd, env))}\n")
             log_file.flush()
             proc = subprocess.Popen(
                 cmd, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=log_file, stderr=subprocess.STDOUT,

@@ -161,12 +161,49 @@ def is_variant(name: str, key: str) -> bool:
     return name.startswith(key) and _VERSION_SUFFIX.fullmatch(name[len(key):]) is not None
 
 
+def streamed_as(reported: str | None, upstream: str | None) -> bool:
+    """reported is the upstream id a gateway model streams back as
+    (Provider.upstream_models), perhaps with a date or version tag."""
+    return bool(reported and upstream) and is_variant(str(reported), str(upstream))
+
+
+# A gateway provider (base_url_env set) is reached at the URL in that .env
+# variable, read when a job starts, so the address never enters the repo or a
+# config hash. Its arms pick a path on it with this option: the bench's own,
+# not Harbor's, so it never reaches Harbor as --ak.
+ROUTE_OPTION = "base_url_route"
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# A route is a plain path ("" or "/" for the root): no query, no "@" or "//" that
+# could move the host, no "..".
+_ROUTE = re.compile(r"(/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*/?")
+# Every gateway URL variable a loaded config names, so keys.child_env can drop
+# them for arms on other providers and for helpers with none. It only grows:
+# a name one profile used stays dropped after another profile loads.
+GATEWAY_URL_VARS: set[str] = set()
+
+# Claude Code's model selectors an arm may set itself, passed to Harbor as
+# --ae NAME=VALUE (the bench's own option, never --ak). With a base_url,
+# Harbor points every alias and the subagent model at the arm's model unless
+# one is set, so a gateway arm that should match a direct arm names them;
+# an empty value leaves Claude Code its own default. Only these names: an
+# arm cannot set any other variable this way.
+AGENT_ENV_OPTION = "agent_env"
+AGENT_ENV_NAMES = frozenset({
+    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL",
+})
+_AGENT_ENV_VALUE = re.compile(r"[A-Za-z0-9._:/@\[\]-]*")
+
+
 @dataclass(frozen=True)
 class Provider:
     name: str
     env_key: str
     model_prefix: str
     enabled: bool = True
+    base_url_env: str | None = None   # gateway: the .env variable holding its root URL
+    # gateway: {model name: the upstream id its streamed replies carry}; see config/bench.yaml
+    upstream_models: dict[str, str] = field(default_factory=dict, hash=False)
 
 
 @dataclass(frozen=True)
@@ -306,6 +343,11 @@ class Config:
 
     def harbor_model(self, arm: Arm) -> str:
         return self.providers[arm.provider].model_prefix + arm.model
+
+    def upstream_model(self, provider: str, model: str) -> str | None:
+        """The upstream id this gateway model's streamed replies carry, if declared."""
+        p = self.providers.get(provider)
+        return p.upstream_models.get(model) if p is not None else None
 
     def price(self, provider: str, model_name: str) -> Price | None:
         """Look up a price by the name a harness reports, which may carry a
@@ -521,6 +563,43 @@ def _check_model_spec(arm: str, options: Mapping[str, Any], harbor_model: str) -
 def check_model_spec(arm: str, options: Mapping[str, Any], harbor_model: str) -> None:
     """Public name for designs.validate, which applies the same rule to design arms."""
     _check_model_spec(arm, options, harbor_model)
+
+
+def check_route(arm: str, options: Mapping[str, Any], provider: Provider) -> None:
+    """A route only on a gateway provider, and a plain path. A gateway arm sets
+    no endpoint of its own: the route is the only part of its URL it picks.
+    Shared with designs.validate."""
+    route = options.get(ROUTE_OPTION)
+    if provider.base_url_env is None:
+        if route is not None:
+            raise ConfigError(f"Arm '{arm}': {ROUTE_OPTION} needs a gateway provider (one with base_url_env); "
+                              f"'{provider.name}' has none")
+        return
+    own = sorted(k for k in options if k in ("base_url", "api_base") and options[k] is not None)
+    if own:
+        raise ConfigError(f"Arm '{arm}': provider '{provider.name}' is a gateway reached at "
+                          f"${{{provider.base_url_env}}}; set {ROUTE_OPTION}, not {', '.join(own)}")
+    if route is not None and (not isinstance(route, str) or not _ROUTE.fullmatch(route)):
+        raise ConfigError(f"Arm '{arm}': {ROUTE_OPTION} must be a plain path such as /anthropic, "
+                          f"or empty for the gateway's root (got {route!r})")
+
+
+def check_agent_env(arm: str, options: Mapping[str, Any]) -> None:
+    """agent_env is a mapping of Claude Code's model selectors (AGENT_ENV_NAMES)
+    to model names, or empty. Shared with designs.validate."""
+    value = options.get(AGENT_ENV_OPTION)
+    if value is None:
+        return
+    if not isinstance(value, Mapping):
+        raise ConfigError(f"Arm '{arm}': {AGENT_ENV_OPTION} must map variable names to model names")
+    unknown = sorted(str(k) for k in value if k not in AGENT_ENV_NAMES)
+    if unknown:
+        raise ConfigError(f"Arm '{arm}': {AGENT_ENV_OPTION} can only set {', '.join(sorted(AGENT_ENV_NAMES))} "
+                          f"(got {', '.join(unknown)})")
+    bad = sorted(k for k, v in value.items() if not (isinstance(v, str) and _AGENT_ENV_VALUE.fullmatch(v)))
+    if bad:
+        raise ConfigError(f"Arm '{arm}': {AGENT_ENV_OPTION} values must be model names or empty "
+                          f"({', '.join(bad)})")
 
 
 def _mapping(value: Any, label: str) -> dict[str, Any]:
@@ -766,12 +845,22 @@ def load_config(base_path: Path | None = None, overrides_path: Path | None = Non
         spec = _mapping(spec, f"providers.{name}")
         if not spec.get("env_key"):
             raise ConfigError(f"Provider '{name}' needs an env_key")
+        url_env = spec.get("base_url_env")
+        if url_env is not None and (not isinstance(url_env, str) or not _ENV_NAME.fullmatch(url_env)):
+            raise ConfigError(f"providers.{name}.base_url_env must name an environment variable")
+        upstream = _mapping(spec.get("upstream_models"), f"providers.{name}.upstream_models")
+        if not all(isinstance(k, str) and k and isinstance(v, str) and v for k, v in upstream.items()):
+            raise ConfigError(f"providers.{name}.upstream_models must map model names to upstream ids")
         providers[name] = Provider(
             name=name,
             env_key=str(spec["env_key"]),
             model_prefix=str(spec.get("model_prefix") or ""),
             enabled=_flag(spec.get("enabled"), True, f"providers.{name}.enabled"),
+            base_url_env=url_env,
+            upstream_models=dict(upstream),
         )
+        if url_env:
+            GATEWAY_URL_VARS.add(url_env)
 
     tasks = read_tasks(ROOT / str(raw.get("tasks_file") or "config/tasks.txt"))
 
@@ -834,6 +923,8 @@ def load_config(base_path: Path | None = None, overrides_path: Path | None = Non
         if not all(isinstance(k, str) for k in options):
             raise ConfigError(f"Arm '{name}': option names must be strings")
         _check_model_spec(name, options, providers[spec["provider"]].model_prefix + str(spec["model"]))
+        check_route(name, options, providers[spec["provider"]])
+        check_agent_env(name, options)
         arms.append(Arm(
             name=name,
             agent=agent,

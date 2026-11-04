@@ -2,7 +2,7 @@
     "id": "226363ca-c145-42fa-9ad4-7d7dcd3e2664",
     "task_name": "fix-git",
     "trial_name": "fix-git__pb-terminus-2",
-    "trial_uri": "file:///C:/Users/praem/AppData/Local/Temp/claude/c--Git-EngineeringTestBench/7fdc8d26-4f79-487e-9281-7d1b420770ae/scratchpad/prebake/envclass/trials/fixgit/terminus-2/fix-git__pb-terminus-2",
+    "trial_uri": "file:///C:/Users/user/AppData/Local/Temp/claude/c--Git-EngineeringTestBench/00000000-0000-0000-0000-000000000000/scratchpad/prebake/envclass/trials/fixgit/terminus-2/fix-git__pb-terminus-2",
     "task_id": {
         "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git"
     },
@@ -20,7 +20,7 @@
             "source": "terminal-bench"
         },
         "trial_name": "fix-git__pb-terminus-2",
-        "trials_dir": "C:\\Users\\praem\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\7fdc8d26-4f79-487e-9281-7d1b420770ae\\scratchpad\\prebake\\envclass\\trials\\fixgit\\terminus-2",
+        "trials_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\00000000-0000-0000-0000-000000000000\\scratchpad\\prebake\\envclass\\trials\\fixgit\\terminus-2",
         "install_only": true,
         "timeout_multiplier": 1.0,
         "agent_timeout_multiplier": null,

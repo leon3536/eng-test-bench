@@ -80,10 +80,10 @@ class Candidates(PruneTestCase):
         foreign = self.bake(prefix="someoneelse", recipe=OTHER)
         probe = "benchprobe/claude-code-2.1.312/alexgshaw/fix-git:20251031"
         self.docker.add_image(probe, labels={"org.benchprobe.harness": "claude-code"})
-        self.docker.add_image("ailab-web:latest")
+        self.docker.add_image("other-project-web:latest")
         found = self.found()
         self.assertEqual(found, {old_unwanted: "bake"})
-        for kept in (wanted, unlabelled, foreign, probe, "ailab-web:latest", "alexgshaw/fix-git:20251031"):
+        for kept in (wanted, unlabelled, foreign, probe, "other-project-web:latest", "alexgshaw/fix-git:20251031"):
             self.assertNotIn(kept, found)
 
     def test_reasons_harbor_upgrade_age_and_staging(self) -> None:

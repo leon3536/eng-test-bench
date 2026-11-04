@@ -1,0 +1,1684 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 4 models (litellm/deepseek-v4.1-flash, litellm/deepseek-v4.1-flash-translated, litellm/kimi-k3-fireworks, litellm/gpt-6.1-sol). Pairs form only within one model and provider, so each comparison needs its baseline on the same model",
+      "25 task image(s) are not on this machine yet. The run pulls them before its first arm (prebake.prepull); a 15-20 GB image took 6-9 minutes the first time.",
+      "claude-code-gw-deepseek: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-deepseek: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-deepseek-tr: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-deepseek-tr: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-kimi: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-kimi: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-sol: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-sol: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 108,
+    "budget_usd": 20.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "claude-code-gw-deepseek",
+      "claude-code-gw-deepseek-tr",
+      "claude-code-gw-kimi",
+      "claude-code-gw-sol"
+    ],
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/deepseek-v4.1-flash",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-deepseek --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 297.0,
+            "build_gb": 51.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/deepseek-v4.1-flash-translated",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/deepseek-v4.1-flash-translated --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-deepseek-tr --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 297.0,
+            "build_gb": 51.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/kimi-k3-fireworks",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/kimi-k3-fireworks --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-kimi --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 297.0,
+            "build_gb": 51.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-sol",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/gpt-6.1-sol",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/gpt-6.1-sol --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-sol --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 297.0,
+            "build_gb": 51.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:a0e778b88ed284bd290e04cf217663d4b7638c66f7f2f552bde37e5bd3ed596d",
+    "warnings": [
+      "25 task image(s) are not on this machine yet. The run pulls them before its first arm (prebake.prepull); a 15-20 GB image took 6-9 minutes the first time."
+    ],
+    "peak_containers": 4,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 27,
+      "build_min": 297.0,
+      "build_wall_min": 99.0,
+      "build_gb": 58.99,
+      "jobs": 3,
+      "task_images": 27,
+      "pull": [
+        "alexgshaw/openssl-selfsigned-cert:20251031",
+        "alexgshaw/cobol-modernization:20251031",
+        "alexgshaw/build-cython-ext:20251031",
+        "alexgshaw/mteb-retrieve:20251031",
+        "alexgshaw/sparql-university:20251031",
+        "alexgshaw/sqlite-with-gcov:20251031",
+        "alexgshaw/sqlite-db-truncate:20251031",
+        "alexgshaw/hf-model-inference:20251031",
+        "alexgshaw/db-wal-recovery:20251031",
+        "alexgshaw/git-multibranch:20251031",
+        "alexgshaw/log-summary-date-ranges:20251031",
+        "alexgshaw/nginx-request-logging:20251031",
+        "alexgshaw/multi-source-data-merger:20251031",
+        "alexgshaw/reshard-c4-data:20251031",
+        "alexgshaw/sanitize-git-repo:20251031",
+        "alexgshaw/kv-store-grpc:20251031",
+        "alexgshaw/mailman:20251031",
+        "alexgshaw/cancel-async-tasks:20251031",
+        "alexgshaw/constraints-scheduling:20251031",
+        "alexgshaw/financial-document-processor:20251031",
+        "alexgshaw/fix-code-vulnerability:20251031",
+        "alexgshaw/git-leak-recovery:20251031",
+        "alexgshaw/headless-terminal:20251031",
+        "alexgshaw/modernize-scientific-stack:20251031",
+        "alexgshaw/pypi-server:20251031"
+      ],
+      "pull_error": null,
+      "race": {
+        "tasks": 27,
+        "arms": 4,
+        "lanes": 108,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 27,
+        "build_wall_min_total": 297.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "cobol-modernization",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "build-cython-ext",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "mteb-retrieve",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "sparql-university",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "sqlite-db-truncate",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "hf-model-inference",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "db-wal-recovery",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "git-multibranch",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "nginx-request-logging",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "multi-source-data-merger",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "reshard-c4-data",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "sanitize-git-repo",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "kv-store-grpc",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "fix-git",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "mailman",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "cancel-async-tasks",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "constraints-scheduling",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "financial-document-processor",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "git-leak-recovery",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "headless-terminal",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "modernize-scientific-stack",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "pypi-server",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "regex-log",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 27,
+      "arms": 4,
+      "lanes": 108,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 27,
+      "build_wall_min_total": 297.0,
+      "build_wall_min_max": 11.0,
+      "peak_disk_gb": 2.18,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "27 task race(s) x 4 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "cobol-modernization",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "build-cython-ext",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "mteb-retrieve",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "sparql-university",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "hf-model-inference",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "db-wal-recovery",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "git-multibranch",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "nginx-request-logging",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "multi-source-data-merger",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "reshard-c4-data",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "sanitize-git-repo",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "kv-store-grpc",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "fix-git",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "mailman",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "cancel-async-tasks",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "constraints-scheduling",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "financial-document-processor",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "git-leak-recovery",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "headless-terminal",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "pypi-server",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "regex-log",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:a0e778b88ed284bd290e04cf217663d4b7638c66f7f2f552bde37e5bd3ed596d",
+    "ledger_fingerprint": "sha256:44e03231c8d377d2",
+    "seed": 153311094243115,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code-gw-deepseek",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "deepseek-v4.1-flash",
+          "effort": "high",
+          "config_hash": "412355368dd71f5c",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:deepseek-v4.1-flash prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.007932,
+          "p50": 0.004449,
+          "p90": 0.01691
+        },
+        "total": {
+          "p10": 0.079819,
+          "p50": 0.173238,
+          "p90": 0.380104
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.14,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 94.56,
+          "p90": 105.6
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-deepseek-tr",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "deepseek-v4.1-flash-translated",
+          "effort": "high",
+          "config_hash": "2cced94a29597150",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:deepseek-v4.1-flash-translated prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.008164,
+          "p50": 0.004532,
+          "p90": 0.017636
+        },
+        "total": {
+          "p10": 0.078368,
+          "p50": 0.173884,
+          "p90": 0.377833
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.14,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 94.85,
+          "p90": 105.34
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-kimi",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "kimi-k3-fireworks",
+          "effort": "high",
+          "config_hash": "813a3b064b60dac0",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:kimi-k3-fireworks prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.118526,
+          "p50": 0.066031,
+          "p90": 0.2502
+        },
+        "total": {
+          "p10": 1.17942,
+          "p50": 2.510202,
+          "p90": 5.595323
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.08,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 94.17,
+          "p90": 104.99
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-sol",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "gpt-6.1-sol",
+          "effort": "medium",
+          "config_hash": "6938b8ab5ac2251b",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:gpt-6.1-sol prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.061692,
+          "p50": 0.036083,
+          "p90": 0.131621
+        },
+        "total": {
+          "p10": 0.654706,
+          "p50": 1.441296,
+          "p90": 3.107906
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.08,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 94.13,
+          "p90": 105.49
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 2.854996,
+        "p50": 4.690112,
+        "p90": 8.144029
+      },
+      "budget_usd": 20.0,
+      "p_within_budget": 0.999,
+      "suggested_budget_usd": 9.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "claude-code-gw-deepseek",
+        "claude-code-gw-deepseek-tr",
+        "claude-code-gw-kimi",
+        "claude-code-gw-sol"
+      ],
+      "inflight_allowance_usd": 2.0016,
+      "wall_minutes": {
+        "p50": 418.42,
+        "p90": 425.3
+      },
+      "peak_containers": 4,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 27,
+        "arms": 4,
+        "max_containers": 6,
+        "build_wall_min_total": 297.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "images_to_build": 27
+      }
+    },
+    "pairing": [],
+    "reuse": {
+      "tasks": 0,
+      "trials": 0,
+      "cost_avoided_usd": 0.0,
+      "unpriced_tasks": 0,
+      "arms": []
+    },
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 108,
+    "trials_reused": 0,
+    "trials_to_run": 108,
+    "cost_avoided_usd": 0.0,
+    "skipped_arms": [],
+    "arms": [
+      {
+        "arm": "claude-code-gw-deepseek",
+        "family": "claude-code",
+        "config_hash": "412355368dd71f5c",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "claude-code-gw-deepseek-tr",
+        "family": "claude-code",
+        "config_hash": "2cced94a29597150",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "claude-code-gw-kimi",
+        "family": "claude-code",
+        "config_hash": "813a3b064b60dac0",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "claude-code-gw-sol",
+        "family": "claude-code",
+        "config_hash": "6938b8ab5ac2251b",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-11-04T20:40:16+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:d7aa7bb86919c067ce37b50028c604a3579781b8627a1382f9188cc3340c3495",
+  "ledger_fingerprint": "sha256:44e03231c8d377d2",
+  "reuse_fingerprint": "sha256:276648c0b0466bef"
+}

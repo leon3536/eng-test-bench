@@ -53,7 +53,10 @@ from .harnesses import is_import_path, reports_mispriced_cost
 #    verdict by hand from config/answer_lookups.yaml (answer_lookup_verdict); see lookups.py.
 # 10: DeepSeek Harness's answer lookups judged from the tool calls and results in its dsh.jsonl, which has
 #    no ATIF trajectory: they were a text search left for a person (used null).
-PARSER_VERSION = 10
+# 11: a gateway model's usage under the upstream id its streams carry (providers.<name>.upstream_models:
+#    LiteLLM's message_start names Fireworks' accounts/fireworks/models/... id) joins the arm's own model,
+#    primary and priced at the gateway name's row, instead of reading as a fallback model left unpriced.
+PARSER_VERSION = 11
 
 # Text in a failed trial's message that means the harness never got going.
 SETUP_SIGNATURES: tuple[str, ...] = ("No module named", "ModuleNotFoundError", "command not found",
@@ -85,6 +88,13 @@ class RunContext:
     dataset: str | None
     local_snapshot: str | None
     family: str | None = None   # the arm's configured family (run.json resolved_arms), if any
+    # A gateway arm's base_url as planned, ${VAR}/route (keys.base_url_template). The trial's
+    # config holds the address it ran against; this stands in for it, so moving the gateway
+    # keeps one configuration and its address stays out of the ledger.
+    base_url: str | None = None
+    # The upstream id the arm's gateway model streams back as (provider_upstreams): usage
+    # under it is the arm's own model's.
+    upstream_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -226,18 +236,18 @@ def default_roots(extra: Sequence[Path] = ()) -> list[ScanRoot]:
     return roots
 
 
-def provider_prefixes(config_dir: Path | None = None) -> dict[str, str]:
-    """{model_prefix: provider} from every bench config, for jobs that carry
-    no run.json: 'fireworks_ai/accounts/fireworks/models/' -> 'fireworks'."""
-    config_dir = Path(config_dir or settings.CONFIG_DIR)
-    out: dict[str, str] = {}
+def _config_paths(config_dir: Path) -> list[Path]:
+    """Every bench config (profile) in config_dir."""
     try:
         paths = sorted(config_dir.glob("*.yaml"))
     except OSError:
-        return out
+        return []
+    return [p for p in paths if not p.name.endswith(".overrides.yaml")
+            and p.name not in ("pricing.yaml", "reference.yaml", "overrides.yaml")]
+
+
+def _provider_specs(paths: Sequence[Path]) -> Iterator[tuple[str, Mapping[str, Any]]]:
     for p in paths:
-        if p.name.endswith(".overrides.yaml") or p.name in ("pricing.yaml", "reference.yaml", "overrides.yaml"):
-            continue
         try:
             data = yaml.safe_load(p.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError, UnicodeDecodeError):
@@ -246,10 +256,59 @@ def provider_prefixes(config_dir: Path | None = None) -> dict[str, str]:
         if not isinstance(providers, dict):
             continue
         for name, spec in providers.items():
-            prefix = spec.get("model_prefix") if isinstance(spec, dict) else None
-            if isinstance(prefix, str) and prefix:
-                out.setdefault(prefix, str(name))
+            if isinstance(spec, dict):
+                yield str(name), spec
+
+
+def provider_prefixes(config_dir: Path | None = None) -> dict[str, str]:
+    """{model_prefix: provider} from every bench config, for jobs that carry
+    no run.json: 'fireworks_ai/accounts/fireworks/models/' -> 'fireworks'."""
+    out: dict[str, str] = {}
+    for name, spec in _provider_specs(_config_paths(Path(config_dir or settings.CONFIG_DIR))):
+        prefix = spec.get("model_prefix")
+        if isinstance(prefix, str) and prefix:
+            out.setdefault(prefix, name)
     return out
+
+
+# config_dir -> (its configs' (name, mtime, size), provider_upstreams' answer): a context is
+# built per arm on every scan, and the files rarely change.
+_UPSTREAMS: dict[str, tuple[tuple[tuple[str, int, int], ...], dict[str, dict[str, str]]]] = {}
+
+
+def provider_upstreams(config_dir: Path | None = None) -> dict[str, dict[str, str]]:
+    """{provider: {model: upstream id}} from every bench config's
+    upstream_models: the id a gateway model's streamed replies carry. It is
+    a fact about the gateway, not a run, so the current files decide it for
+    a first parse and a re-derive alike (run.json's copy is not read)."""
+    config_dir = Path(config_dir or settings.CONFIG_DIR)
+    paths = _config_paths(config_dir)
+    stamp = []
+    for p in paths:
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        stamp.append((p.name, st.st_mtime_ns, st.st_size))
+    hit = _UPSTREAMS.get(str(config_dir))
+    if hit is not None and hit[0] == tuple(stamp):
+        return hit[1]
+    out: dict[str, dict[str, str]] = {}
+    for name, spec in _provider_specs(paths):
+        declared = spec.get("upstream_models")
+        if isinstance(declared, dict):
+            for model, upstream in declared.items():
+                if isinstance(model, str) and isinstance(upstream, str) and upstream:
+                    out.setdefault(name, {}).setdefault(model, upstream)
+    _UPSTREAMS[str(config_dir)] = (tuple(stamp), out)
+    return out
+
+
+def upstream_of(provider: str | None, model: str | None) -> str | None:
+    """The upstream id this provider's model streams back as, if a config declares one."""
+    if not provider or not model:
+        return None
+    return provider_upstreams().get(provider, {}).get(model)
 
 
 def _find(items: Any, name: str) -> Mapping[str, Any]:
@@ -290,6 +349,9 @@ def context_for_bench_arm(run: Mapping[str, Any], arm: str, profile: str) -> Run
     if snapshot and snapshot.get("dataset") and snapshot.get("downloaded_at"):
         local = f"local:{snapshot['dataset']}@{snapshot['downloaded_at']}"
     family = resolved.get("family") or planned.get("family") or configured.get("family") or None
+    planned_url = next((k.get("value") for k in resolved.get("kwargs") or []
+                        if isinstance(k, Mapping) and k.get("name") == "base_url"), None)
+    bare = resolved.get("model") or configured.get("model")
     return RunContext(
         run_key=f"{profile}/{run_id}", profile=profile, run_id=run_id, source="bench", arm=arm,
         provider=str(provider) if provider else None,
@@ -297,6 +359,8 @@ def context_for_bench_arm(run: Mapping[str, Any], arm: str, profile: str) -> Run
         effort_label=str(effort_label) if effort_label is not None else None,
         dataset=str(dataset) if dataset else None, local_snapshot=local,
         family=str(family) if family else None,
+        base_url=planned_url if isinstance(planned_url, str) and planned_url.startswith("${") else None,
+        upstream_model=upstream_of(str(provider) if provider else None, bare if isinstance(bare, str) else None),
     )
 
 
@@ -434,15 +498,34 @@ def split_model(harbor_model: str, ctx: RunContext, prefixes: Mapping[str, str],
     return "unknown", harbor_model
 
 
-def canonical_model(reported: str, ctx: RunContext, prefixes: Mapping[str, str]) -> str:
+def canonical_model(reported: str, ctx: RunContext, prefixes: Mapping[str, str], model: str | None = None) -> str:
     """A model_usage key without its provider prefix, so pi's
-    'openrouter/deepseek/x' and Claude Code's 'deepseek/x' are one model."""
+    'openrouter/deepseek/x' and Claude Code's 'deepseek/x' are one model.
+    Given the arm's model, the upstream id it streams back as
+    (ctx.upstream_model) is that model, so the two names make one entry."""
+    key = reported
     if ctx.model_prefix and reported.startswith(ctx.model_prefix):
-        return reported[len(ctx.model_prefix):]
-    for prefix in sorted(prefixes, key=len, reverse=True):
-        if prefix and reported.startswith(prefix) and (ctx.provider is None or prefixes[prefix] == ctx.provider):
-            return reported[len(prefix):]
-    return reported
+        key = reported[len(ctx.model_prefix):]
+    else:
+        for prefix in sorted(prefixes, key=len, reverse=True):
+            if prefix and reported.startswith(prefix) and (ctx.provider is None or prefixes[prefix] == ctx.provider):
+                key = reported[len(prefix):]
+                break
+    if model and settings.streamed_as(key, ctx.upstream_model):
+        return model
+    return key
+
+
+def _note_upstream(entry: dict[str, Any], reported: str, key: str, ctx: RunContext,
+                   prefixes: Mapping[str, str]) -> None:
+    """Names, in upstream_id, the upstream id whose tokens canonical_model
+    joined to this entry (the arm's model). reported_as keeps the gateway's
+    own name whichever came first, so a re-read in another key order (the
+    stored result is sorted) stores the same entry."""
+    if key != canonical_model(reported, ctx, prefixes):
+        entry["upstream_id"] = reported
+    elif entry.get("upstream_id") and entry["reported_as"] == entry["upstream_id"]:
+        entry["reported_as"] = reported
 
 
 def is_primary(canonical: str, model: str) -> bool:
@@ -493,12 +576,21 @@ def _label_value(value: Any) -> str:
 def config_identity(trial_cfg: Mapping[str, Any], family: str, implementation: str, provider: str,
                     model: str) -> tuple[str, dict, str]:
     """(hash, identity, label). The hash covers what changes what is measured;
-    arm name, versions, concurrency, ids, paths and env are left out, so the
-    same settings under two arm names pool, and version drift is its own column.
+    arm name, versions, concurrency, ids, paths and env (but for agent_env's
+    model selectors) are left out, so the same settings under two arm names
+    pool, and version drift is its own column.
     Option values are redacted first: the identity is stored and exported."""
     agent = trial_cfg.get("agent") if isinstance(trial_cfg.get("agent"), Mapping) else {}
     rx = _secret_regex()
-    kwargs = _redacted_options(agent.get("kwargs"), rx)
+    raw = dict(agent["kwargs"]) if isinstance(agent.get("kwargs"), Mapping) else {}
+    # An arm's agent_env reaches Harbor as --ae, so the trial holds it in agent.env.
+    # Back among the options, as the planner has it (runs.agent_kwargs): the
+    # models Claude Code picks for aliases and subagents change what is measured.
+    env = agent.get("env") if isinstance(agent.get("env"), Mapping) else {}
+    picked = {k: str(env[k]) for k in sorted(settings.AGENT_ENV_NAMES) if k in env}
+    if picked:
+        raw[settings.AGENT_ENV_OPTION] = picked
+    kwargs = _redacted_options(raw, rx)
     effort = kwargs.pop("reasoning_effort", None)
     effort = None if effort is None else str(effort)
     options = {str(k): _normalize(v) for k, v in sorted(kwargs.items(), key=lambda kv: str(kv[0]))}
@@ -971,10 +1063,11 @@ def _usage(result: Mapping, ctx: RunContext, prefixes: Mapping[str, str], model:
         for reported, u in (c.get("model_usage") or {}).items():
             if not isinstance(u, Mapping):
                 continue
-            key = canonical_model(str(reported), ctx, prefixes)
+            key = canonical_model(str(reported), ctx, prefixes, model)
             entry = usage.setdefault(key, {"reported_as": str(reported), "n_input": None, "n_cache": None,
                                            "n_output": None, "reported_cost_usd": None,
                                            "primary": is_primary(key, model), "synthesized": False})
+            _note_upstream(entry, str(reported), key, ctx, prefixes)
             for src, dst in (("n_input_tokens", "n_input"), ("n_cache_tokens", "n_cache"),
                              ("n_output_tokens", "n_output"), ("cost_usd", "reported_cost_usd")):
                 value = u.get(src)
@@ -1609,10 +1702,12 @@ def _recovered_usage(found: tuple[str, list[_Call]], ctx: RunContext, prefixes: 
     where, calls = found
     usage: dict[str, dict[str, Any]] = {}
     for reported, n_in, n_cache, n_out, cost, *_writes in calls:
-        key = canonical_model(reported, ctx, prefixes) if reported else model
+        key = canonical_model(reported, ctx, prefixes, model) if reported else model
         entry = usage.setdefault(key, {"reported_as": reported, "n_input": 0, "n_cache": 0, "n_output": 0,
                                        "reported_cost_usd": None, "primary": is_primary(key, model),
                                        "synthesized": True, "recovered_from": where})
+        if reported:
+            _note_upstream(entry, reported, key, ctx, prefixes)
         entry["n_input"] += n_in
         entry["n_cache"] += n_cache
         entry["n_output"] += n_out
@@ -1653,10 +1748,13 @@ def _same_name(reported: str, key: str) -> bool:
     return a == b or settings.is_variant(a, b) or settings.is_variant(b, a)
 
 
-def _entry_key(usage: Mapping[str, Mapping[str, Any]], reported: str | None, model: str) -> str | None:
-    """The usage entry a logged call belongs to: its model's, else (a log
-    without model names) the one model that used tokens, the configured one
-    among several, or none."""
+def _entry_key(usage: Mapping[str, Mapping[str, Any]], reported: str | None, model: str,
+               upstream: str | None = None) -> str | None:
+    """The usage entry a logged call belongs to: its model's (the arm's for
+    the upstream id it streams back as), else (a log without model names)
+    the one model that used tokens, the configured one among several, or none."""
+    if reported and model in usage and settings.streamed_as(reported, upstream):
+        return model
     if reported:
         for key in usage:
             if _same_name(reported, key):
@@ -1706,7 +1804,7 @@ def _gap_call(usage: Mapping[str, Mapping[str, Any]], calls: Sequence[_Call], co
 
 def assign_cache_writes(usage: dict[str, dict[str, Any]], calls: Sequence[_Call] | None, provider: str, model: str,
                         table: Mapping[str, Mapping[str, settings.Price]], *, cost: float | None = None,
-                        missing: str = "no harness log") -> dict[str, Any]:
+                        missing: str = "no harness log", upstream: str | None = None) -> dict[str, Any]:
     """Sets n_cache_write_5m and n_cache_write_1h on the usage entries the
     log's calls belong to, and returns the flags this raises. A call's writes
     come from the log, else from its own cost (_writes_from_cost); Harbor's
@@ -1714,7 +1812,8 @@ def assign_cache_writes(usage: dict[str, dict[str, Any]], calls: Sequence[_Call]
     costed from the harness's total `cost`. An entry with a call whose writes
     stay unknown keeps the known ones; an entry the log names none for, on a
     model whose price has write rates, is flagged cache_writes_unknown with
-    the reason (`missing` when there is no log at all)."""
+    the reason (`missing` when there is no log at all). upstream is the id
+    the arm's model streams back as (RunContext.upstream_model)."""
     calls = list(calls or [])
     if calls:
         gap = _gap_call(usage, calls, cost)
@@ -1723,7 +1822,7 @@ def assign_cache_writes(usage: dict[str, dict[str, Any]], calls: Sequence[_Call]
     sums: dict[str, list[int]] = {}
     unknown = 0
     for call in calls:
-        key = _entry_key(usage, call[0], model)
+        key = _entry_key(usage, call[0], model, upstream)
         price = pricing.lookup(table, provider, key) if key is not None else None
         writes = (call[5], call[6] or 0) if call[5] is not None else _writes_from_cost(call, price)
         if key is None or writes is None:
@@ -1761,7 +1860,7 @@ def _stored_writes(usage: dict[str, dict[str, Any]], stored: Mapping[str, Any]) 
 
 def trial_flags(flags: dict[str, Any], usage: Mapping[str, Mapping[str, Any]], provider: str, family: str,
                 table: Mapping[str, Mapping[str, settings.Price]], reported: float | None,
-                computed: float | None) -> dict[str, Any]:
+                computed: float | None, model: str | None = None) -> dict[str, Any]:
     """The flags with what the prices add: each declined attempt's cost at
     today's rates (an upper bound: whether it was billed is unknown), and a
     harness-reported cost more than REPORTED_COST_TOLERANCE from the computed
@@ -1780,7 +1879,7 @@ def trial_flags(flags: dict[str, Any], usage: Mapping[str, Mapping[str, Any]], p
         declined["cost_usd_max"] = total
     flags.pop("reported_cost_mismatch", None)
     if (reported is not None and reported > 0 and computed is not None and computed > 0
-            and not reports_mispriced_cost(family, provider)):
+            and not reports_mispriced_cost(family, provider, model)):
         diff = (reported - computed) / computed
         if abs(diff) > REPORTED_COST_TOLERANCE:
             flags["reported_cost_mismatch"] = {"reported_usd": reported, "computed_usd": computed,
@@ -1815,7 +1914,7 @@ def _first(markers: Sequence[str], text: str) -> str | None:
 
 def _priced(usage: dict[str, dict[str, Any]], provider: str, model: str, family: str,
             log: HarnessLog | None, stored: Mapping[str, Any] | None,
-            reported: float | None) -> tuple[float | None, str | None, dict[str, Any]]:
+            reported: float | None, upstream: str | None = None) -> tuple[float | None, str | None, dict[str, Any]]:
     """(cost, pricing sha, flags) once the usage carries its cache writes:
     from the log, else (a re-derive whose trial folder is gone) as stored."""
     try:
@@ -1829,11 +1928,12 @@ def _priced(usage: dict[str, dict[str, Any]], provider: str, model: str, family:
         flags["trial_folder_missing"] = True
     flags.update(assign_cache_writes(usage, log.calls if log is not None else None, provider, model, table or {},
                                      cost=reported, missing="trial folder gone" if stored is not None
-                                     else "no harness log"))
+                                     else "no harness log", upstream=upstream))
     if table is None:
         return None, None, flags
     cost, _unpriced = pricing.price_usage(usage, provider, table)
-    return cost, pricing.table_sha(), trial_flags(flags, usage, provider, family, table, reported, cost)
+    return cost, pricing.table_sha(), trial_flags(flags, usage, provider, family, table, reported, cost,
+                                                         model)
 
 
 def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, job_lock: Mapping | None,
@@ -1849,6 +1949,10 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
     host the run's host load samples (hostload.jsonl), None for none kept."""
     agent = trial_cfg.get("agent") if isinstance(trial_cfg.get("agent"), Mapping) else {}
     kwargs = agent.get("kwargs") if isinstance(agent.get("kwargs"), Mapping) else {}
+    if ctx.base_url and kwargs.get("base_url"):
+        kwargs = {**kwargs, "base_url": ctx.base_url}
+        agent = {**agent, "kwargs": kwargs}
+        trial_cfg = {**trial_cfg, "agent": agent}
     info = (result or {}).get("agent_info") if isinstance((result or {}).get("agent_info"), Mapping) else {}
     implementation = _implementation(agent)
     agent_name = agent.get("name") if isinstance(agent.get("name"), str) and not is_import_path(agent["name"]) else None
@@ -1901,7 +2005,8 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
         reported = math.fsum(costs) if costs else None
         cost, pricing_sha, flags = None, None, dict(log.flags) if log else {}
         if usage:
-            cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, None, reported)
+            cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, None, reported,
+                                               ctx.upstream_model)
         flags = lookups.with_verdict(flags, common["trial_key"])
         return TrialFacts(
             **common, trial_uid=None, reward=None, rewards_json=None, passed=None, exception_type=None,
@@ -1924,7 +2029,8 @@ def _build(*, result: Mapping | None, trial_cfg: Mapping, lock: Mapping | None, 
         totals = _usage_totals(usage, totals[3])
     cost, pricing_sha, flags = None, None, dict(log.flags) if log is not None else {}
     if usage:
-        cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, stored, totals[3])
+        cost, pricing_sha, flags = _priced(usage, provider, model, str(family), log, stored, totals[3],
+                                           ctx.upstream_model)
     flags = _host_flags(flags, result, host, stored)
     if log is None and stored is not None and not usage and lookups.FLAG in (stored.get("flags") or {}):
         flags[lookups.FLAG] = stored["flags"][lookups.FLAG]  # _priced keeps it when there is usage

@@ -1,5 +1,10 @@
 .venv/
-.env
+# Keys: .env and any copy of it (.env.local, .env.bak, ...). An .env.example
+# with placeholder values may be tracked.
+.env*
+!.env.example
+# Logs from any tool run outside jobs/ (anything written there is ignored already).
+*.log
 # Run data and downloads. Anchored to the project root (and to each profile)
 # so folders of the same name under tests/fixtures stay tracked.
 /jobs/
@@ -8,6 +13,9 @@ profiles/*/jobs/
 profiles/*/runs/
 profiles/*/assistant/
 profiles/*/queue.json
+profiles/*/datasets/
+profiles/*/ledger/
+profiles/*/prebake/
 /datasets/
 /ledger/
 /assistant/

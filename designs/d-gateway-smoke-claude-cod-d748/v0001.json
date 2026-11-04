@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "design_id": "d-gateway-smoke-claude-cod-d748",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-04T18:08:53+00:00",
+  "profile": "default",
+  "title": "Gateway smoke: Claude Code on 4 non-Claude models",
+  "purpose": "Check Claude Code runs end to end through a self-hosted LiteLLM gateway on DeepSeek (native and translated), Kimi K3 and GPT-6.1 Sol",
+  "rationale": "Two quick tasks per arm; verify the route, usage, model names and that no tokens go to Claude models before a full run.",
+  "change_note": "First version",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "regex-log",
+      "fix-git"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-gw-deepseek",
+    "run": {
+      "budget_usd": 5.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash-translated",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-sol",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "gpt-6.1-sol",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:08c4f2dc4fede79ebf0ec9561bada87c59c0b5cd786f91d27a2dda2a3817ec25"
+}

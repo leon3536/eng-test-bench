@@ -25,7 +25,14 @@ gets a scrubbed copy of the environment from child_env():
   an arm's effort, thinking, turn limit, models or caching without the plan
   showing it.
   They are not secrets, so secret_values() leaves them alone.
-- Only the key for that arm's provider is put back.
+- Every gateway URL variable a loaded config names (any provider's
+  base_url_env, settings.GATEWAY_URL_VARS) is removed too, whatever its name.
+- Only the key for that arm's provider is put back, and for a gateway
+  provider the variable holding its URL. Harbor never reads that variable:
+  the arm's base_url is written ${VAR}/route in the plan, and build_command
+  fills it in from this env (expand_base_url), so the address stays out of
+  plans, run.json, the arm log (hide_gateway_urls) and the config hash.
+  Harbor's own job and trial config.json files under jobs/ do hold it.
 - .env loading is switched off in the child (PYTHON_DOTENV_DISABLED,
   LITELLM_MODE=PRODUCTION). LiteLLM calls load_dotenv() on import, and from
   inside .venv that walks up to this project's .env and would restore every
@@ -44,10 +51,11 @@ import re
 import threading
 import time
 from typing import Any, Callable, TypeVar
+from urllib.parse import urlsplit
 
 from dotenv import dotenv_values, set_key, unset_key
 
-from .settings import ENV_FILE, ROOT, Config, Provider
+from .settings import ENV_FILE, GATEWAY_URL_VARS, ROOT, Config, ConfigError, Provider
 
 # The run-design assistant's key. It has a Setup row of its own when no
 # provider uses it (the dev profile runs everything through OpenRouter).
@@ -193,13 +201,67 @@ def secret_values() -> list[str]:
     return sorted(values, key=lambda v: (-len(v), v))
 
 
+def base_url_template(provider: Provider, route: str | None) -> str:
+    """A gateway arm's base_url as plans and run.json show it: ${VAR}/route.
+    No route, "" or "/" is the gateway's root."""
+    return f"${{{provider.base_url_env}}}{(route or '').rstrip('/')}"
+
+
+def base_url_problem(provider: Provider) -> str | None:
+    """Why a gateway provider's URL cannot be used, in words that never repeat it."""
+    name = provider.base_url_env
+    if not name:
+        return None
+    value = (os.environ.get(name) or "").strip()
+    if not value:
+        return f"{name} is not set"
+    parts = urlsplit(value)
+    if (parts.scheme not in ("http", "https") or not parts.hostname or "@" in parts.netloc
+            or parts.query or parts.fragment):
+        return f"{name} is not a plain http(s) URL (scheme, host, optional port and path)"
+    return None
+
+
+def expand_base_url(value: Any, env: dict[str, str]) -> Any:
+    """base_url_template's ${VAR} filled in from a child env; anything else
+    unchanged. Missing or empty is an error: Claude Code on a provider Harbor
+    does not know would otherwise fall back to that provider's public URL."""
+    if not (isinstance(value, str) and value.startswith("${")):
+        return value
+    name, _, route = value[2:].partition("}")
+    root = (env.get(name) or "").strip().rstrip("/")
+    if not root:
+        raise ConfigError(f"{name} is not set, so this gateway arm has no endpoint")
+    return root + route
+
+
+def hide_gateway_urls(cmd: list[str], env: dict[str, str]) -> list[str]:
+    """cmd with each gateway URL from this child env written back as ${VAR},
+    for showing the command: in a log, the address would be served to anyone
+    reading it."""
+    roots = sorted(((name, (env.get(name) or "").strip().rstrip("/")) for name in GATEWAY_URL_VARS),
+                   key=lambda pair: -len(pair[1]))
+    roots = [(name, root) for name, root in roots if root]
+    out = []
+    for part in cmd:
+        for name, root in roots:
+            part = part.replace(root, f"${{{name}}}")
+        out.append(part)
+    return out
+
+
 def child_env(provider: Provider | None) -> dict[str, str]:
+    gateways = {name.upper() for name in GATEWAY_URL_VARS}
     env = {k: v for k, v in os.environ.items()
-           if not _is_secret(k) and not _is_endpoint(k) and not _is_harness_selector(k)}
+           if not _is_secret(k) and not _is_endpoint(k) and not _is_harness_selector(k)
+           and k.upper() not in gateways}
     if provider is not None:
         value = get_secret(provider.env_key)
         if value:
             env[provider.env_key] = value
+        if provider.base_url_env and os.environ.get(provider.base_url_env):
+            # Put back by name: every gateway's variable was removed above.
+            env[provider.base_url_env] = os.environ[provider.base_url_env]
     env["PYTHON_DOTENV_DISABLED"] = "1"
     env["LITELLM_MODE"] = "PRODUCTION"
     root = str(ROOT)

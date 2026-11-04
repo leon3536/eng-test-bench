@@ -24,6 +24,10 @@ TURN_CAPS = ("max_turns",)
 # is the only provider whose prices the harness knows.
 CAP_PRICED_FOR: dict[tuple[str, str], str] = {("claude-code", "max_budget_usd"): "anthropic"}
 _CAP_PRICED_FOR = CAP_PRICED_FOR  # the name schemas.py used before the move
+# The model names each of those providers' prices cover wherever the model is
+# served: Claude Code prices a claude-* model right on a gateway that passes it
+# on to Anthropic, so the gateway Opus arm keeps the cap the direct arm has.
+_PRICED_MODEL_PREFIX = {"anthropic": "claude-"}
 
 MISPRICED_CAP = ("Not applied: this harness prices other providers' models at its own rates, "
                  "so its cap would stop trials early. The turn cap and run budget still apply.")
@@ -39,16 +43,24 @@ def is_import_path(agent: str) -> bool:
     return isinstance(agent, str) and _IMPORT_PATH.fullmatch(agent) is not None
 
 
-def cap_misprices_for(family: str, provider: str, option: str) -> bool:
-    """The harness would price this cap at another provider's rates."""
+def _priced_right(priced_for: str, provider: str, model: str | None) -> bool:
+    if provider == priced_for:
+        return True
+    prefix = _PRICED_MODEL_PREFIX.get(priced_for)
+    return bool(prefix and isinstance(model, str) and model.rsplit("/", 1)[-1].startswith(prefix))
+
+
+def cap_misprices_for(family: str, provider: str, option: str, model: str | None = None) -> bool:
+    """The harness would price this cap at another provider's rates. Without
+    the model, any provider but the one it knows counts as mispriced."""
     priced_for = CAP_PRICED_FOR.get((family, option))
-    return priced_for is not None and provider != priced_for
+    return priced_for is not None and not _priced_right(priced_for, provider, model)
 
 
-def reports_mispriced_cost(family: str, provider: str) -> bool:
+def reports_mispriced_cost(family: str, provider: str, model: str | None = None) -> bool:
     """The harness's own cost figure uses another provider's prices, so it
     must not be trusted over the bench's computed cost on this provider."""
-    return any(f == family and priced_for != provider
+    return any(f == family and not _priced_right(priced_for, provider, model)
                for (f, _option), priced_for in CAP_PRICED_FOR.items())
 
 
@@ -60,7 +72,8 @@ def usable_reported_cost(row: Mapping[str, Any]) -> float | None:
     reported = row.get("reported_cost_usd")
     used_tokens = bool((row.get("n_input") or 0) + (row.get("n_output") or 0))
     if (reported is not None and (float(reported) > 0 or not used_tokens)
-            and not reports_mispriced_cost(row.get("family") or "", row.get("provider") or "")):
+            and not reports_mispriced_cost(row.get("family") or "", row.get("provider") or "",
+                                           row.get("model"))):
         return float(reported)
     return None
 

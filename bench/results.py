@@ -32,7 +32,7 @@ from typing import Any
 from harbor.models.trial.error_policy import FailureCause, policy_for
 
 from . import classify, extract, fsutil, harnesses, lookups, pricing, stats
-from .settings import EFFORT_INHERIT, JOBS_DIR, Arm, Config, Price, is_variant
+from .settings import EFFORT_INHERIT, JOBS_DIR, Arm, Config, Price, is_variant, streamed_as
 
 # Failures that end a trial before it is a task attempt. Harbor still runs the
 # verifier after some of them (a provider error is a NonZeroAgentExitCodeError
@@ -83,7 +83,7 @@ def _writes(path: Path, cfg: Config, arm: Arm, usage: dict[str, tuple[int, int, 
                for m, u in usage.items()}
     log = extract.read_harness_log(path.parent)
     extract.assign_cache_writes(entries, log.calls if log is not None else None, arm.provider, arm.model,
-                                cfg.pricing, cost=cost)
+                                cfg.pricing, cost=cost, upstream=cfg.upstream_model(arm.provider, arm.model))
     found = {m: pricing.cache_writes(e) for m, e in entries.items() if "n_cache_write_5m" in e}
     if len(_WRITES) >= _WRITES_KEEP:
         _WRITES.clear()
@@ -175,12 +175,16 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
     # Zero-token entries are skipped, as Harbor's own cost estimate does: Claude
     # Code records error and interrupt messages under model '<synthetic>' with
     # no usage, and listing one as unpriced would undo the spend rule below.
-    usage = {}
+    # Tokens a gateway reports under the upstream id the arm's model streams
+    # back as are that model's, as in the ledger (extract.canonical_model).
+    upstream = cfg.upstream_model(arm.provider, arm.model)
+    usage: dict[str, tuple[int, int, int]] = {}
     for model, u in (ctx.get("model_usage") or {}).items():
         u = u or {}
         counts = tuple(u.get(k) or 0 for k in ("n_input_tokens", "n_cache_tokens", "n_output_tokens"))
         if counts[0] or counts[2]:
-            usage[model] = counts
+            name = arm.model if streamed_as(str(model), upstream) else model
+            usage[name] = tuple(a + b for a, b in zip(usage.get(name, (0, 0, 0)), counts))
     usage_by_arm = not usage  # no per-model breakdown: price the totals as the arm's model
     if usage_by_arm:
         usage = {arm.model: (n_input, n_cache, n_output)}
@@ -242,7 +246,7 @@ def read_trial(path: Path, cfg: Config, arm: Arm) -> dict[str, Any] | None:
         "unpriced_floor_cost": floor,
         # The harness's own cost uses another provider's prices (Claude Code
         # prices DeepSeek tokens at Claude rates, about 50x too high).
-        "reported_mispriced": harnesses.reports_mispriced_cost(arm.family or arm.agent, arm.provider),
+        "reported_mispriced": harnesses.reports_mispriced_cost(arm.family or arm.agent, arm.provider, arm.model),
         "unpriced_models": unpriced,
         "models": [] if usage_by_arm else sorted(usage),
         "other_model_tokens": other_tokens,
@@ -273,7 +277,9 @@ def spend(row: dict[str, Any]) -> float:
     The harness's figure includes what ours cannot see (cache writes its log
     does not give, Haiku's long-prompt rate, OpenRouter's billed routing). The one
     exception is a harness that prices this provider's models at another
-    provider's rates; when every model is in our table, ours is used there."""
+    provider's rates; when every model is in our table, ours is used there.
+    A gateway model's tokens under its upstream id are in the table: read_trial
+    gives them the arm's model (Provider.upstream_models)."""
     computed, reported = row["computed_cost"], row["reported_cost"]
     if computed is not None and not row["unpriced_models"] and row.get("reported_mispriced"):
         return computed

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import datasets, designs, extract, harnesses, pricing, report, stats
-from .settings import EFFORT_INHERIT, EFFORT_OMIT, SCHEDULE_TASKS, Config, Price, RunSettings
+from .settings import AGENT_ENV_OPTION, EFFORT_INHERIT, EFFORT_OMIT, SCHEDULE_TASKS, Config, Price, RunSettings
 from .spec import ArmSpec, race_lane_slots, race_peak, spec_from_design
 
 REPLICATES = 2000
@@ -148,7 +148,8 @@ def spend_of(row: Mapping[str, Any]) -> float | None:
     computed, reported = row.get("cost_usd"), row.get("reported_cost_usd")
     if computed is None and reported is None:
         return None
-    if computed is not None and harnesses.reports_mispriced_cost(row.get("family") or "", row.get("provider") or ""):
+    if computed is not None and harnesses.reports_mispriced_cost(row.get("family") or "", row.get("provider") or "",
+                                                                 row.get("model")):
         return float(computed)
     return max(float(computed or 0.0), float(reported or 0.0))
 
@@ -263,7 +264,8 @@ def _cell_summary(cfg: Config, key: tuple[str, ...], rows: list[Mapping[str, Any
         "spend_per_trial": _summary(spends),
         "reported_cost_per_trial": {"mean": _money(math.fsum(reported) / len(reported)) if reported else None,
                                     "n": len(reported),
-                                    "harness_misprices_provider": harnesses.reports_mispriced_cost(family, provider)},
+                                    "harness_misprices_provider": harnesses.reports_mispriced_cost(family, provider,
+                                                                                                  model)},
         "tokens_per_trial": {"fresh_input": round(math.fsum(fresh) / len(fresh), 1) if fresh else None,
                              "cache": mean_of("n_cache"), "output": mean_of("n_output"),
                              "total": mean_of("tokens_total"), "n": len(measured)},
@@ -398,7 +400,11 @@ def config_hash_for(arm: ArmSpec, kwargs: Mapping[str, Any], timeout_multiplier:
     """The config hash the ledger will give this arm's trials: the same
     identity extract.config_identity computes from a trial's config."""
     implementation = arm.agent if arm.kind == "import_path" else "builtin"
-    trial_cfg = {"agent": {"kwargs": dict(kwargs)}, "timeout_multiplier": timeout_multiplier}
+    agent: dict[str, Any] = {"kwargs": dict(kwargs)}
+    env = arm.options.get(AGENT_ENV_OPTION)
+    if isinstance(env, Mapping) and env:
+        agent["env"] = {str(k): str(v) for k, v in env.items()}  # where Harbor records --ae (runs.arm_agent_env)
+    trial_cfg = {"agent": agent, "timeout_multiplier": timeout_multiplier}
     return extract.config_identity(trial_cfg, arm.family or arm.agent, implementation, arm.provider, arm.model)[0]
 
 
@@ -414,7 +420,8 @@ def planned_kwargs(cfg: Config, arm: ArmSpec, run: RunSettings | None = None) ->
         # allowlist must not turn an estimate into code execution.
         if arm.agent not in {h["agent"] for h in designs.allowed_harnesses(cfg)}:
             return None
-        kwargs, _ = runs.agent_kwargs(run or cfg.run, arm, schemas.agent_schema(arm.agent))
+        kwargs, _ = runs.agent_kwargs(run or cfg.run, arm, schemas.agent_schema(arm.agent),
+                                      cfg.providers.get(arm.provider))
     except Exception:
         return None
     return kwargs
@@ -700,7 +707,7 @@ def enforced_cap(arm: ArmSpec, kwargs: Mapping[str, Any]) -> tuple[float | None,
             continue
         if not math.isfinite(number) or number <= 0:
             continue
-        if harnesses.cap_misprices_for(arm.family or arm.agent, arm.provider, name):
+        if harnesses.cap_misprices_for(arm.family or arm.agent, arm.provider, name, arm.model):
             notes.append(f"{name} is priced at another provider's rates on {arm.provider}, so it may stop trials "
                          "early; it does not bound this estimate.")
             continue

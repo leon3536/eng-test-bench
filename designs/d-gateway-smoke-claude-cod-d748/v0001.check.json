@@ -1,0 +1,750 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 4 models (litellm/deepseek-v4.1-flash, litellm/deepseek-v4.1-flash-translated, litellm/kimi-k3, litellm/gpt-6.1-sol). Pairs form only within one model and provider, so each comparison needs its baseline on the same model",
+      "Tasks are not in seeded-sample order. Keeping that order pairs new trials with earlier runs and keeps each block balanced by difficulty",
+      "2 task image(s) are not on this machine yet. The run pulls them before its first arm (prebake.prepull); a 15-20 GB image took 6-9 minutes the first time.",
+      "claude-code-gw-deepseek: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-deepseek: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-deepseek-tr: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-deepseek-tr: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-kimi: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-kimi: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply.",
+      "claude-code-gw-sol: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-sol: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "regex-log",
+      "fix-git"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 8,
+    "budget_usd": 5.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "claude-code-gw-deepseek",
+      "claude-code-gw-deepseek-tr",
+      "claude-code-gw-kimi",
+      "claude-code-gw-sol"
+    ],
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/deepseek-v4.1-flash",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-deepseek --job-name regex-log --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name regex-log --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "regex-log",
+              "fix-git"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 22.0,
+            "build_gb": 3.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/deepseek-v4.1-flash-translated",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/deepseek-v4.1-flash-translated --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-deepseek-tr --job-name regex-log --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name regex-log --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "regex-log",
+              "fix-git"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 22.0,
+            "build_gb": 3.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/kimi-k3",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/kimi-k3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-kimi --job-name regex-log --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name regex-log --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "regex-log",
+              "fix-git"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 22.0,
+            "build_gb": 3.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      },
+      {
+        "name": "claude-code-gw-sol",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/gpt-6.1-sol",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/gpt-6.1-sol --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-sol --job-name regex-log --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name regex-log --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "regex-log",
+              "fix-git"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 22.0,
+            "build_gb": 3.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:08c4f2dc4fede79ebf0ec9561bada87c59c0b5cd786f91d27a2dda2a3817ec25",
+    "warnings": [
+      "2 task image(s) are not on this machine yet. The run pulls them before its first arm (prebake.prepull); a 15-20 GB image took 6-9 minutes the first time."
+    ],
+    "peak_containers": 4,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 2,
+      "build_min": 22.0,
+      "build_wall_min": 11.0,
+      "build_gb": 4.37,
+      "jobs": 3,
+      "task_images": 2,
+      "pull": [
+        "alexgshaw/regex-log:20251031",
+        "alexgshaw/fix-git:20251031"
+      ],
+      "pull_error": null,
+      "race": {
+        "tasks": 2,
+        "arms": 4,
+        "lanes": 8,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 2,
+        "build_wall_min_total": 22.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "regex-log",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          },
+          {
+            "task": "fix-git",
+            "arms": [
+              "claude-code-gw-deepseek",
+              "claude-code-gw-deepseek-tr",
+              "claude-code-gw-kimi",
+              "claude-code-gw-sol"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 2,
+      "arms": 4,
+      "lanes": 8,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 2,
+      "build_wall_min_total": 22.0,
+      "build_wall_min_max": 11.0,
+      "peak_disk_gb": 2.18,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "2 task race(s) x 4 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "regex-log",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        },
+        {
+          "task": "fix-git",
+          "arms": [
+            "claude-code-gw-deepseek",
+            "claude-code-gw-deepseek-tr",
+            "claude-code-gw-kimi",
+            "claude-code-gw-sol"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:08c4f2dc4fede79ebf0ec9561bada87c59c0b5cd786f91d27a2dda2a3817ec25",
+    "ledger_fingerprint": "sha256:44e03231c8d377d2",
+    "seed": 55127756092527,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code-gw-deepseek",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "deepseek-v4.1-flash",
+          "effort": "high",
+          "config_hash": "412355368dd71f5c",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 2,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:deepseek-v4.1-flash prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.00407,
+          "p50": 0.003249,
+          "p90": 0.007166
+        },
+        "total": {
+          "p10": 0.003323,
+          "p50": 0.006997,
+          "p90": 0.015013
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.83,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 3.79,
+          "p90": 8.28
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-deepseek-tr",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "deepseek-v4.1-flash-translated",
+          "effort": "high",
+          "config_hash": "2cced94a29597150",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 2,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:deepseek-v4.1-flash-translated prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.004337,
+          "p50": 0.003411,
+          "p90": 0.007815
+        },
+        "total": {
+          "p10": 0.003262,
+          "p50": 0.006872,
+          "p90": 0.015072
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.83,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 3.79,
+          "p90": 8.28
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-kimi",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "kimi-k3",
+          "effort": "high",
+          "config_hash": "d50ca7c123ba25bd",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 2,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:kimi-k3 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.056246,
+          "p50": 0.04725,
+          "p90": 0.102072
+        },
+        "total": {
+          "p10": 0.04797,
+          "p50": 0.102743,
+          "p90": 0.229341
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.83,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 3.79,
+          "p90": 8.28
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "claude-code-gw-sol",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "gpt-6.1-sol",
+          "effort": "medium",
+          "config_hash": "6938b8ab5ac2251b",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 2,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:gpt-6.1-sol prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.035861,
+          "p50": 0.030251,
+          "p90": 0.063878
+        },
+        "total": {
+          "p10": 0.026836,
+          "p50": 0.060045,
+          "p90": 0.127278
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.83,
+          "p90": 5.57
+        },
+        "arm_minutes": {
+          "p50": 4.85,
+          "p90": 8.28
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.113507,
+        "p50": 0.193158,
+        "p90": 0.332156
+      },
+      "budget_usd": 5.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "claude-code-gw-deepseek",
+        "claude-code-gw-deepseek-tr",
+        "claude-code-gw-kimi",
+        "claude-code-gw-sol"
+      ],
+      "inflight_allowance_usd": 0.816576,
+      "wall_minutes": {
+        "p50": 30.28,
+        "p90": 30.39
+      },
+      "peak_containers": 4,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 2,
+        "arms": 4,
+        "max_containers": 6,
+        "build_wall_min_total": 22.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "images_to_build": 2
+      }
+    },
+    "pairing": [],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-11-04T18:08:53+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:2642221f766bc249c38fd13b5ec86c3ac27c9832d09deb106ef9ef98a4057362",
+  "ledger_fingerprint": "sha256:44e03231c8d377d2",
+  "reuse_fingerprint": null
+}

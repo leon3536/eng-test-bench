@@ -16,7 +16,7 @@ from typing import Any
 
 from . import harnesses, keys, procs
 from .harnesses import DOLLAR_CAPS, MISPRICED_CAP, TURN_CAPS  # noqa: F401  re-exported for runs and server
-from .settings import ROOT, Arm, Config, harbor_executable
+from .settings import AGENT_ENV_OPTION, ROOT, ROUTE_OPTION, Arm, Config, harbor_executable
 
 # Options grouped for the arm editor. Anything not named here goes under "Other".
 REASONING = ("reasoning_effort", "thinking_display", "max_thinking_tokens", "interleaved_thinking")
@@ -27,6 +27,9 @@ CAUTIONS = {
     "fallback_model": "Switches models mid-run, so the arm no longer measures one model.",
     "base_url": "Sends model traffic somewhere other than the provider's API.",
     "api_base": "Sends model traffic somewhere other than the provider's API.",
+    # On a gateway provider; it becomes base_url, which is cautioned on its own.
+    ROUTE_OPTION: "Picks the path on the gateway: /anthropic passes requests through, the root translates.",
+    AGENT_ENV_OPTION: "Sets the models Claude Code uses for its aliases and subagents.",
     "version": "Pins the harness version. Leave empty to use Harbor's default.",
 }
 
@@ -34,7 +37,8 @@ CAUTIONS = {
 def cap_misprices(arm: Any, option: str) -> bool:
     """The arm's harness would price this cap at another provider's rates.
     Keyed by family, so an import-path subclass of claude-code is covered too."""
-    return harnesses.cap_misprices_for(getattr(arm, "family", "") or arm.agent, arm.provider, option)
+    return harnesses.cap_misprices_for(getattr(arm, "family", "") or arm.agent, arm.provider, option,
+                                       getattr(arm, "model", None))
 
 
 # Current Claude models reject these request settings outright.
@@ -158,6 +162,12 @@ def model_warnings(arm: Arm) -> dict[str, str]:
 def coerce(schema: dict[str, Any], name: str, value: Any) -> Any:
     """Match a value to the option's declared type. Several Harbor options are
     string-typed even when they hold numbers (max_budget_usd, cost_limit)."""
+    if name == ROUTE_OPTION:
+        # The bench's own option (settings.ROUTE_OPTION), not Harbor's: checked by settings.check_route.
+        return None if value is None else str(value)
+    if name == AGENT_ENV_OPTION:
+        # Also the bench's own (settings.AGENT_ENV_OPTION): build_command passes it as --ae.
+        return None if value is None else {str(k): str(v) for k, v in dict(value).items()}
     prop = schema.get("properties", {}).get(name)
     if prop is None:
         raise ValueError(f"'{name}' is not an option of this harness")

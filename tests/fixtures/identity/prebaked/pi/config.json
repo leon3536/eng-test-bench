@@ -4,7 +4,7 @@
         "source": "terminal-bench"
     },
     "trial_name": "fix-git__pb-pi",
-    "trials_dir": "C:\\Users\\praem\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\7fdc8d26-4f79-487e-9281-7d1b420770ae\\scratchpad\\prebake\\envclass\\trials\\fixgit\\pi",
+    "trials_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\00000000-0000-0000-0000-000000000000\\scratchpad\\prebake\\envclass\\trials\\fixgit\\pi",
     "install_only": true,
     "agent": {
         "name": "pi",

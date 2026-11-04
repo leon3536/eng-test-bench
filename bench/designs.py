@@ -685,6 +685,8 @@ def _check(cfg: Config, spec: Mapping[str, Any], problems: list[str], warnings: 
                 # The rule load_config applies to config arms, so a design
                 # cannot call one model while pricing and recording another.
                 settings.check_model_spec(name, arm["options"], provider.model_prefix + arm["model"])
+                settings.check_route(name, arm["options"], provider)
+                settings.check_agent_env(name, arm["options"])
             except ConfigError as exc:
                 problems.append(str(exc))
         # An empty list is an arm whose every task is reused, which runs nothing on purpose.

@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "design_id": "d-pilot-from-config-2ece",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-04T20:40:04+00:00",
+  "profile": "default",
+  "title": "pilot from config",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "attempts": 1,
+    "baseline_arm": null,
+    "run": {
+      "budget_usd": 100.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash-translated",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "kimi-k3-fireworks",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-sol",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "gpt-6.1-sol",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:6df001d49f4dc51489d31c97ad453c261f6d238bab21ac0ae066e1d3a814305e"
+}
