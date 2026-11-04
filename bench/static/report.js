@@ -333,6 +333,20 @@
       rows.push(['Folder gone', 'No trial folder when last re-derived; its cache writes and log checks are the '
         + 'figures stored before.']);
     }
+    // A gateway arm's cost from the gateway's own spend log (bench/gateway_spend.py), or its lack.
+    if (f.cost_from_gateway_log) {
+      const g = f.cost_from_gateway_log;
+      const was = g.recorded || {};
+      const list = isNum(g.list_price_usd) ? ` (${money(g.list_price_usd)} at list prices)` : '';
+      rows.push(['Cost from gateway spend log', `Tokens, cache reads and cost from the gateway's spend log`
+        + `${g.file ? ` (${g.file})` : ''}: ${calls(g.calls)}, ${money(g.cost_usd)}${list}. The harness had `
+        + `recorded ${tokens(was.n_input)} in / ${tokens(was.n_cache)} cache / ${tokens(was.n_output)} out, `
+        + `${money(was.cost_usd)}; the usage per model below is still its figures.`]);
+    }
+    if (f.cost_upper_bound) {
+      rows.push(['Cost upper bound', 'The gateway reported no cached tokens and this trial has no spend-log '
+        + 'correction, so every prompt token is priced as fresh input.']);
+    }
     return rows;
   }
 
@@ -2466,7 +2480,8 @@
         ['Reported by the harness', money(t.reported_cost_usd)],
         ['Tokens', usageValue(t.tokens_total, t.usage_status, tokens)],
         ['Uncached tokens', usageValue(t.tokens_uncached, t.usage_status, tokens)],
-        ['In / cache / out (raw)', `${tokens(t.n_input)} / ${tokens(t.n_cache)} / ${tokens(t.n_output)}`],
+        [(t.flags || {}).cost_from_gateway_log ? 'In / cache / out (gateway spend log)' : 'In / cache / out (raw)',
+          `${tokens(t.n_input)} / ${tokens(t.n_cache)} / ${tokens(t.n_output)}`],
         ['Unpriced models', (t.unpriced_models || []).join(', ') || 'none'],
         ['Primary model share', pct(t.primary_share)],
       ])),

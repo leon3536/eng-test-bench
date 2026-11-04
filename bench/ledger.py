@@ -41,11 +41,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO, Any
 
-from . import classify, extract, harnesses, lookups, pricing, settings
+from . import classify, extract, gateway_spend, harnesses, lookups, pricing, settings
 from .extract import RunContext, ScanRoot, TrialFacts
 from .fsutil import canonical_json
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 BUSY_TIMEOUT_MS = 15000
 # A live ingest runs inside the run manager's 3-second refresh, which also
 # enforces budgets and cancels, so it gives up quickly; the next refresh or
@@ -204,8 +204,26 @@ def _migrate_v3(conn: sqlite3.Connection) -> None:
     conn.execute(_TRIALS_V)
 
 
+def _migrate_v4(conn: sqlite3.Connection) -> None:
+    """Adds cost_corrections (bench.gateway_spend): a trial's tokens and cost
+    as a gateway's own spend log gives them, where what the harness recorded
+    is wrong. Entered by hand like an exclusion, so appended and never
+    edited, the latest row per trial wins ('clear' takes a correction back),
+    and no rescan or rederive reads or writes it: it is applied when rows
+    are read."""
+    conn.execute("""CREATE TABLE cost_corrections (
+        id INTEGER PRIMARY KEY,
+        trial_key TEXT NOT NULL REFERENCES trials(trial_key),
+        action TEXT NOT NULL CHECK (action IN ('correct','clear')),
+        source TEXT NOT NULL,
+        n_input INTEGER, n_cache INTEGER, n_output INTEGER, cost_usd REAL, calls INTEGER,
+        note_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL)""")
+    conn.execute("CREATE INDEX cost_corrections_trial ON cost_corrections(trial_key)")
+
+
 # Ordered and additive only: MIGRATIONS[n] takes user_version n to n + 1.
-MIGRATIONS = [_migrate_v1, _migrate_v2, _migrate_v3]
+MIGRATIONS = [_migrate_v1, _migrate_v2, _migrate_v3, _migrate_v4]
 
 _FACT_COLUMNS = [f.name for f in dataclasses.fields(TrialFacts)]
 _INSERT_COLUMNS = _FACT_COLUMNS + ["outcome", "outcome_reason", "classifier_version",
@@ -474,6 +492,14 @@ def _loads(text: str | None, default: Any = None) -> Any:
         return json.loads(text)
     except ValueError:
         return default
+
+
+@dataclass(frozen=True)
+class _Corrections:
+    """The cost corrections in force (gateway_spend): the latest row per
+    trial, unless that row is a 'clear'."""
+    by_trial: Mapping[str, Mapping[str, Any]]
+    arms: frozenset[tuple[str, str, str]]   # (arm, provider, model) of the corrected trials
 
 
 # The ledger -----------------------------------------------------------------------
@@ -1060,12 +1086,37 @@ class Ledger:
             latest[(r["target_type"], r["target_id"])] = dict(r)
         return latest
 
+    def _correction_maps(self, conn: sqlite3.Connection) -> _Corrections:
+        latest: dict[str, dict[str, Any]] = {}
+        for r in conn.execute("SELECT c.*, t.arm, t.provider, t.model FROM cost_corrections c "
+                              "JOIN trials t ON t.trial_key = c.trial_key ORDER BY c.id"):
+            latest[r["trial_key"]] = dict(r)
+        in_force = {k: v for k, v in latest.items() if v["action"] == "correct"}
+        return _Corrections(in_force, frozenset((v["arm"], v["provider"], v["model"]) for v in in_force.values()))
+
     def _trial_row(self, r: Mapping[str, Any], table: Mapping[str, Any],
-                   latest: Mapping[tuple[str, str], dict[str, Any]]) -> dict[str, Any]:
+                   latest: Mapping[tuple[str, str], dict[str, Any]],
+                   fixes: _Corrections | None = None) -> dict[str, Any]:
         usage = _loads(r["usage_json"], {}) or {}
         cost, unpriced = pricing.price_usage(usage, r["provider"], table)
         n_input, n_cache, n_output = r["n_input"], r["n_cache"], r["n_output"]
-        status = classify.usage_status({k: r[k] for k in _USAGE_FACTS})
+        flags = _loads(r["flags_json"], {}) or {}
+        cost_at_ingest = r["cost_at_ingest_usd"]
+        fix = fixes.by_trial.get(r["trial_key"]) if fixes is not None else None
+        if fix is not None:
+            # The gateway's spend log, not what the harness recorded (gateway_spend): its tokens, its cache
+            # split and its logged cost in every figure below. The stored columns keep the harness's, and
+            # the checks that questioned the harness's figures no longer apply to the cost shown.
+            superseded = sorted(k for k in flags if k in gateway_spend.SUPERSEDED_FLAGS)
+            flags = {**{k: v for k, v in flags.items() if k not in superseded},
+                     gateway_spend.CORRECTED_FLAG: gateway_spend.corrected_flag(
+                         fix, (n_input, n_cache, n_output), cost, pricing.lookup(table, r["provider"], r["model"]),
+                         superseded)}
+            n_input, n_cache, n_output = fix["n_input"], fix["n_cache"], fix["n_output"]
+            cost, unpriced, cost_at_ingest = fix["cost_usd"], [], fix["cost_usd"]
+        elif fixes is not None and gateway_spend.is_upper_bound(r, fixes.arms):
+            flags = {**flags, gateway_spend.UPPER_BOUND_FLAG: gateway_spend.upper_bound_flag()}
+        status = classify.usage_status({**{k: r[k] for k in _USAGE_FACTS}, "n_input": n_input, "n_output": n_output})
         # Harbor's 0/0/0 for a run that recorded nothing stays in n_input..n_output
         # as the raw fact; the totals and the costs say "not measured".
         measured = status != "unmeasured" and (n_input is not None or n_output is not None)
@@ -1093,11 +1144,12 @@ class Ledger:
             "passed": False if r["outcome"] == "answer_lookup" else None if r["passed"] is None else bool(r["passed"]),
             "n_input": n_input, "n_cache": n_cache, "n_output": n_output, "usage_status": status,
             "tokens_total": (n_input or 0) + (n_output or 0) if measured else None,
-            "cost_usd": cost, "cost_at_ingest_usd": None if status == "unmeasured" else r["cost_at_ingest_usd"],
+            "cost_usd": cost, "cost_at_ingest_usd": None if status == "unmeasured" else cost_at_ingest,
             "reported_cost_usd": r["reported_cost_usd"], "unpriced_models": unpriced,
             "primary_share": r["primary_share"], "started_at": r["started_at"], "finished_at": r["finished_at"],
-            # What only the harness's log or the prices could check (extract.trial_flags); {} for none.
-            "flags": _loads(r["flags_json"], {}) or {},
+            # What only the harness's log or the prices could check (extract.trial_flags), and a gateway
+            # spend-log correction or the lack of one (gateway_spend); {} for none.
+            "flags": flags,
             "phases": {"env_setup_sec": r["env_setup_sec"], "agent_setup_sec": r["agent_setup_sec"],
                        "agent_exec_sec": r["agent_exec_sec"], "verifier_sec": r["verifier_sec"]},
             "total_sec": r["total_sec"],
@@ -1152,9 +1204,10 @@ class Ledger:
                     else:
                         rows = conn.execute(sql + " LIMIT -1 OFFSET ?", [*params, offset]).fetchall()
                 latest = self._exclusion_maps(conn)
+                fixes = self._correction_maps(conn)
             finally:
                 conn.execute("COMMIT")
-        out = [self._trial_row(r, table, latest) for r in rows]
+        out = [self._trial_row(r, table, latest, fixes) for r in rows]
         if column is None:
             name = m.group(1)
             known = sorted((r for r in out if r[name] is not None), key=lambda r: (r[name], r["id"]),
@@ -1177,7 +1230,8 @@ class Ledger:
             if row is None:
                 raise KeyError(f"No trial {trial_id}")
             latest = self._exclusion_maps(conn)
-        out = self._trial_row(row, pricing.load_table(), latest)
+            fixes = self._correction_maps(conn)
+        out = self._trial_row(row, pricing.load_table(), latest, fixes)
         raw = extract.inflate(row["raw_result_z"])
         trial_dir = Path(row["trial_dir"])
         absolute = trial_dir if trial_dir.is_absolute() else self.root / trial_dir
@@ -1194,10 +1248,11 @@ class Ledger:
         self._require()
         with self._conn() as conn:
             runs = [dict(r) for r in conn.execute("SELECT * FROM runs ORDER BY created_at DESC, run_key")]
-            trials = conn.execute("SELECT run_key, outcome, cost_at_ingest_usd, reported_cost_usd, family, provider, "
-                                  "model, dataset_snapshot, n_input, n_output, exception_type, agent_started, "
-                                  "agent_exec_sec FROM trials").fetchall()
+            trials = conn.execute("SELECT trial_key, run_key, arm, outcome, cost_at_ingest_usd, reported_cost_usd, "
+                                  "family, provider, model, dataset_snapshot, n_input, n_cache, n_output, "
+                                  "exception_type, agent_started, agent_exec_sec FROM trials").fetchall()
             latest = self._exclusion_maps(conn)
+            fixes = self._correction_maps(conn)
         by_run: dict[str, list[sqlite3.Row]] = defaultdict(list)
         for t in trials:
             by_run[t["run_key"]].append(t)
@@ -1214,9 +1269,16 @@ class Ledger:
                 "mode": r["mode"], "status": r["status"], "created_at": r["created_at"],
                 "finished_at": r["finished_at"], "budget_usd": r["budget_usd"],
                 "trials": dict(Counter(t["outcome"] for t in rows)),
-                # The cost at ingest, or for unpriced trials the harness's own figure when it can be trusted.
-                "spend_usd": round(sum(t["cost_at_ingest_usd"] if t["cost_at_ingest_usd"] is not None
+                # The cost at ingest, or for unpriced trials the harness's own figure when it can be trusted;
+                # for a trial corrected from a gateway's spend log, the cost the gateway logged.
+                "spend_usd": round(sum(fixes.by_trial[t["trial_key"]]["cost_usd"] if t["trial_key"] in fixes.by_trial
+                                       else t["cost_at_ingest_usd"] if t["cost_at_ingest_usd"] is not None
                                        else (harnesses.usable_reported_cost(dict(t)) or 0.0) for t in rows), 6),
+                # Trials whose cost is the gateway's spend log, and trials of a corrected arm without a
+                # correction, whose cost is an upper bound (gateway_spend).
+                "trials_cost_corrected": sum(1 for t in rows if t["trial_key"] in fixes.by_trial),
+                "trials_cost_upper_bound": sum(1 for t in rows if t["trial_key"] not in fixes.by_trial
+                                               and gateway_spend.is_upper_bound(t, fixes.arms)),
                 # spend_usd is a lower bound while any of these, or trials['incomplete'], is above 0:
                 # finished trials that ran but recorded no usage, and ones cut short whose usage
                 # covers completed calls only.
@@ -1355,6 +1417,84 @@ class Ledger:
             ids.append(r["id"])
         return frozenset(trials), frozenset(runs), tuple(sorted(ids))
 
+    # Cost corrections (gateway_spend) ---------------------------------------------------
+
+    def resolve_run(self, run: str) -> str:
+        """The run key for 'profile/run_id' or a bare run id. KeyError when no
+        run, or runs in several profiles, have it."""
+        self._require()
+        with self._conn() as conn:
+            if "/" in run:
+                keys = [r[0] for r in conn.execute("SELECT run_key FROM runs WHERE run_key = ?", (run,))]
+            else:
+                keys = [r[0] for r in conn.execute("SELECT run_key FROM runs WHERE run_id = ? ORDER BY run_key",
+                                                   (run,))]
+        if not keys:
+            raise KeyError(f"No run '{run}' in the ledger")
+        if len(keys) > 1:
+            raise KeyError(f"Run '{run}' is in several profiles ({', '.join(keys)}); give it as profile/run_id")
+        return keys[0]
+
+    def arm_trials(self, run_key: str, arm: str) -> list[dict]:
+        """Each trial of one arm in one run as gateway_spend matches it: its
+        agent execution windows (UTC; one per step), whether it ran through a
+        gateway (a ${VAR} base_url), its tokens and cost as the harness
+        recorded them at today's prices, and the correction in force."""
+        self._require()
+        with self._conn() as conn:
+            rows = conn.execute("SELECT trial_key, trial_name, task, outcome, provider, model, options_json, "
+                                "n_input, n_cache, n_output, usage_json, raw_result_z FROM trials "
+                                "WHERE run_key = ? AND arm = ? ORDER BY started_at, trial_name",
+                                (run_key, arm)).fetchall()
+            fixes = self._correction_maps(conn)
+        table = pricing.load_table()
+        out = []
+        for r in rows:
+            raw = extract.inflate(r["raw_result_z"])
+            base_url = (_loads(r["options_json"], {}) or {}).get("base_url")
+            out.append({
+                "trial_key": r["trial_key"], "trial_name": r["trial_name"], "task": r["task"],
+                "outcome": r["outcome"], "provider": r["provider"], "model": r["model"],
+                "gateway": isinstance(base_url, str) and base_url.startswith("${"),
+                "windows": extract.agent_windows(raw) if isinstance(raw, Mapping) else [],
+                "n_input": r["n_input"], "n_cache": r["n_cache"], "n_output": r["n_output"],
+                "cost_usd": pricing.price_usage(_loads(r["usage_json"], {}) or {}, r["provider"], table)[0],
+                "correction": fixes.by_trial.get(r["trial_key"]),
+            })
+        return out
+
+    def add_cost_corrections(self, entries: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+        """Append cost corrections: trial_key, action ('correct' or 'clear'),
+        source, n_input, n_cache, n_output, cost_usd, calls and a note. The
+        latest row per trial wins, so a correction replaces the one before
+        rather than adding to it, and an entry equal to the one in force
+        (same figures from the same spend-log rows) is skipped: importing
+        the same file twice writes nothing the second time. A trial that
+        changes has its updated_at moved, which version(), the report cache
+        key, reads."""
+        self._require()
+        counts = {"written": 0, "unchanged": 0}
+        now = _now()
+        with self._write() as conn:
+            fixes = self._correction_maps(conn)
+            for e in entries:
+                if e["action"] not in ("correct", "clear"):
+                    raise ValueError("action must be correct or clear")
+                if conn.execute("SELECT 1 FROM trials WHERE trial_key = ?", (e["trial_key"],)).fetchone() is None:
+                    raise KeyError(f"No trial '{e['trial_key']}' in the ledger")
+                held = fixes.by_trial.get(e["trial_key"])
+                if gateway_spend.same_correction(held, e):
+                    counts["unchanged"] += 1
+                    continue
+                conn.execute("INSERT INTO cost_corrections (trial_key, action, source, n_input, n_cache, n_output, "
+                             "cost_usd, calls, note_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                             (e["trial_key"], e["action"], e["source"], e.get("n_input"), e.get("n_cache"),
+                              e.get("n_output"), e.get("cost_usd"), e.get("calls"),
+                              canonical_json(e.get("note") or {}), now))
+                conn.execute("UPDATE trials SET updated_at = ? WHERE trial_key = ?", (now, e["trial_key"]))
+                counts["written"] += 1
+        return counts
+
     # Snapshots ---------------------------------------------------------------------
 
     def save_snapshot(self, name: str, request: dict, response: dict) -> dict:
@@ -1420,6 +1560,7 @@ class Ledger:
             "trials": 0, "runs": 0, "by_profile": {}, "by_outcome": {}, "last_ingest_at": None,
             "rescan": {"running": self.rescan_running, "last": None}, "last_error": self._last_error,
             "last_backup": None, "last_rederive": None, "pricing_sha": pricing.table_sha(), "seeded_exclusions": [],
+            "cost_corrections": 0,
             "journal_mode": self.journal_mode, "warnings": list(self.warnings),
         }
         if not self._available:
@@ -1434,6 +1575,7 @@ class Ledger:
                     "SELECT outcome, COUNT(*) FROM trials GROUP BY outcome ORDER BY outcome")}
                 meta = {r[0]: r[1] for r in conn.execute("SELECT key, value FROM meta")}
                 latest = self._exclusion_maps(conn)
+                out["cost_corrections"] = len(self._correction_maps(conn).by_trial)  # trials, in force
         except sqlite3.Error as exc:
             out["error"] = f"The ledger is busy or locked by another program: {exc}"
             return out
@@ -1623,6 +1765,17 @@ def main(argv: list[str] | None = None) -> int:
     export = sub.add_parser("export", help="write trials to a CSV or JSON lines file")
     export.add_argument("--out", required=True, metavar="FILE")
     export.add_argument("--format", choices=("csv", "jsonl"), default="csv")
+    spend = sub.add_parser("gateway-spend", help="correct a gateway arm's tokens and cost from the gateway's "
+                                                 "spend log (a CSV export); see bench/gateway_spend.py")
+    spend.add_argument("csv", nargs="?", metavar="FILE", help="the spend log export (not needed with --clear)")
+    spend.add_argument("--run", required=True, help="the run id, or profile/run_id")
+    spend.add_argument("--arm", required=True, help="the gateway arm, e.g. claude-code-gw-terra")
+    spend.add_argument("--skew", type=float, default=gateway_spend.DEFAULT_SKEW_SEC, metavar="SEC",
+                       help=f"clock difference allowed either side of a trial's agent window "
+                            f"(default {gateway_spend.DEFAULT_SKEW_SEC:g})")
+    spend.add_argument("--dry-run", action="store_true", help="show the matching and the costs; write nothing")
+    spend.add_argument("--clear", action="store_true", help="take back the arm's corrections in this run")
+    spend.add_argument("--json", action="store_true", help="print the summary as JSON")
     args = parser.parse_args(argv)
 
     path = Path(settings.LEDGER_DB)
@@ -1645,6 +1798,8 @@ def main(argv: list[str] | None = None) -> int:
                 for chunk in ledger.export_rows(Filters(include_cautioned=True), args.format):
                     out.write(chunk)
             print(f"Wrote {args.out}")
+        elif args.command == "gateway-spend":
+            return gateway_spend.cli(ledger, args)
         return 0
     finally:
         ledger.close()

@@ -554,7 +554,70 @@ Every trial from every run, in every profile, goes into one SQLite file,
 .venv\Scripts\python -m bench.ledger rescan [--reparse] [--root PATH ...]
 .venv\Scripts\python -m bench.ledger export --out FILE [--format csv|jsonl]
 .venv\Scripts\python -m bench.ledger rebuild   # bench stopped: renames the DB to bench.sqlite.corrupt-<time> and rescans
+.venv\Scripts\python -m bench.ledger gateway-spend FILE --run RUN_ID --arm ARM [--dry-run] [--skew SEC] [--clear] [--json]
 ```
+
+### Gateway arms: cost from the spend log
+
+Through LiteLLM 1.83.7, `claude-code-gw-terra` (GPT-6.1 Terra, translated to
+OpenAI's Responses API) caches upstream, but the gateway does not report the
+cached tokens back. Claude Code records `cache_read_input_tokens` 0 and an
+input count that includes the cached tokens, so the bench prices every prompt
+token as fresh input, and the arm's computed cost is an upper bound. The
+gateway's own spend log has the real split and cost. To use it:
+
+1. **Export** the spend-log rows for the run window from LiteLLM
+   (`LiteLLM_SpendLogs`), one row per model call, filtered to the arm's
+   model and the bench's key, as a CSV with a header row:
+   `start_utc, end_utc, prompt_tokens, cached_prompt_tokens,
+   completion_tokens, cost_usd, request_id`. `prompt_tokens` includes the
+   cached ones. A time without a zone is read as UTC. An optional `model`
+   column keeps only the arm's model's rows.
+2. **Dry run**: nothing is written.
+
+   ```powershell
+   .venv\Scripts\python -m bench.ledger gateway-spend spend.csv --run 20261104-200000-gateway --arm claude-code-gw-terra --dry-run
+   ```
+
+   Each row goes to the arm's trial in that run whose agent execution window
+   holds the row's start time, give or take `--skew` seconds (default 5) for
+   the gateway's clock. Trials of one arm never overlap in a race. The
+   summary lists each trial with its rows, its corrected input / cached /
+   output, its cost before and after, and the corrected tokens at list
+   price (a check on the gateway's own prices). It also lists rows that fit
+   no trial (calls outside the run, or another arm's traffic) and rows that
+   fit two trials. A trial whose logged prompt tokens differ by more than 25%
+   from what Claude Code recorded is named: the export may hold other calls,
+   or miss some. A request id that appears twice is read once.
+3. **Import**: the same command without `--dry-run`. If any row fits two
+   trials, nothing is written; use a smaller `--skew`, or check the clock.
+   Rows that fit no trial are left out.
+
+Each matched trial gets one row in the ledger's `cost_corrections` table: the
+summed tokens, cache reads, output and logged cost, the number of calls, and a
+note with the file's name, digest, rows and totals. Like an exclusion it is
+entered by hand: appended, the latest row per trial wins, and no rescan or
+re-derive touches it. Harbor's trial files are never changed.
+- **Importing the same rows again writes nothing.** A new export replaces a
+  trial's correction rather than adding to it. `--clear` takes an arm's
+  corrections in a run back.
+- **What uses it:** the trial's tokens, cache split and cost under every
+  REPORT pricing, the Ledger table and trial drawer, and a run's
+  `spend_usd`. The trial is marked **cost from gateway spend log** (flag
+  `cost_from_gateway_log`; REPORT adds a caveat). The ingest checks on the
+  harness's own figures, such as unknown cache writes, are set aside for it.
+- **Trials left without a correction:** a trial of the same arm, provider
+  and model with no correction and no cached tokens recorded is marked
+  **cost upper bound** (`cost_upper_bound`). A run counts both kinds of trial
+  (`trials_cost_corrected`, `trials_cost_upper_bound`).
+- **Other arms are not touched.** The command refuses an arm whose trials
+  did not run through a gateway (a `${VAR}` base_url).
+- **What stays the same:** the run budget and the per-run results page read
+  the trial files, so they keep the harness's figures. That keeps the budget
+  on the safe side.
+- **After a rebuild**, import the CSV again: `rebuild` starts a new file.
+  The table came with ledger schema 4. A bench from before it cannot open
+  the ledger once a newer one has.
 
 ## REPORT
 
