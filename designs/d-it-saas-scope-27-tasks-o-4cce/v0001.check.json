@@ -1,0 +1,598 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arm 'claude-code' runs 23 of the design's 27 tasks",
+      "Arm 'terminus-2' runs 23 of the design's 27 tasks"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 127,
+    "budget_usd": 95.0,
+    "worst_case_capped_usd": 750.0,
+    "uncapped_arms": [
+      "terminus-2",
+      "pi",
+      "strands"
+    ],
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 23,
+        "trials": 23,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "54ba249e1265",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name claude-code --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_budget_usd=\\\"15\\\" --ak max_turns=300 --ak version=\\\"2.1.312\\\"",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 23,
+        "trials": 23,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          }
+        ],
+        "options_fingerprint": "44136fa355b3",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name terminus-2 --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a4945e4f8e73",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name mini-swe-agent --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"15\\\" --ak version=\\\"2.4.6\\\"",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "pi",
+        "agent": "pi",
+        "family": "pi",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent pi --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name pi --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\"",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "problems": [],
+        "warnings": []
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_kwargs",
+            "value": {
+              "model_spec": "anthropic/claude-opus-5-5",
+              "effort": "medium"
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a232a54a70bf",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name strands --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak \"factory_kwargs={\\\"model_spec\\\": \\\"anthropic/claude-opus-5-5\\\", \\\"effort\\\": \\\"medium\\\"}\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak version=\\\"1.57.2\\\"",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "problems": [],
+        "warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:d1795cd2708441ca920460908687a894487cbe730b3737f7ac7909475a6ae4af",
+    "warnings": [],
+    "peak_containers": 3,
+    "skipped_arms": []
+  },
+  "estimate": {
+    "spec_hash": "sha256:d1795cd2708441ca920460908687a894487cbe730b3737f7ac7909475a6ae4af",
+    "ledger_fingerprint": "sha256:263e1c0bf642e7c8",
+    "seed": 150748525767542,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code",
+        "cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "c701410eb884a0d9",
+          "options_fingerprint": "54ba249e1265"
+        },
+        "trials": 23,
+        "basis": "measured",
+        "basis_detail": "20 trials on 19 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 20,
+          "tasks": 19,
+          "design_tasks_observed": 10,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.152746,
+          "p50": 0.078145,
+          "p90": 0.353114
+        },
+        "total": {
+          "p10": 2.657941,
+          "p50": 3.493151,
+          "p90": 4.456859
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 5.92,
+          "p90": 10.33
+        },
+        "arm_minutes": {
+          "p50": 49.74,
+          "p90": 57.86
+        },
+        "p_infra": 0.3939,
+        "unpriced_models": [],
+        "notes": [
+          "39% of 33 earlier trials failed before using the model; fix before spending."
+        ]
+      },
+      {
+        "arm": "terminus-2",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "a06ee084038fa5e2",
+          "options_fingerprint": "44136fa355b3"
+        },
+        "trials": 23,
+        "basis": "measured",
+        "basis_detail": "11 trials on 10 tasks of this configuration on anthropic:claude-opus-5-5",
+        "confidence": "high",
+        "evidence": {
+          "trials": 11,
+          "tasks": 10,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.297781,
+          "p50": 0.161924,
+          "p90": 0.816844
+        },
+        "total": {
+          "p10": 5.23337,
+          "p50": 6.797169,
+          "p90": 8.332215
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.25,
+          "p90": 13.63
+        },
+        "arm_minutes": {
+          "p50": 44.32,
+          "p90": 53.56
+        },
+        "p_infra": 0.0,
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "e6d727483679d869",
+          "options_fingerprint": "a4945e4f8e73"
+        },
+        "trials": 27,
+        "basis": "measured_any_options",
+        "basis_detail": "1 trials on 1 tasks of mini-swe-agent on anthropic:claude-opus-5-5, any options",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261029-122236-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.452099,
+          "p50": 0.31182,
+          "p90": 0.946518
+        },
+        "total": {
+          "p10": 4.629206,
+          "p50": 10.144471,
+          "p90": 22.247979
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 4.27,
+          "p90": 9.29
+        },
+        "arm_minutes": {
+          "p50": 46.52,
+          "p90": 54.43
+        },
+        "p_infra": 0.0,
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi",
+        "cell": {
+          "family": "pi",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "dd7f23a86e387f25",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 27,
+        "basis": "measured_any_options",
+        "basis_detail": "1 trials on 1 tasks of pi on anthropic:claude-opus-5-5, any options",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261029-122236-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.500428,
+          "p50": 0.362843,
+          "p90": 1.01929
+        },
+        "total": {
+          "p10": 5.547521,
+          "p50": 12.230738,
+          "p90": 25.574161
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.5,
+          "p90": 9.78
+        },
+        "arm_minutes": {
+          "p50": 49.71,
+          "p90": 58.56
+        },
+        "p_infra": 0.0,
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "harness default",
+          "config_hash": "9c7311ba1b25de57",
+          "options_fingerprint": "a232a54a70bf"
+        },
+        "trials": 27,
+        "basis": "measured_any_options",
+        "basis_detail": "1 trials on 1 tasks of strands on anthropic:claude-opus-5-5, any options",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261029-122236-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.92162,
+          "p50": 0.685799,
+          "p90": 1.856682
+        },
+        "total": {
+          "p10": 9.726073,
+          "p50": 21.770703,
+          "p90": 46.373608
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.7,
+          "p90": 12.38
+        },
+        "arm_minutes": {
+          "p50": 63.31,
+          "p90": 73.98
+        },
+        "p_infra": 0.0,
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 40.202541,
+        "p50": 58.717436,
+        "p90": 88.954165
+      },
+      "budget_usd": 95.0,
+      "p_within_budget": 0.924,
+      "suggested_budget_usd": 102.5,
+      "worst_case_capped_usd": 750.0,
+      "uncapped_arms": [
+        "terminus-2",
+        "pi",
+        "strands"
+      ],
+      "inflight_allowance_usd": 49.5,
+      "wall_minutes": {
+        "p50": 255.15,
+        "p90": 273.36
+      },
+      "peak_containers": 3
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 10,
+        "pairs_after": 32,
+        "multiple_now": {
+          "value": 0.8662,
+          "ci": [
+            0.6485,
+            1.157
+          ],
+          "n": 10
+        },
+        "ci_factor_now": 1.3357,
+        "ci_factor_after": 1.1614,
+        "sd_log": 0.4993,
+        "sd_source": "observed"
+      },
+      {
+        "arm": "mini-swe-agent",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 1,
+        "pairs_after": 28,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1743,
+        "sd_log": 0.4993,
+        "sd_source": "pooled_model"
+      },
+      {
+        "arm": "pi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 1,
+        "pairs_after": 28,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1743,
+        "sd_log": 0.4993,
+        "sd_source": "pooled_model"
+      },
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 1,
+        "pairs_after": 28,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1743,
+        "sd_log": 0.4993,
+        "sd_source": "pooled_model"
+      }
+    ],
+    "reuse": null,
+    "warnings": [
+      "Arm 'claude-code': 39% of its earlier trials were infrastructure failures; fix before spending."
+    ],
+    "assumptions": [
+      "Harbor does not report cache writes; trial cache writes are priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-10-30T00:15:28+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:2613c2325b1b9453eee132e12e732928f37b912fdbe95be4ece18ff41dfea5f1",
+  "ledger_fingerprint": "sha256:263e1c0bf642e7c8",
+  "reuse_fingerprint": null
+}

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "d-kilo-code-27-tasks-sonne-ac4a",
+  "title": "Kilo Code: 27 tasks, Sonnet 5.5",
+  "created_at": "2026-10-31T10:37:28+00:00",
+  "updated_at": "2026-10-31T17:45:10+00:00",
+  "latest_version": 2,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T10:37:28+00:00",
+      "spec_hash": "sha256:ba4750a39774f7e9571f3cd4ffebb0b67a51cbcfa93dd0fb2a3672bc777e775a",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T11:37:29+00:00",
+      "spec_hash": "sha256:a236c783e747558ef019e81ba2db502d8e0723585c40d674efee6b90167cfd3a",
+      "change_note": "Prefer pre-baked images; 2 Kilo tasks have none (disk full) and install normally with a 4x setup limit.",
+      "approved_at": "2026-10-31T11:37:30+00:00",
+      "runs": [
+        "20261031-104510-kilo-code-27-tas-v2"
+      ]
+    }
+  }
+}

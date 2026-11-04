@@ -1,0 +1,359 @@
+# Engineering Test Bench: harness screening configuration.
+#
+# Secrets never go in this file. They live in .env (git-ignored), which the
+# bench loads at startup and the dashboard can edit.
+# After editing this file, press "Reload config" in the dashboard.
+
+dataset: terminal-bench@2.0
+
+# Fixed task sample, chosen once with a seed so every arm sees the same tasks.
+# Each mode takes the first n_tasks lines of this file.
+tasks_file: config/tasks.txt
+
+providers:
+  anthropic:
+    env_key: ANTHROPIC_API_KEY
+    model_prefix: anthropic/
+  fireworks:                       # default provider for open / third-party models: one fixed price per model (decided 2026-10-29)
+    env_key: FIREWORKS_AI_API_KEY
+    model_prefix: fireworks_ai/accounts/fireworks/models/
+  openai:                          # OpenAI's own API, fixed list prices (GPT-6.1 Terra, added 2026-10-31)
+    env_key: OPENAI_API_KEY
+    model_prefix: openai/
+  xai:                             # xAI's own API, fixed list prices (Grok 4.7, added 2026-10-31)
+    env_key: XAI_API_KEY
+    model_prefix: xai/
+  openrouter:                      # off: routed per request, so the price varies by provider; weaker data guarantees
+    env_key: OPENROUTER_API_KEY
+    model_prefix: openrouter/
+    enabled: false
+  # A self-hosted LiteLLM gateway (LiteLLM 1.83.7, added 2026-11-04), to measure what a
+  # gateway changes. Its root URL is LITELLM_URL in .env (never in this file), read when a
+  # job starts; each arm picks a path on it with base_url_route. Its trials carry
+  # base_url, so the report flags them cautioned. litellm_proxy/ is LiteLLM's (and
+  # Harbor's) proxy provider: Claude Code gets the gateway's model name unchanged as
+  # ANTHROPIC_MODEL and the key as a bearer token, never an Anthropic key. Model names on
+  # the gateway, not the providers' ids; priced under litellm in pricing.yaml.
+  litellm:
+    env_key: LITELLM_API_KEY       # a LiteLLM virtual key
+    base_url_env: LITELLM_URL      # the gateway root, e.g. http://<host>:<port>
+    model_prefix: litellm_proxy/
+    # The id each model's streamed replies carry. LiteLLM 1.83.7 puts the gateway name
+    # back on whole replies but not on streams, so Claude Code's message_start reports
+    # the upstream provider's id. The ledger and the run budget count usage under this
+    # id as the arm's own model, priced at the gateway name's row; any other name is
+    # still another model. A fact about the gateway rather than a run: keep an entry
+    # while trials that streamed it are in the ledger. Not part of any config hash.
+    upstream_models:
+      deepseek-v4.1-flash: accounts/fireworks/models/deepseek-v4p1-flash
+      deepseek-v4.1-flash-translated: accounts/fireworks/models/deepseek-v4p1-flash
+      kimi-k3-fireworks: accounts/fireworks/models/kimi-k3
+
+modes:
+  pilot:  {n_tasks: 1,  n_attempts: 1}   # prices one trial per arm before committing
+  sample: {n_tasks: 10, n_attempts: 1}   # sanity sample against published ratios
+
+run:
+  # Held fixed across arms. Strands takes its effort through its factory
+  # (factory_kwargs.effort on the strands arm), not through this setting, so
+  # keep the two in step.
+  effort: medium
+  n_concurrent: 2            # trials in parallel per arm; Docker Desktop on Windows
+  parallel_arms: 1           # arms at once; all share the run budget
+  budget_usd: 150            # stop for a whole run, checked as trials finish plus an estimate
+                             # for trials in flight; it can be exceeded by at most the trials in flight
+  per_trial_cap_usd: 15      # passed to harnesses that accept a dollar cap
+  max_turns: 300             # runaway guard for harnesses that only accept a turn cap
+  timeout_multiplier: 1.0
+  # Harness setup. prefer runs each trial on a pre-baked image (the harness
+  # installed into the task image once; see the prebake section) and falls
+  # back to Harbor's stock install per trial where none is ready; require
+  # fails such a trial as infra instead; off always installs (stock A/B runs).
+  # None of these is part of the config hash.
+  prebake: prefer            # off | prefer | require
+  setup_timeout_multiplier: auto   # auto: 2x Harbor's 360 s for arms that may run stock setups; or a number
+  env_build_timeout_multiplier: 1.0  # task image pull/start limit (600 s); raise for first pulls of huge images
+
+baseline_arm: claude-code
+# The model REPORT compares other models with when it holds the harness fixed
+# (compare: models), as provider:model; the report's baseline.model option overrides it.
+baseline_model: anthropic:claude-opus-5-5
+
+
+# Per arm:
+#   agent    a Harbor agent name, or module.path:Class for a harness class in
+#            this repo (run with --agent-import-path)
+#   family   the harness label used for pooling, reference.yaml and reports;
+#            defaults to agent, so give it for an import-path agent
+#   effort   inherit (default, follows run.effort) | omit (harness default) | a level.
+#            Quote levels YAML reads as true/false, e.g. effort: 'off'
+#   options  any option from `harbor agents schema <agent>`, e.g. thinking_display.
+#            The dashboard lists each harness's options and edits them for you.
+#            An object-valued option edited there replaces the value here whole.
+#   enabled  false leaves the arm out of runs
+arms:
+  # Harness versions are pinned so later runs (Block 2, more attempts) pool
+  # with earlier ones; unpinned, Harbor installs the latest in every trial.
+  # These are the versions the dev pilots ran on 2026-10-29. Terminus-2 ships
+  # inside Harbor, so Harbor's version pins it.
+  - name: claude-code
+    agent: claude-code
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "2.1.312"
+
+  - name: terminus-2
+    agent: terminus-2
+    provider: anthropic
+    model: claude-opus-5-5
+
+  - name: mini-swe-agent
+    # Harbor installs mini-swe-agent without LiteLLM's proxy extra, and LiteLLM
+    # 1.106 imports mcp, so every stock trial failed; this subclass adds mcp.
+    agent: bench.agents.mini_swe_agent:MiniSweAgentWithMcp
+    family: mini-swe-agent
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "2.4.6"
+
+  - name: pi
+    agent: pi
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "1.4.0"
+
+  - name: strands
+    # Harbor's Strands adapter runs a factory we supply. This one builds the
+    # Strands team's published strands-harness, the harness their S8 figures
+    # come from. Effort reaches it through factory_kwargs; the adapter itself
+    # rejects an effort setting.
+    agent: strands
+    family: strands
+    provider: anthropic
+    model: claude-opus-5-5
+    effort: omit
+    options:
+      factory: bench_strands_factory:create_agent
+      factory_path: harnesses/strands_factory
+      version: "1.57.2"        # strands-agents; strands-harness 0.3.2 needs >= 1.57.2
+      factory_kwargs:
+        model_spec: anthropic/claude-opus-5-5   # must equal this arm's provider/model; change both together
+        effort: medium         # keep in step with run.effort
+
+  # Cline, Goose and OpenCode (dev pilots 2026-10-30). Cline and Goose run as
+  # subclasses whose `version` installs exactly that release: Harbor's
+  # cline-cli installs cline@nightly unless cline_version is set, and Harbor's
+  # goose installs the latest stable release whatever version says. The
+  # OpenCode subclass keeps a finished run that Bun's late EPIPE exits 1
+  # (OpenCode 1.19.4+). Cline and OpenCode take no dollar or turn cap, so the
+  # task time limits are their only bound. See bench/agents/.
+  - name: cline
+    agent: bench.agents.cline:PinnedClineCli
+    family: cline-cli
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "3.0.74"        # npm latest; effort reaches it as --thinking medium
+
+  - name: goose
+    agent: bench.agents.goose:PinnedGoose
+    family: goose
+    provider: anthropic
+    model: claude-opus-5-5
+    options:
+      version: "1.57.0"        # release tag v1.57.0; effort reaches it as GOOSE_THINKING_EFFORT
+
+  - name: opencode
+    # OpenCode has no effort option; the model variant sets it (adaptive
+    # thinking at effort medium on Opus 5.5).
+    agent: bench.agents.opencode:OpenCodeBunEpipe
+    family: opencode
+    provider: anthropic
+    model: claude-opus-5-5
+    effort: omit
+    options:
+      version: "1.19.5"
+      variant: medium          # keep in step with run.effort
+
+  # Kilo Code 7.8.18, an OpenCode fork, run as the OpenCode subclass with Kilo's
+  # package, binary, config and --auto (bench/agents/kilo.py). Only telemetry,
+  # Claude Code config/skills and the update check are switched off. Like
+  # OpenCode it takes its effort as a model variant. Dev pilot passed 2026-10-31.
+  - name: kilo
+    agent: bench.agents.kilo:KiloCode
+    family: kilo-code
+    provider: anthropic
+    model: claude-opus-5-5
+    effort: omit
+    options:
+      version: "7.8.18"        # npm latest (rc track is 7.8.25)
+      variant: medium          # keep in step with run.effort
+
+  # DeepSeek Harness (dsh), DeepSeek's own agent, headless with full access
+  # and approval off (bench/agents/dsh.py). It runs its pi-ai adapter on a
+  # route to Fireworks the subclass declares; Fireworks is the only provider
+  # routed, so it has no Opus arm. Telemetry and the title-generator call are
+  # off. No turn or dollar cap: the task time limit is its only bound.
+  # Version 0.2.1-rc.5 (2026-10-29) is newer than the two-week pin habit; dsh
+  # has no non-rc release. Smoke-tested 2/2 and raced on 27 tasks 2026-11-02.
+  # No pre-bake adapter yet, so it sets up stock in every trial.
+  - name: dsh
+    agent: bench.agents.dsh:DeepSeekHarness
+    family: deepseek-harness
+    provider: fireworks
+    model: deepseek-v4p1-flash-1017
+    effort: high               # Fireworks takes low | high | max (and dsh 'off'); no medium
+    enabled: true
+    options:
+      version: "0.2.1-rc.5"    # npm latest = next; pi-ai pinned to 1.3.0 inside the adapter
+
+  # Claude Code through the LiteLLM gateway (provider litellm). Claude models take
+  # the raw pass-through, /anthropic (body and anthropic-beta forwarded unchanged);
+  # the others the gateway's root, its own /v1/messages, which drops unknown betas
+  # and body fields: that filtering is part of what these arms measure. Pairs:
+  # gw-opus against claude-code (does the gateway itself change anything),
+  # gw-deepseek (Fireworks' Anthropic format) against gw-deepseek-tr (the same
+  # model translated from OpenAI format), gw-deepseek-tr and gw-kimi against the
+  # Goose arms on the same models. kimi-k3-fireworks is Fireworks' Kimi K3 with no
+  # fallback, so a Fireworks failure shows as an error in the trial (the gateway's
+  # kimi-k3, which fell back to OpenRouter, is off the bench keys). DeepSeek and
+  # Kimi run at high, as in the per-model designs: they offer low, high and max,
+  # no medium. Off until a design asks for them.
+  - name: claude-code-gw-opus
+    # Matches claude-code but for the gateway. With a base URL, Harbor points
+    # every model alias and the subagent model at Opus; agent_env puts back
+    # what the direct arm uses: Haiku and Sonnet by name (both on the key),
+    # and no subagent model, so Claude Code picks its own. Fable stays on Opus,
+    # since the key has no Fable model. It keeps Claude Code's dollar cap too:
+    # that prices claude-* models right on any route.
+    agent: claude-code
+    provider: litellm
+    model: claude-opus-5-5
+    enabled: false
+    options:
+      version: "2.1.312"
+      base_url_route: /anthropic
+      agent_env:
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-5-5
+        ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5-5
+        CLAUDE_CODE_SUBAGENT_MODEL: ""
+
+  - name: claude-code-gw-deepseek
+    agent: claude-code
+    provider: litellm
+    model: deepseek-v4.1-flash
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-deepseek-tr
+    agent: claude-code
+    provider: litellm
+    model: deepseek-v4.1-flash-translated
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-kimi
+    agent: claude-code
+    provider: litellm
+    model: kimi-k3-fireworks
+    effort: high
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  - name: claude-code-gw-sol
+    # Translated to OpenAI's Responses API. Budgeted thinking fails there
+    # (enabled + budget_tokens becomes an effort Sol rejects); Claude Code's
+    # adaptive thinking works.
+    agent: claude-code
+    provider: litellm
+    model: gpt-6.1-sol
+    enabled: false
+    options:
+      version: "2.1.312"
+
+  # Example open-model arm on Fireworks. Fill in the model id from
+  # fireworks.ai/models, add its price to config/pricing.yaml, then enable.
+  # - name: opencode-fireworks
+  #   agent: bench.agents.opencode:OpenCodeBunEpipe
+  #   family: opencode
+  #   provider: fireworks
+  #   model: <fireworks-model-id>
+  #   enabled: false
+
+# Pooled report (REPORT tab). Every key below is optional; the values shown
+# are the defaults.
+report:
+  group_by: family            # family | implementation | config: what pools into one line per model
+  crashes: include            # include | exclude: a harness crash after using the model counts as a failure
+  misconfigured_cap: exclude  # exclude | include: trials stopped by a harness cap priced at the wrong rates
+  exclusions: true            # true | false: apply the run and trial exclusions recorded in the ledger
+  same_run_only: false        # false: a task pairs across runs on the same model
+  match_on: digest            # digest | name: how a task is recognised across runs
+  # ci_level: 0.90            # defaults to stats.confidence
+  bootstrap_resamples: 2000
+  seed: 20261028
+  min_pairs_estimate: 3       # fewer pairs: no multiple is shown
+  min_pairs_verdict: 8        # fewer pairs: no verdict against the published figures
+  pricing: current            # current | as_ingested | reported (the harness's or OpenRouter's billed cost)
+  # baseline_effort: medium   # compare models: the baseline_model effort every model is set against
+
+# Statistics shared by the report, coverage and the assistant's estimates.
+stats:
+  confidence: 0.90            # one level for every interval, sample size and verdict
+  target_halfwidth: 0.25      # precision target: +/-25% on a multiple
+  prior_sd_log: 0.6           # spread of per-task log ratios assumed before any pairs exist
+  default_trial_tokens:       # cost prior for a harness with no trials yet
+    input: 600000
+    cache_share: 0.85
+    output: 60000
+
+# Run-design assistant (Claude Opus 5.5). It drafts designs; only you queue them.
+assistant:
+  enabled: true
+  effort: medium              # for new conversations: low | medium | high | xhigh | max
+  max_tokens: 32000           # per request; bounds one request's output cost
+  max_steps: 12               # API requests per message you send
+  per_turn_cap_usd: 1.00
+  daily_cap_usd: 5.00         # per local calendar day, this profile
+  fallbacks: default          # default | off: let Anthropic answer a declined request with a fallback model
+
+# Limits on run designs, checked before a design can be queued.
+designs:
+  max_budget_usd: 1000        # the largest budget one design may set (5-model race at full cost, user OK 2026-10-31)
+  max_arms: 64                # per-task race: 5 models x 8 harnesses + Opus low/high x 9 + baseline
+  max_attempts: 5
+  warn_containers: 8          # parallel_arms x n_concurrent above this: warning
+  max_containers: 16          # above this: the design cannot run
+  extra_harnesses: []         # Harbor agent names a design may use beyond the arms above
+  import_paths:                # module.path:Class -> {family: ...}; the arms' import paths are added
+    # Pi with routes to Fireworks and to GPT-6.1 Terra (bench/agents/pi.py), for the
+    # per-model designs; on Anthropic it is Harbor's pi unchanged.
+    bench.agents.pi:PiProviders: {family: pi}
+
+queue:
+  on_failure: pause           # pause | skip: what the queue does after a failed run
+  global_cap_usd: null        # starting cap on all runs since it was set; the Queue panel changes it
+
+ledger:
+  extra_scan_roots: []        # more Harbor jobs folders to import, relative to the project root
+
+# Pre-baked harness images (python -m bench.prebake). One image per task,
+# harness and version, named <prefix>/<harness>-<version>-r<recipe>/<task image>
+# and built FROM the local task image with Harbor's own install commands.
+prebake:
+  prefix: benchbake           # image repository prefix (benchprobe/ is the prototypes')
+  build_jobs: 3               # builds at once, also per task race; builds have no CPU cap (6 cores for the bench)
+  max_age_days: 14            # older images still run, with a warning: their apt lists go stale
+  keep_days: 14               # prune keeps an image no arm wants this long
+  auto_build: false           # true: the queue builds missing images before it starts an item
+  prepull: true               # a run pulls missing task images before its first arm
+  host_reserve_gb: 25         # a build leaves this much free on the drive holding Docker's disk
+  vm_reserve_gb: 50           # ... and inside Docker's VM

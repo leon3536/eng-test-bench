@@ -1,0 +1,275 @@
+/* DESIGNS tab styles. Owned by the DESIGNS builder, with designs.js and demo-designs.js.
+
+   Use the tokens in style.css :root and its shared classes (.panel, .btn, .tag,
+   .chip, .field, .grid-t, .params, .led, .design-chip ...) without restyling
+   them. Scope every rule under #view-designs. The few rules for the tab's own
+   dialogs (option, task and arm pickers) are under dialog, since formDialog
+   builds them outside the view; their dz- classes keep them apart. */
+
+/* Layout: list | editor | check and queue. Two columns below 1560px, one below 1100px. */
+#view-designs .dz-layout {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: 290px minmax(0, 1fr) 400px; grid-template-areas: "list main side";
+}
+#view-designs .dz-list-panel { grid-area: list; }
+#view-designs .dz-main { grid-area: main; min-width: 0; }
+#view-designs .dz-side { grid-area: side; display: grid; gap: 14px; min-width: 0; }
+#view-designs .dz-list-panel, #view-designs .dz-side {
+  position: sticky; top: calc(var(--bar-h) + 14px); max-height: calc(100vh - var(--bar-h) - 62px);
+}
+#view-designs .dz-list-panel { display: flex; flex-direction: column; }
+#view-designs .dz-side { overflow-y: auto; scrollbar-width: thin; }
+
+/* D-01 list */
+#view-designs .dz-list-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+#view-designs .dz-filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+#view-designs .dz-filters button {
+  padding: 5px 8px; border: 1px solid var(--line-2); background: var(--inset); color: var(--muted); cursor: pointer;
+  font: 600 10px/1 var(--font-ui); letter-spacing: .14em; text-transform: uppercase; font-stretch: 85%;
+}
+#view-designs .dz-filters button:hover { color: var(--text); border-color: var(--line-3); }
+#view-designs .dz-filters button.active { color: var(--kelly-ink); background: var(--kelly); border-color: var(--kelly); }
+#view-designs .dz-filters button:focus-visible { outline: 1px solid var(--kelly); outline-offset: 1px; }
+#view-designs .dz-list { overflow-y: auto; min-height: 0; flex: 1; transition: opacity .15s; }
+#view-designs .dz-list.dz-stale { opacity: .5; }
+#view-designs .dz-list-msg { margin: 0; padding: 16px 14px; font: 12px/1.45 var(--font-mono); }
+#view-designs .dz-cards { list-style: none; margin: 0; padding: 0; }
+#view-designs .dz-card { border-bottom: 1px solid var(--line); }
+#view-designs .dz-card.active { background: var(--kelly-wash); box-shadow: inset 2px 0 0 var(--kelly); }
+#view-designs .dz-card-main {
+  display: grid; gap: 4px; width: 100%; padding: 11px 14px 9px; border: 0; background: none; color: var(--text-2);
+  cursor: pointer; text-align: left;
+}
+#view-designs .dz-card:not(.active) .dz-card-main:hover { background: var(--panel-3); }
+#view-designs .dz-card-main:focus-visible { outline: 1px solid var(--kelly); outline-offset: -2px; }
+#view-designs .dz-card-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+#view-designs .dz-card-top .tag { flex: none; padding: 2px 5px; }
+#view-designs .dz-card-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; color: var(--text); }
+#view-designs .dz-card-id, #view-designs .dz-card-est, #view-designs .dz-card-counts { font: 10.5px/1.4 var(--font-mono); color: var(--muted); }
+#view-designs .dz-card-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
+#view-designs .dz-card-est { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+#view-designs .dz-card-est .tag { padding: 1px 4px; }
+#view-designs .dz-card-counts { display: flex; flex-wrap: wrap; gap: 3px 10px; }
+#view-designs .dz-card-run {
+  display: block; max-width: calc(100% - 28px); margin: -4px 14px 9px; padding: 0; border: 0; background: none; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10.5px var(--font-mono); color: var(--kelly-hi); text-align: left;
+}
+#view-designs .dz-card-run:hover { text-decoration: underline; }
+#view-designs .dz-card.unreadable .dz-card-main { cursor: default; }
+#view-designs .dz-card-error { font: 11px/1.4 var(--font-mono); overflow-wrap: anywhere; }
+
+/* D-02 editor */
+#view-designs .dz-main.dz-loading { opacity: .55; pointer-events: none; transition: opacity .15s; }
+#view-designs .dz-center { justify-content: center; }
+#view-designs .dz-editor .panel-meta { min-width: 0; }
+#view-designs .dz-id, #view-designs .dz-hash { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-designs .dz-hash { color: var(--faint); }
+#view-designs .dz-editor-body { display: grid; gap: 14px; }
+#view-designs .dz-editor-body > .field { margin: 0; }
+#view-designs .dz-notes-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px 14px; }
+#view-designs .dz-notices:empty { display: none; }
+#view-designs .dz-notices { display: grid; gap: 8px; }
+#view-designs .dz-banner { margin: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+#view-designs .dz-banner > span:first-child { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+#view-designs .dz-banner small { font: 11px/1.4 var(--font-mono); opacity: .85; }
+#view-designs .note-strip.dz-banner { flex-wrap: wrap; }
+#view-designs .dz-headline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 300px); gap: 12px 14px; align-items: start; }
+/* The version select is as wide as its longest option ("v2 · You · … · queued · <change note>"): never wider than its column. */
+#view-designs .dz-headline > .field { min-width: 0; }
+#view-designs .dz-headline select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+#view-designs .dz-title-input { height: 40px; font-size: 16px; font-weight: 600; letter-spacing: .01em; }
+#view-designs .dz-editor-body textarea { min-height: 0; }
+#view-designs .dz-vermeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: -6px; font: 11px var(--font-mono); color: var(--muted); }
+#view-designs .dz-runs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#view-designs .dz-run-chip {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 3px 8px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--inset); color: var(--text-2);
+}
+#view-designs .dz-run-chip:hover { border-color: var(--kelly-lo); color: var(--text); }
+#view-designs .dz-run-chip .mono:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+#view-designs .dz-ai { padding: 10px 14px; border: 1px solid var(--ai-line); border-left: 3px solid var(--ai-mark); background: rgba(79, 143, 214, .07); }
+#view-designs .dz-ai-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#view-designs .dz-ai-head b { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--ai); font-stretch: 85%; }
+#view-designs .dz-ai-head .btn { margin-left: auto; }
+#view-designs .dz-rationale { margin-top: 8px; color: var(--text-2); font-size: 13px; }
+#view-designs .dz-rationale > * { margin: 0 0 6px; }
+#view-designs .dz-rationale > :last-child { margin-bottom: 0; }
+#view-designs .dz-ai p { margin: 8px 0 0; }
+#view-designs .dz-ai-mark { color: var(--ai); }
+
+#view-designs .dz-diff { padding: 4px 12px 8px; border: 1px solid var(--line-2); border-left: 2px solid var(--amber); background: var(--panel); }
+#view-designs .dz-diff ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font: 11.5px/1.45 var(--font-mono); }
+#view-designs .dz-diff li { overflow-wrap: anywhere; color: var(--muted); }
+#view-designs .dz-path { color: var(--text-2); }
+#view-designs .dz-from { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+#view-designs .dz-to { color: var(--text); }
+
+#view-designs .dz-actionbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+#view-designs .dz-grow { flex: 1; }
+#view-designs .dz-save.dz-ready { color: var(--kelly-hi); border-color: var(--kelly); box-shadow: 0 0 14px rgba(76, 187, 23, .2); }
+
+#view-designs .dz-section { display: grid; gap: 10px; min-width: 0; }
+#view-designs .dz-section .section-head { margin: 0; }
+#view-designs .dz-section .row { margin: 0; }
+#view-designs .dz-task-count, #view-designs .dz-peak { font: 11px var(--font-mono); color: var(--text-2); letter-spacing: .04em; }
+#view-designs .dz-hint { margin: 0; font: 11px var(--font-mono); color: var(--faint); }
+#view-designs .dz-line { display: flex; gap: 8px; margin: 0; font: 11.5px/1.45 var(--font-mono); }
+#view-designs .dz-link {
+  padding: 0; border: 0; background: none; cursor: pointer; color: var(--kelly-hi);
+  font: 11px var(--font-mono); text-decoration: underline; text-decoration-color: var(--kelly-lo); text-underline-offset: 2px;
+}
+#view-designs .dz-link:hover { color: var(--text); text-decoration-color: var(--kelly); }
+#view-designs .dz-link:focus-visible { outline: 1px solid var(--kelly); outline-offset: 2px; }
+#view-designs .dz-suggest { display: flex; flex-wrap: wrap; gap: 0 4px; align-items: baseline; }
+#view-designs .dz-suggest:empty { display: none; }
+
+/* Tasks: the seeded strip, in blocks, then free text. Chosen tasks carry a tick, not only a colour. */
+#view-designs .dz-strip { display: grid; gap: 10px; }
+#view-designs .dz-block + .dz-block { padding-top: 10px; border-top: 1px dashed var(--line-3); }
+#view-designs .dz-block-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font: 600 10px var(--font-ui); letter-spacing: .16em; color: var(--muted); font-stretch: 85%; }
+#view-designs .dz-block-head .faint { font: 10.5px var(--font-mono); letter-spacing: 0; }
+#view-designs .dz-tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px; }
+#view-designs .dz-task {
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px; cursor: pointer; text-align: left;
+  border: 1px solid var(--line-2); background: var(--inset); color: var(--muted); font: 11.5px var(--font-mono);
+}
+#view-designs .dz-task:hover { color: var(--text); border-color: var(--line-3); }
+#view-designs .dz-task:focus-visible { outline: 1px solid var(--kelly); outline-offset: 1px; }
+#view-designs .dz-task-n { flex: none; width: 34px; color: var(--faint); }
+#view-designs .dz-task-n::before { content: "+ "; }
+#view-designs .dz-task-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-designs .dz-task[aria-pressed="true"] { color: var(--text); border-color: var(--kelly-lo); background: var(--kelly-wash); }
+#view-designs .dz-task[aria-pressed="true"] .dz-task-n { color: var(--kelly-hi); }
+#view-designs .dz-task[aria-pressed="true"] .dz-task-n::before { content: "✓ "; }
+#view-designs .dz-task-more { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 12px 14px; }
+#view-designs .dz-order:empty { display: none; }
+
+/* Arms: one block per arm, the baseline marked by its radio, a tag and an edge. */
+#view-designs .dz-nobase, #view-designs .dz-base { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#view-designs .dz-nobase { font: 600 10px var(--font-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-stretch: 85%; }
+#view-designs .dz-nobase input, #view-designs .dz-base input { width: auto; height: auto; margin: 0; accent-color: var(--kelly); }
+#view-designs .dz-arms { display: grid; gap: 8px; }
+#view-designs .dz-no-arms { margin: 0; font-size: 13px; }
+#view-designs .dz-arm {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 8px 12px; align-items: start;
+  padding: 10px 12px; border: 1px solid var(--line-2); background: var(--panel);
+}
+#view-designs .dz-arm.is-base { border-color: var(--kelly-lo); box-shadow: inset 2px 0 0 var(--kelly); }
+#view-designs .dz-base { flex-direction: column; gap: 4px; padding-top: 18px; font: 600 9px var(--font-ui); letter-spacing: .14em; color: var(--faint); font-stretch: 85%; }
+#view-designs .dz-arm.is-base .dz-base { color: var(--kelly); }
+#view-designs .dz-arm-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; min-width: 0; }
+#view-designs .dz-model { grid-column: span 2; min-width: 0; }
+#view-designs .dz-agent { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+#view-designs .dz-agent:empty { display: none; }
+#view-designs .dz-path-text, #view-designs .dz-harbor { word-break: break-all; }
+#view-designs .dz-effort { display: grid; gap: 4px; }
+#view-designs .dz-subset { justify-content: flex-start; width: 100%; height: 34px; text-transform: none; letter-spacing: .02em; font: 12px var(--font-mono); }
+#view-designs .dz-remove { margin-top: 18px; width: 28px; padding: 0; }
+#view-designs .dz-remove:hover { color: var(--red); border-color: var(--red-lo); }
+#view-designs .dz-arm-options { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+#view-designs .dz-opts { min-width: 0; }
+#view-designs .dz-opts .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-designs .chip.dz-odd { border-color: var(--amber-lo); color: var(--amber); }
+#view-designs .dz-none { font: 11px var(--font-mono); }
+
+/* D-03 check */
+#view-designs .dz-check-panel { transition: opacity .15s; }
+#view-designs .dz-check-panel.dz-dim .dz-check-body { opacity: .5; }
+#view-designs .dz-check-status { font: 600 11px var(--font-ui); letter-spacing: .14em; font-stretch: 85%; gap: 8px; }
+#view-designs .dz-armbar { padding: 12px 14px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(76, 187, 23, .05), transparent); }
+#view-designs .dz-armbar .actions .btn { flex: 1 1 auto; }
+#view-designs .dz-arm-note { margin: 8px 0 0; font: 11px/1.45 var(--font-mono); color: var(--muted); }
+#view-designs .dz-check-body { display: grid; gap: 12px; transition: opacity .15s; }
+#view-designs .dz-check-body > * { margin: 0; }
+#view-designs .dz-check-src { font: 11px var(--font-mono); color: var(--faint); }
+#view-designs .dz-issues { margin: 0; }
+#view-designs .dz-issues li span:last-child { overflow-wrap: anywhere; }
+#view-designs .dz-estimate { display: grid; gap: 10px; }
+#view-designs .dz-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+#view-designs .dz-totals div { display: grid; gap: 3px; padding: 8px 10px; background: var(--panel); }
+#view-designs .dz-totals span { font: 600 9.5px var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); font-stretch: 85%; }
+#view-designs .dz-totals b { font: 600 15px var(--font-mono); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-designs .dz-totals .main b { color: var(--kelly-hi); }
+#view-designs .dz-est dd { overflow-wrap: anywhere; }
+#view-designs .dz-est .dz-link { font-size: 13px; }
+#view-designs .dz-est-table td.mono { white-space: nowrap; }
+#view-designs .dz-est-table .tag { padding: 2px 5px; }
+#view-designs .dz-est-note { font: 12px/1.45 var(--font-mono); }
+#view-designs .dz-pairs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font: 11.5px/1.45 var(--font-mono); color: var(--text-2); }
+#view-designs .dz-pairs li { overflow-wrap: anywhere; }
+#view-designs .dz-reserve { display: block; margin-top: 4px; font: 10.5px/1.4 var(--font-mono); color: var(--faint); }
+#view-designs .dz-assume { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+
+#view-designs .dz-est div.dz-wide { grid-column: 1 / -1; }
+
+/* Reused trials: per arm what it takes from the ledger (trials and the runs they came from) and what it still runs. */
+#view-designs .dz-reuse { display: grid; gap: 8px; }
+#view-designs .dz-reuse .section-head { margin: 0; }
+#view-designs .dz-reuse-total { font: 11px var(--font-mono); color: var(--text-2); text-align: right; }
+#view-designs .dz-reuse .dz-banner { display: flex; gap: 8px; }
+#view-designs .dz-reuse-arms { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#view-designs .dz-reuse-arm { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line-2); background: var(--panel); min-width: 0; }
+#view-designs .dz-reuse-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+#view-designs .dz-reuse-head b { font-size: 12.5px; color: var(--text); }
+#view-designs .dz-reuse-head .tag { padding: 2px 5px; }
+#view-designs .dz-reuse-head .dz-hash { margin-left: auto; font-size: 10.5px; }
+#view-designs .dz-reuse-arm details > summary { padding: 2px 0; font-size: 10px; }
+#view-designs .dz-reused { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+#view-designs .dz-reused li { display: grid; gap: 3px; padding-left: 8px; border-left: 1px solid var(--kelly-lo); min-width: 0; }
+#view-designs .dz-reused-task { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; }
+#view-designs .dz-reused-task .mono:first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text-2); }
+#view-designs .dz-reused-from { display: flex; flex-wrap: wrap; gap: 3px; }
+#view-designs .dz-reused-from .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+#view-designs .dz-run-ref { cursor: pointer; color: var(--kelly-hi); }
+#view-designs .dz-run-ref:hover { border-color: var(--kelly-lo); color: var(--text); }
+#view-designs .dz-run-ref:focus-visible { outline: 1px solid var(--kelly); outline-offset: 1px; }
+#view-designs .dz-reuse-run { margin: 4px 0 0; font-size: 11px; color: var(--text-2); overflow-wrap: anywhere; }
+#view-designs .dz-arm-reuse:empty { display: none; }
+#view-designs .field small.dz-arm-reuse.ok-text { color: var(--kelly); }
+
+#view-designs .dz-queue-summary:empty { display: none; }
+
+/* Dialogs this tab opens (built by formDialog outside the view). */
+dialog .dz-checks { display: grid; gap: 2px; max-height: 300px; overflow-y: auto; padding: 4px; border: 1px solid var(--line); background: var(--inset); }
+dialog .dz-check { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 2px 8px; align-items: center; padding: 5px 6px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+dialog .dz-check:hover { background: var(--panel-3); }
+dialog .dz-check input { width: auto; height: auto; margin: 0; accent-color: var(--kelly); }
+dialog .dz-check small { grid-column: 2; font: 10.5px var(--font-mono); }
+dialog .dz-check .mono { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1560px) {
+  #view-designs .dz-layout { grid-template-columns: 270px minmax(0, 1fr); grid-template-areas: "list main" "list side"; }
+  #view-designs .dz-list-panel { grid-row: 1 / span 2; }
+  #view-designs .dz-side { position: relative; top: auto; max-height: none; overflow: visible; }
+}
+@media (max-width: 1100px) {
+  #view-designs .dz-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "main" "side"; }
+  #view-designs .dz-list-panel { grid-row: auto; position: relative; top: auto; max-height: none; }
+  #view-designs .dz-list { max-height: 300px; }
+  #view-designs .dz-queue-summary { display: none; }  /* the queue lives on the QUEUE tab here */
+}
+/* The docked assistant (body.as-docked, from 1240px) takes 420px from main: repeat the 1560px and 1100px rules. */
+@media (min-width: 1240px) and (max-width: 1980px) {
+  body.as-docked #view-designs .dz-layout { grid-template-columns: 270px minmax(0, 1fr); grid-template-areas: "list main" "list side"; }
+  body.as-docked #view-designs .dz-list-panel { grid-row: 1 / span 2; }
+  body.as-docked #view-designs .dz-side { position: relative; top: auto; max-height: none; overflow: visible; }
+}
+@media (min-width: 1240px) and (max-width: 1520px) {
+  body.as-docked #view-designs .dz-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "list" "main" "side"; }
+  body.as-docked #view-designs .dz-list-panel { grid-row: auto; position: relative; top: auto; max-height: none; }
+  body.as-docked #view-designs .dz-list { max-height: 300px; }
+  body.as-docked #view-designs .dz-queue-summary { display: none; }
+}
+@media (max-width: 760px) {
+  #view-designs .dz-headline, #view-designs .dz-task-more, #view-designs .dz-notes-row { grid-template-columns: minmax(0, 1fr); }
+  #view-designs .dz-arm { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 10px; gap: 8px; }
+  #view-designs .dz-arm-fields { grid-template-columns: minmax(0, 1fr); }
+  #view-designs .dz-model { grid-column: auto; }
+  #view-designs .dz-arm-options { grid-column: 1 / -1; }
+  #view-designs .dz-tasks { grid-template-columns: minmax(0, 1fr); }
+  #view-designs .dz-actionbar .dz-grow { display: none; }
+}

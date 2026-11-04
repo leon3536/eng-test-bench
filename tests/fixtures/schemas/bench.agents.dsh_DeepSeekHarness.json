@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "base_url": {
+      "type": "null",
+      "default": null
+    },
+    "disable_web_search": {
+      "default": false,
+      "description": "Disable native web search and fetch tools when supported.",
+      "title": "Disable Web Search",
+      "type": "boolean"
+    },
+    "reasoning_effort": {
+      "anyOf": [
+        {
+          "enum": [
+            "off",
+            "low",
+            "high",
+            "max"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Model reasoning effort (the route's reasoning level). Omit for the model's default.",
+      "title": "Reasoning Effort"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent CLI version to install. Omit for latest.",
+      "title": "Version"
+    },
+    "prompt_template_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Jinja2 template path; must include {{ instruction }}.",
+      "title": "Prompt Template Path"
+    },
+    "config": {
+      "default": null,
+      "description": "Native config file path or inline JSON.",
+      "title": "Config"
+    }
+  },
+  "title": "DshOptions",
+  "type": "object"
+}

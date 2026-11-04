@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "design_id": "d-new-harnesses-27-tasks-o-6a45",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T04:22:50+00:00",
+  "profile": "default",
+  "title": "New harnesses: 27 tasks, Opus 5.5 (pilot)",
+  "purpose": "Cline, Goose and OpenCode on the 27-task scope; Claude Code is the baseline (reused).",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 5.0,
+      "parallel_arms": 3,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "require"
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert"
+        ]
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert"
+        ]
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:ff7fc17d84363c60d4d2300bd7aef03466258223f4cd8a3091c902fd2e0b0cd1"
+}

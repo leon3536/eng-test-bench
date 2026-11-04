@@ -1,0 +1,22 @@
+# Factory project for Harbor's built-in `strands` agent (see README.md).
+#
+# Harbor copies this folder into the task container and runs
+# `uv pip install -e` on it because it has a pyproject.toml. That is what
+# installs the pinned strands-harness next to Harbor's strands-agents.
+# strands-harness 0.3.2 needs strands-agents >= 1.57.2, so arms using this
+# factory must also set the Harbor option `version: "1.57.2"` (Harbor's
+# default, 1.54.0, cannot be resolved together with it).
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bench-strands-factory"
+version = "0.1.0"
+description = "Builds the Strands harness agent for Harbor's strands adapter."
+requires-python = ">=3.10"
+dependencies = ["strands-harness==0.3.2"]
+
+[tool.setuptools]
+packages = ["bench_strands_factory"]

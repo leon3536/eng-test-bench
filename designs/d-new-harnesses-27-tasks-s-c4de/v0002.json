@@ -1,0 +1,1086 @@
+{
+  "schema": 1,
+  "design_id": "d-new-harnesses-27-tasks-s-c4de",
+  "version": 2,
+  "parent_version": 1,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T11:37:30+00:00",
+  "profile": "default",
+  "title": "New harnesses: 27 tasks, Sonnet 5.5 (full)",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "Gap fill.",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 15.0,
+      "parallel_arms": 3,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "require"
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": []
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": []
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "build-cython-ext"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/openssl-selfsigned-cert__2Zuqu4e"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cobol-modernization__xrNcNvj"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/build-cython-ext__7dHsY5p"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/mteb-retrieve__uRcPVsp"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sparql-university__NxSPkEo"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-with-gcov__diHUajb"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-db-truncate__k7pwXwe"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/hf-model-inference__NCifn4b"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/db-wal-recovery__oRFThUG"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-multibranch__Uq4CQEd"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/log-summary-date-ranges__Xq75xRZ"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/nginx-request-logging__WNWWZFt"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/multi-source-data-merger__yXNbmhX"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/reshard-c4-data__xjxGCsw"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/sanitize-git-repo__9nAsYrt"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/kv-store-grpc__NcvvxD2"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-git__yvZYiwW"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/mailman__pufunSf"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cancel-async-tasks__Eb8K35R"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/constraints-scheduling__3G4Gekd"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/financial-document-processor__Pp8v9ug"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-code-vulnerability__6fHftSa"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-leak-recovery__5v9eyUo"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/headless-terminal__TsoguPL"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/modernize-scientific-stack__4Lrqu4t"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/pypi-server__hqCXdY7"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "9c7b5be9-f13e-4e32-a030-359b086b4c82/regex-log__L25bwAh"
+          ],
+          "runs": [
+            "default/20261030-125004-it-saas-scope-27-v2"
+          ]
+        }
+      ],
+      "cline": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/openssl-selfsigned-cert__fsHhpsj"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/cobol-modernization__DeWHj5N"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/build-cython-ext__oowz7VL"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/mteb-retrieve__8YxiZSm"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/sparql-university__wZXvJoH"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/sqlite-with-gcov__UEekn3s"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/sqlite-db-truncate__yLUF4f9"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/hf-model-inference__GCMQQqz"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/db-wal-recovery__vSPQfQx"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/git-multibranch__DEdS7im"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/log-summary-date-ranges__Toahm7C"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/nginx-request-logging__mRSnfft"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/multi-source-data-merger__ipAUehV"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/reshard-c4-data__HKgBa3x"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/sanitize-git-repo__zYY4BFV"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/kv-store-grpc__QQ5AkCk"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/fix-git__p8Xm8Ye"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/mailman__G5EHeVj"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/cancel-async-tasks__doteqcU"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/constraints-scheduling__EQi8mbA"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/financial-document-processor__CRyz3mB"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/fix-code-vulnerability__iH98JWV"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/git-leak-recovery__fAS4Ps8"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/headless-terminal__6H6VQrp"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/modernize-scientific-stack__eqTwbDh"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/pypi-server__XcRMPo7"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "2e983c65-69be-446e-ad46-d1668f9773fb/regex-log__nfC5TsB"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        }
+      ],
+      "goose": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/openssl-selfsigned-cert__WnCbaCV"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/cobol-modernization__qJdRRFb"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/build-cython-ext__j7EW89D"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/mteb-retrieve__R9pW4By"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/sparql-university__FjWBBUf"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/sqlite-with-gcov__GcTqKvx"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/sqlite-db-truncate__bLg9XX9"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/hf-model-inference__Kf6hcPu"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/db-wal-recovery__ZCsk8Qk"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/git-multibranch__paPjBn8"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/log-summary-date-ranges__Upxp5mi"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/nginx-request-logging__HRih632"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/multi-source-data-merger__DjpPLhj"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/reshard-c4-data__STGaHtH"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/sanitize-git-repo__NLa3nFj"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/kv-store-grpc__VL2KwgB"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/fix-git__RY9kjDN"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/mailman__5ngHim5"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/cancel-async-tasks__KNzaPVn"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/constraints-scheduling__QBFCXL3"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/financial-document-processor__KCQcyQt"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/fix-code-vulnerability__tm7THvY"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/git-leak-recovery__zjWpof8"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/headless-terminal__obgYJdK"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/modernize-scientific-stack__pS7QNVi"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/pypi-server__WhfzPTr"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "3b7f470f-1790-4ede-9454-a22be34b6ab5/regex-log__eWHvyFG"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        }
+      ],
+      "opencode": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/openssl-selfsigned-cert__Meu6QYk"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/cobol-modernization__695pb2S"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/mteb-retrieve__SzgJRH5"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/sparql-university__K9vz8MU"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/sqlite-with-gcov__JabcvXm"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/sqlite-db-truncate__Qnr49ei"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/hf-model-inference__B5T7r4m"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/db-wal-recovery__uwrwmuN"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/git-multibranch__JPkTv6v"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/log-summary-date-ranges__JGVKeVm"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/nginx-request-logging__LvLLMZz"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/multi-source-data-merger__zFRiU2g"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/reshard-c4-data__MmLdnKL"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/sanitize-git-repo__zgjQTJX"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/kv-store-grpc__h6dcRse"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/fix-git__3M8LymA"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/mailman__EsSeBbW"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/cancel-async-tasks__wjCLoj5"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/constraints-scheduling__Z6tzSMZ"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/financial-document-processor__9Dn6j4X"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/fix-code-vulnerability__aqZfMkD"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/git-leak-recovery__kJ6NbEw"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/headless-terminal__UpJTJZi"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/modernize-scientific-stack__zrDbLas"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/pypi-server__3E5yQmU"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "0fa1dbd4-9e57-4cd8-a876-da1614d145e3/regex-log__rtD5QP4"
+          ],
+          "runs": [
+            "default/20261031-024618-new-harnesses-27-v1"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:5d12083b6cec5313ee9f45ed192e5a27e907a67319b1f5694806da56610b5dac"
+}

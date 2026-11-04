@@ -1,0 +1,18 @@
+{
+    "task": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+        "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__saBMoJj",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\jobs\\20261029-122236-pilot\\mini-swe-agent",
+    "agent": {
+        "import_path": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "model_name": "anthropic/claude-opus-5-5",
+        "kwargs": {
+            "reasoning_effort": "medium",
+            "cost_limit": "15",
+            "version": "2.4.6"
+        }
+    },
+    "job_id": "a2f33135-578c-45ad-946e-08dc13410cd0"
+}

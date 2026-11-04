@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "d-pilot-from-config-255c",
+  "title": "pilot from config",
+  "created_at": "2026-11-04T18:02:13+00:00",
+  "updated_at": "2026-11-04T18:02:13+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-04T18:02:13+00:00",
+      "spec_hash": "sha256:fd21b375d5db868fe7172526b17e65c43807c9774b332de40c7fa1157ff6cd43",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    }
+  }
+}

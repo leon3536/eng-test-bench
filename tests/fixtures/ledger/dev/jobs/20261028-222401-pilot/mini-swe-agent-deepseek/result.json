@@ -1,0 +1,37 @@
+{
+  "id": "49b93d85-a686-4131-9fcf-c54f68bc0268",
+  "started_at": "2026-10-28T22:24:28.310133",
+  "updated_at": "2026-10-28T22:25:06.173250",
+  "finished_at": "2026-10-28T22:25:06.173250",
+  "n_total_trials": 1,
+  "stats": {
+    "n_completed_trials": 1,
+    "n_errored_trials": 1,
+    "n_running_trials": 0,
+    "n_pending_trials": 0,
+    "n_cancelled_trials": 0,
+    "n_retries": 0,
+    "evals": {
+      "mini-swe-agent__deepseek/deepseek-v4.1-flash__terminal-bench": {
+        "n_trials": 0,
+        "n_errors": 1,
+        "metrics": [
+          {
+            "mean": 0.0
+          }
+        ],
+        "pass_at_k": {},
+        "reward_stats": {},
+        "exception_stats": {
+          "NonZeroAgentExitCodeError": [
+            "adaptive-rejection-sampler__DPYY4dP"
+          ]
+        }
+      }
+    },
+    "n_input_tokens": null,
+    "n_cache_tokens": null,
+    "n_output_tokens": null,
+    "cost_usd": null
+  }
+}

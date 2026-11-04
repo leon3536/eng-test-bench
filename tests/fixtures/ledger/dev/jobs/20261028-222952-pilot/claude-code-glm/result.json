@@ -1,0 +1,43 @@
+{
+  "id": "d583f866-ff6f-4cdc-8327-e0f730bae179",
+  "started_at": "2026-10-28T22:31:49.717629",
+  "updated_at": "2026-10-28T22:38:32.906144",
+  "finished_at": "2026-10-28T22:38:32.906144",
+  "n_total_trials": 1,
+  "stats": {
+    "n_completed_trials": 1,
+    "n_errored_trials": 1,
+    "n_running_trials": 0,
+    "n_pending_trials": 0,
+    "n_cancelled_trials": 0,
+    "n_retries": 0,
+    "evals": {
+      "claude-code__z-ai/glm-5.3__terminal-bench": {
+        "n_trials": 1,
+        "n_errors": 1,
+        "metrics": [
+          {
+            "mean": 0.0
+          }
+        ],
+        "pass_at_k": {},
+        "reward_stats": {
+          "reward": {
+            "0.0": [
+              "adaptive-rejection-sampler__J2fip4K"
+            ]
+          }
+        },
+        "exception_stats": {
+          "NonZeroAgentExitCodeError": [
+            "adaptive-rejection-sampler__J2fip4K"
+          ]
+        }
+      }
+    },
+    "n_input_tokens": 282687,
+    "n_cache_tokens": 188608,
+    "n_output_tokens": 20486,
+    "cost_usd": 1.0768490000000002
+  }
+}

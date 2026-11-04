@@ -1,0 +1,64 @@
+# Verdicts by hand on answer lookups. They win over the bench's own check (bench/lookups.py).
+#
+# Policy (2026-11-02): an agent that fetches the benchmark's own task files (the reference solution, the
+# tests or task.yaml, from GitHub or Hugging Face) and uses them has failed the task. The trial stays in
+# the ledger as answer_lookup, counted as a fail; it is neither excluded nor run again. Allowed: the
+# real-world upstream fix a task is built on, a README, and a fetch made after the agent had finished.
+#
+# Key: the trial's trial_key (the ledger's TRIAL KEY, "<job_id>/<trial_name>").
+#   verdict: lookup    counts as a fail, whatever the check says
+#   verdict: allowed   never counts, whatever the check says
+#   note:              why, in a sentence (shown in the report's trial drawer)
+# The ledger applies an edit on its next open or rescan, without a re-parse.
+
+trials:
+  # Confirmed lookups (manual audit, 2026-11-02).
+  "8556bd04-c4d8-4881-b806-ed8e57ddfb0b/mteb-retrieve__ZQm9Hu7":
+    verdict: lookup
+    note: "kilo-deepseek, run v3: curl of the reference solution and tests from GitHub, then ran it"
+  "5368c88d-102a-4481-9c30-e6ea4764781a/mteb-retrieve__Bt8XjbD":
+    verdict: lookup
+    note: "mini-swe-agent-deepseek, run v3: fetched solve.sh and the tests from GitHub, then ran the solution"
+  "375164a5-3c28-4801-b71f-45c906d1d9ee/mteb-retrieve__kUBDtEM":
+    verdict: lookup
+    note: "opencode-deepseek, run v3: cloned terminal-bench from GitHub and ran its solution.sh"
+  "e6229c36-b10b-4853-8bce-a463383b63f0/mteb-retrieve__oxRM86V":
+    verdict: lookup
+    note: "opencode-deepseek, run v5: downloaded solve.sh and the tests from the Hugging Face terminal-bench-2.0 dataset"
+  "414f6cfd-fb68-45db-ab53-eaf6e425f34c/mteb-retrieve__qAT4Nfz":
+    verdict: lookup
+    note: "pi-deepseek, run v3: downloaded terminal-bench from GitHub and ran its solution"
+  "ac1f2e62-eb93-4c55-b3a9-c86f6701c1c6/mteb-retrieve__kmY4ehu":
+    verdict: lookup
+    note: "strands-deepseek, run v3: fetched the solution and the tests from GitHub"
+  "12b620d3-fa25-4730-bc3a-e23820176b75/db-wal-recovery__fvQiGHi":
+    verdict: lookup
+    note: "mini-swe-agent-deepseek, run v5: cloned terminal-bench, read solution.sh and the tests, copied its fixtures"
+  "e5409967-4be7-47b0-81fe-1bbd82774ac5/db-wal-recovery__uVMv9v8":
+    verdict: lookup
+    note: "cline-grok, grok reruns: fetched solve.sh and the tests from GitHub, then decrypted the WAL with its key"
+  "4851e6c0-f95f-47e5-80f3-02fcddf4ea41/mteb-retrieve__YdUtzaV":
+    verdict: lookup
+    note: "dsh, dsh race: fetched solution.sh and the tests from GitHub, then ran the solution's SciFact-prompt code to write the answer"
+
+  # Fetched, but did not use the answer.
+  "920fc942-b0b4-4311-99b4-34c3e1371e6a/mteb-retrieve__B4uWFLi":
+    verdict: allowed
+    note: "opencode-grok, grok reruns: GitHub search and the README only, and it failed anyway"
+  "6cd3adc6-7db0-4ca8-8418-377e167ee39f/headless-terminal__gQg9mBH":
+    verdict: allowed
+    note: "strands-grok, run v5: README only"
+  "87683032-2797-4bd6-9fe6-c41b8453ebdf/sqlite-with-gcov__6etjfaV":
+    verdict: allowed
+    note: "pi-deepseek, run v5: fetched solve.sh and the tests after the build was done"
+
+  # Upstream fixes the task is built on (the bottle CVE-2016-9964 commit).
+  "137989c0-54cb-4dcc-8890-478f5fcb5aea/fix-code-vulnerability__Qfyz9s3":
+    verdict: allowed
+    note: "pi-deepseek, run v5: fetched the upstream bottle fix, not the benchmark's answer"
+  "473fd857-eeed-44f4-96fc-d8ddab66b2c1/fix-code-vulnerability__P5DoBCC":
+    verdict: allowed
+    note: "kilo-deepseek, run v5: fetched the upstream bottle fix, not the benchmark's answer"
+  "a4ce844a-902c-4990-86e5-1ae9d68292bd/fix-code-vulnerability__ic2iSJA":
+    verdict: allowed
+    note: "strands-glm, run v5: fetched the upstream bottle fix, not the benchmark's answer"

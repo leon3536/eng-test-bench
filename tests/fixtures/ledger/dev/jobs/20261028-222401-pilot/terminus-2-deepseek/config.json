@@ -1,0 +1,25 @@
+{
+  "job_name": "terminus-2-deepseek",
+  "jobs_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "terminus-2",
+      "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "max_turns": 150
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "terminal-bench",
+      "version": "2.0",
+      "task_names": [
+        "adaptive-rejection-sampler"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "base_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Inference endpoint override (--base-url).",
+      "title": "Base Url"
+    },
+    "disable_web_search": {
+      "default": false,
+      "description": "Disable native web search and fetch tools when supported.",
+      "title": "Disable Web Search",
+      "type": "boolean"
+    },
+    "reasoning_effort": {
+      "type": "null",
+      "default": null
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent CLI version to install. Omit for latest.",
+      "title": "Version"
+    },
+    "prompt_template_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Jinja2 template path; must include {{ instruction }}.",
+      "title": "Prompt Template Path"
+    },
+    "config": {
+      "default": null,
+      "description": "Native config file path or inline JSON.",
+      "title": "Config"
+    },
+    "variant": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Model variant.",
+      "title": "Variant"
+    },
+    "opencode_config": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "OpenCode config overlay.",
+      "title": "Opencode Config"
+    }
+  },
+  "title": "OpenCodeOptions",
+  "type": "object"
+}

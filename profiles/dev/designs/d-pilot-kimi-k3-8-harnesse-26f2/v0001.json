@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "design_id": "d-pilot-kimi-k3-8-harnesse-26f2",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T20:32:04+00:00",
+  "profile": "dev",
+  "title": "Pilot: Kimi K3, 8 harnesses, openssl",
+  "purpose": "1-task pilot of the per-model design's harness arms (same arm and run settings, so the trials share their configuration), before the 27-task design runs.",
+  "rationale": "Effort high, set on each arm (low/high/max only; Fireworks turns medium into high; never their default max). How each arm sends it: terminus-2: reasoning_effort to LiteLLM; mini-swe-agent: reasoning_effort to LiteLLM; pi: --thinking; strands: model_kwargs.params.reasoning_effort on the model Harbor builds; cline: --thinking; goose: reasoning_effort in the request_params of the custom provider bench/agents/goose.py writes; opencode: the model variant, declared in its entry; kilo: the model variant, declared in its entry.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "attempts": 1,
+    "baseline_arm": null,
+    "run": {
+      "budget_usd": 3.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "off",
+      "setup_timeout_multiplier": 4.0
+    },
+    "arms": [
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": null
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": null
+      },
+      {
+        "name": "pi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": null
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": null
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": null
+      },
+      {
+        "name": "kilo",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:8305fc15a3e1d8690f7e272d62f082803c13acdba83287cb8f4fcf53596f5797"
+}

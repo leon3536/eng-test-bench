@@ -1,0 +1,157 @@
+/* QUEUE tab styles. Owned by the QUEUE builder, with queue.js and demo-queue.js.
+
+   Use the tokens in style.css :root and its shared classes (.panel, .btn, .tag,
+   .chip, .field, .grid-t, .params, .led, .design-chip ...) without restyling
+   them. Scope every rule under #view-queue and the header chip #queue-chip. */
+
+#queue-chip {
+  display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line-2); background: var(--inset); color: var(--text-2);
+  font: 600 10.5px/1 var(--font-mono); letter-spacing: .04em;
+}
+#queue-chip:hover { border-color: var(--line-3); color: var(--text); }
+#queue-chip:focus-visible { outline: 1px solid var(--kelly); outline-offset: 1px; }
+#queue-chip b { color: var(--text); font-weight: 600; }
+#queue-chip .tag { padding: 2px 5px; }
+
+#view-queue .qu { display: grid; gap: 14px; min-width: 0; }
+#view-queue .qu > div:empty { display: none; }  /* the banner and notice slots when there is nothing to say */
+#view-queue .qu .banner, #view-queue .qu .note-strip { margin-bottom: 0; }
+
+/* State strip: the queue's pill, counts and its one control. */
+#view-queue .qu-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; min-height: 60px; padding: 10px 16px;
+  border: 1px solid var(--line-2); background: var(--panel);
+}
+#view-queue .qu-strip.running { background: linear-gradient(90deg, rgba(76, 187, 23, .12), rgba(76, 187, 23, .02) 40%, transparent), var(--panel); }
+#view-queue .qu-state { display: flex; align-items: center; gap: 10px; flex: 1 1 320px; min-width: 0; font: 12.5px/1.4 var(--font-mono); color: var(--text-2); }
+#view-queue .qu-state b { font: 600 13px/1 var(--font-ui); letter-spacing: .18em; color: var(--text); font-stretch: 85%; white-space: nowrap; }
+#view-queue .qu-strip.running .qu-state b { color: var(--kelly-hi); text-shadow: 0 0 14px rgba(76, 187, 23, .4); }
+#view-queue .qu-reason { min-width: 0; overflow-wrap: anywhere; }
+#view-queue .qu-counts { font: 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; }
+#view-queue .qu-counts b { color: var(--text); font-weight: 600; }
+#view-queue .qu-controls { margin-left: auto; }
+#view-queue .qu-why { font: 11px var(--font-mono); max-width: 260px; }
+#view-queue .qu-notice-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+#view-queue .qu-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 14px; align-items: start; }
+
+/* Q-01: the item running now. */
+#view-queue .qu-idle p { margin: 0 0 6px; color: var(--text-2); }
+#view-queue .qu-idle .actions { margin-top: 12px; }
+#view-queue .qu-active-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+#view-queue .qu-active.qu-wanted { outline-offset: 6px; }
+#view-queue .qu-link {
+  padding: 0; border: 0; background: none; cursor: pointer; text-align: left; overflow-wrap: anywhere;
+  font: 13px var(--font-mono); color: var(--kelly-hi); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--kelly-lo);
+}
+#view-queue .qu-link:hover { color: var(--text); }
+#view-queue .qu-link:focus-visible { outline: 1px solid var(--kelly); outline-offset: 2px; }
+#view-queue .qu-live { display: grid; gap: 8px; margin: 14px 0; }
+#view-queue .qu-meter-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; font: 12px var(--font-mono); }
+#view-queue .qu-big { font: 600 20px/1.1 var(--font-mono); color: var(--text); }
+#view-queue .qu-progress { height: 4px; background: var(--line-2); }
+#view-queue .qu-progress i { display: block; height: 100%; background: var(--kelly); box-shadow: 0 0 8px var(--kelly); transition: width .6s var(--ease); }
+#view-queue .qu-arms { list-style: none; margin: 6px 0 0; padding: 0; border-top: 1px solid var(--line); }
+#view-queue .qu-arms li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font: 12px var(--font-mono); }
+#view-queue .qu-arm-name { display: inline-flex; align-items: center; gap: 7px; min-width: 130px; color: var(--text); }
+#view-queue .qu-arms small { flex-basis: 100%; font: 11px var(--font-mono); }
+#view-queue .qu-stopping { margin: 0 0 12px; font: 12px/1.45 var(--font-mono); }
+
+/* Q-02: the global cap. */
+#view-queue .qu-meter { margin: 0 0 10px; font: 12.5px/1.5 var(--font-mono); color: var(--text-2); }
+#view-queue .qu-meter b { color: var(--text); font-weight: 600; }
+#view-queue .qu-since { border-bottom: 1px dotted var(--line-3); }
+#view-queue .qu-cap-figs { margin-top: 12px; }
+#view-queue .qu-warn { margin: 10px 0 0; font: 11.5px/1.45 var(--font-mono); }
+#view-queue .qu-cap-controls { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* Q-03: waiting and held items. One grid per row: column labels in a head row on wide screens, beside each
+   figure once the row wraps. */
+#view-queue .qu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+#view-queue .qu-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto auto auto auto; column-gap: 12px;
+}
+/* Each row shares the list's columns (subgrid), so the head labels sit over their figures whatever the buttons. */
+#view-queue .qu-row {
+  grid-column: 1 / -1; display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 84px 200px 84px 112px 240px; grid-template-columns: subgrid; gap: 12px;
+  align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+#view-queue .qu-row:last-child { border-bottom: 0; }
+#view-queue .qu-row:not(.qu-head):hover { background: rgba(76, 187, 23, .035); }
+#view-queue .qu-head {
+  padding-top: 8px; padding-bottom: 8px; border-bottom-color: var(--line-2);
+  font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-stretch: 85%;
+}
+#view-queue .qu-head .qu-num, #view-queue .qu-head .qu-pos { font: inherit; color: inherit; }
+#view-queue .qu-row.held { box-shadow: inset 2px 0 0 var(--amber); background: linear-gradient(90deg, var(--amber-wash), transparent 45%); }
+#view-queue .qu-pos { font: 600 16px var(--font-mono); color: var(--text-2); text-align: center; }
+#view-queue .qu-what { display: grid; gap: 4px; min-width: 0; }
+#view-queue .qu-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+#view-queue .qu-id { font: 11px var(--font-mono); color: var(--faint); }
+#view-queue .qu-msg { margin: 0; font: 11.5px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+#view-queue .qu-added { font: 10.5px var(--font-mono); color: var(--faint); }
+#view-queue .qu-figs { display: contents; }
+#view-queue .qu-fig { min-width: 0; text-align: right; }
+#view-queue .qu-num { font: 12px var(--font-mono); color: var(--text); white-space: nowrap; text-align: right; }
+#view-queue .qu-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#view-queue .qu-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+#view-queue .qu-icon { width: 28px; padding: 0; font: 600 13px/1 var(--font-mono); letter-spacing: 0; }
+
+/* Q-04: history. */
+#view-queue .qu-pad { margin: 0; padding: 18px 14px; }
+#view-queue .qu-history td { vertical-align: middle; }
+#view-queue .qu-history .design-chip { max-width: 300px; }
+#view-queue .qu-hmsg { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; font: 10.5px var(--font-mono); color: var(--muted); }
+#view-queue .qu-run { font-family: var(--font-mono); letter-spacing: 0; text-transform: none; }
+
+/* openQueue(item): the item it asked for. */
+#view-queue .qu-wanted { outline: 1px solid var(--kelly); outline-offset: -1px; animation: qu-found 1.6s var(--ease); }
+#view-queue tr.qu-wanted td { background: var(--kelly-wash); }
+@keyframes qu-found { 0% { box-shadow: 0 0 0 4px rgba(76, 187, 23, .45); } 100% { box-shadow: none; } }
+
+@media (max-width: 1100px) {
+  #view-queue .qu-top { grid-template-columns: minmax(0, 1fr); }
+  #view-queue .qu-list { display: block; }
+  #view-queue .qu-row { grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "pos what status" ". figs figs" ". acts acts"; row-gap: 8px; }
+  #view-queue .qu-head { display: none; }
+  #view-queue .qu-pos { grid-area: pos; align-self: start; }
+  #view-queue .qu-what { grid-area: what; }
+  #view-queue .qu-status { grid-area: status; align-self: start; }
+  #view-queue .qu-figs { grid-area: figs; display: flex; flex-wrap: wrap; gap: 6px 22px; }
+  #view-queue .qu-fig { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+  #view-queue .qu-fig .qu-num { text-align: left; }
+  #view-queue .qu-lbl {
+    position: static; width: auto; height: auto; overflow: visible; clip: auto;
+    font: 600 9.5px var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); font-stretch: 85%;
+  }
+  #view-queue .qu-acts { grid-area: acts; justify-content: flex-start; }
+}
+/* The docked assistant (body.as-docked, from 1240px) takes 420px from main: repeat the 1100px rules. */
+@media (min-width: 1240px) and (max-width: 1520px) {
+  body.as-docked #view-queue .qu-top { grid-template-columns: minmax(0, 1fr); }
+  body.as-docked #view-queue .qu-list { display: block; }
+  body.as-docked #view-queue .qu-row { grid-template-columns: 26px minmax(0, 1fr) auto; grid-template-areas: "pos what status" ". figs figs" ". acts acts"; row-gap: 8px; }
+  body.as-docked #view-queue .qu-head { display: none; }
+  body.as-docked #view-queue .qu-pos { grid-area: pos; align-self: start; }
+  body.as-docked #view-queue .qu-what { grid-area: what; }
+  body.as-docked #view-queue .qu-status { grid-area: status; align-self: start; }
+  body.as-docked #view-queue .qu-figs { grid-area: figs; display: flex; flex-wrap: wrap; gap: 6px 22px; }
+  body.as-docked #view-queue .qu-fig { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+  body.as-docked #view-queue .qu-fig .qu-num { text-align: left; }
+  body.as-docked #view-queue .qu-lbl {
+    position: static; width: auto; height: auto; overflow: visible; clip: auto;
+    font: 600 9.5px var(--font-ui); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); font-stretch: 85%;
+  }
+  body.as-docked #view-queue .qu-acts { grid-area: acts; justify-content: flex-start; }
+}
+@media (max-width: 760px) {
+  #view-queue .qu-strip { padding: 10px 12px; }
+  #view-queue .qu-state { flex-basis: 100%; flex-wrap: wrap; }
+  #view-queue .qu-controls { margin-left: 0; width: 100%; }
+  #view-queue .qu-controls .btn { flex: 1 1 auto; }
+  #view-queue .qu-row { padding: 10px 12px; column-gap: 10px; }
+  #view-queue .qu-num { white-space: normal; }
+}

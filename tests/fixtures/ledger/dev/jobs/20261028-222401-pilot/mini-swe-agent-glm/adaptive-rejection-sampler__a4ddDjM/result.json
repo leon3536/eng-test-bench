@@ -1,0 +1,115 @@
+{
+  "id": "b8022c83-298a-419a-9d14-6b66bff6634f",
+  "task_name": "adaptive-rejection-sampler",
+  "trial_name": "adaptive-rejection-sampler__a4ddDjM",
+  "trial_uri": "file:///C:/Git/EngineeringTestBench/profiles/dev/jobs/20261028-222401-pilot/mini-swe-agent-glm/adaptive-rejection-sampler__a4ddDjM",
+  "task_id": {
+    "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+    "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+    "path": "adaptive-rejection-sampler"
+  },
+  "source": "terminal-bench",
+  "task_checksum": "cfa1b616968ca40188776311fda408198265c7d8a952466914f6875ca9bc0a9d",
+  "config": {
+    "task": {
+      "path": "adaptive-rejection-sampler",
+      "git_url": "https://github.com/laude-institute/terminal-bench-2.git",
+      "git_commit_id": "69671fbaac6d67a7ef0dfec016cc38a64ef7a77c",
+      "name": null,
+      "ref": null,
+      "overwrite": false,
+      "download_dir": null,
+      "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__a4ddDjM",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222401-pilot\\mini-swe-agent-glm",
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent_timeout_multiplier": null,
+    "verifier_timeout_multiplier": null,
+    "agent_setup_timeout_multiplier": null,
+    "environment_build_timeout_multiplier": null,
+    "agent": {
+      "name": "mini-swe-agent",
+      "import_path": null,
+      "model_name": "openrouter/z-ai/glm-5.3",
+      "base_url": null,
+      "model_api_key_name": null,
+      "model_api_format": null,
+      "skip_model_parsing": false,
+      "n_concurrent": null,
+      "concurrency_group": null,
+      "skills": [],
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": null,
+      "max_timeout_sec": null,
+      "resume_trajectory": false,
+      "load_trajectory": null,
+      "extra_allowed_hosts": [],
+      "kwargs": {
+        "reasoning_effort": "medium",
+        "cost_limit": "1"
+      },
+      "mcp_servers": []
+    },
+    "user_agent": null,
+    "environment": {
+      "type": "docker",
+      "import_path": null,
+      "force_build": false,
+      "delete": true,
+      "stream": false,
+      "cpu_enforcement_policy": "auto",
+      "memory_enforcement_policy": "auto",
+      "override_cpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "override_gpus": null,
+      "override_tpu": null,
+      "mounts": null,
+      "extra_docker_compose": [],
+      "kwargs": {},
+      "extra_allowed_hosts": []
+    },
+    "verifier": {
+      "override_timeout_sec": null,
+      "max_timeout_sec": null,
+      "disable": false
+    },
+    "artifacts": [],
+    "extra_instruction_paths": [],
+    "extra_instructions": [],
+    "job_id": "84c610c3-6e4e-474b-a02e-0922a97b1505",
+    "source_trial": null
+  },
+  "agent_info": {
+    "name": "mini-swe-agent",
+    "version": "unknown",
+    "model_info": {
+      "name": "z-ai/glm-5.3",
+      "provider": "openrouter"
+    }
+  },
+  "agent_result": null,
+  "verifier_result": null,
+  "verifier_environment_mode": "shared",
+  "exception_info": {
+    "exception_type": "NonZeroAgentExitCodeError",
+    "exception_message": "Command failed (exit 137): apt-get update && apt-get install -y curl build-essential git\nstdout: Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nGet:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]\nGet:4 http://archive.ubuntu.com/ubuntu n ... [633 chars truncated] ... //archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [61.7 kB]\nGet:13 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2172 kB]\nGet:14 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1412 kB]\nGet:15 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2235 kB]\nGet:16 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1740 kB]\nGet:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.0 kB]\nGet:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [36.0 kB]\nGet:19 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [669 B]\nFetched 33.6 MB in 5s (7321 kB/s)\nReading package lists...\nstderr: None",
+    "exception_traceback": "Traceback (most recent call last):\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 606, in run\n    await self._prepare()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 652, in _prepare\n    await self._setup_agent()\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\trial\\trial.py\", line 1885, in _setup_agent\n    await asyncio.wait_for(\n    ...<2 lines>...\n    )\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\tasks.py\", line 507, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1136, in setup\n    await self.install(environment)\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\mini_swe_agent.py\", line 757, in install\n    await self.ensure_system_dependencies(\n    ...<2 lines>...\n    )\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 837, in ensure_system_dependencies\n    await self.exec_as_root(environment, command=command, env=env)\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1068, in exec_as_root\n    return await self._exec(\n           ^^^^^^^^^^^^^^^^^\n        environment, command, user=\"root\", env=env, cwd=cwd, timeout_sec=timeout_sec\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Git\\EngineeringTestBench\\.venv\\Lib\\site-packages\\harbor\\agents\\installed\\base.py\", line 1048, in _exec\n    raise self._classify_exec_error(command, result)\nharbor.agents.installed.base.NonZeroAgentExitCodeError: Command failed (exit 137): apt-get update && apt-get install -y curl build-essential git\nstdout: Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]\nGet:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]\nGet:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]\nGet:4 http://archive.ubuntu.com/ubuntu n ... [633 chars truncated] ... //archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [61.7 kB]\nGet:13 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2172 kB]\nGet:14 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1412 kB]\nGet:15 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2235 kB]\nGet:16 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1740 kB]\nGet:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.0 kB]\nGet:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [36.0 kB]\nGet:19 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [669 B]\nFetched 33.6 MB in 5s (7321 kB/s)\nReading package lists...\nstderr: None\n",
+    "occurred_at": "2026-10-29T05:25:09.283103Z"
+  },
+  "started_at": "2026-10-29T05:24:56.200885Z",
+  "finished_at": "2026-10-29T05:25:10.128404Z",
+  "environment_setup": {
+    "started_at": "2026-10-29T05:24:56.323818Z",
+    "finished_at": "2026-10-29T05:25:00.610924Z"
+  },
+  "agent_setup": {
+    "started_at": "2026-10-29T05:25:00.611002Z",
+    "finished_at": "2026-10-29T05:25:09.278938Z"
+  },
+  "agent_execution": null,
+  "verifier": null,
+  "step_results": null
+}

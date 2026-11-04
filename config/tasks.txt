@@ -1,0 +1,40 @@
+# Task set for terminal-bench@2.0, re-scoped 2026-10-29 to IT / software work at e-commerce and SaaS businesses.
+# All 89 tasks were classified core / adjacent / out from task.toml, instruction.md and tests (never from trial
+# results). Eligible: core, Opus 5.5 refusal risk not high, agent limit <= 3600 s, no GPU, and tests that do not
+# check things the instruction leaves unstated. That leaves these 27; configure-git-webserver, query-optimize and
+# filter-js-from-html are core but excluded for such tests. The earlier seeded sample is kept in tasks-v1.txt.
+# Do not regenerate with `python -m bench.sample_tasks`: it draws from all tasks and would overwrite this scope.
+# Modes take the first n_tasks lines; the pilot uses line 1.
+
+# Block 1 (line 1 is the pilot task)
+openssl-selfsigned-cert                  # medium, 900s
+cobol-modernization                      # easy, 900s
+build-cython-ext                         # medium, 900s
+mteb-retrieve                            # medium, 1800s
+sparql-university                        # hard, 900s
+sqlite-with-gcov                         # medium, 900s
+sqlite-db-truncate                       # medium, 900s
+hf-model-inference                       # medium, 900s
+db-wal-recovery                          # medium, 900s
+
+# Block 2
+git-multibranch                          # medium, 900s
+log-summary-date-ranges                  # medium, 900s
+nginx-request-logging                    # medium, 900s
+multi-source-data-merger                 # medium, 900s
+reshard-c4-data                          # medium, 3600s
+sanitize-git-repo                        # medium, 900s
+kv-store-grpc                            # medium, 900s
+fix-git                                  # easy, 900s
+mailman                                  # medium, 1800s
+cancel-async-tasks                       # hard, 900s
+
+# Block 3
+constraints-scheduling                   # medium, 1200s
+financial-document-processor             # medium, 1200s
+fix-code-vulnerability                   # hard, 900s
+git-leak-recovery                        # medium, 900s
+headless-terminal                        # medium, 900s
+modernize-scientific-stack               # medium, 600s
+pypi-server                              # medium, 900s
+regex-log                                # medium, 900s

@@ -1,0 +1,18 @@
+{
+  "task": {
+    "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+    "source": "terminal-bench"
+  },
+  "trial_name": "adaptive-rejection-sampler__qMLYHAM",
+  "trials_dir": "C:\\Git\\EngineeringTestBench\\profiles\\dev\\jobs\\20261028-222952-pilot\\claude-code-deepseek",
+  "agent": {
+    "name": "claude-code",
+    "model_name": "openrouter/deepseek/deepseek-v4.1-flash",
+    "kwargs": {
+      "reasoning_effort": "medium",
+      "max_budget_usd": "1",
+      "max_turns": 150
+    }
+  },
+  "job_id": "b7668e97-0357-44a6-b17b-d083d246c616"
+}

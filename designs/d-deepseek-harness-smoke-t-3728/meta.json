@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-deepseek-harness-smoke-t-3728",
+  "title": "DeepSeek Harness smoke test (2 tasks)",
+  "created_at": "2026-11-03T05:35:38+00:00",
+  "updated_at": "2026-11-03T05:35:54+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-03T05:35:38+00:00",
+      "spec_hash": "sha256:7f12ab61d3c1938a57f1b29ac6b756cb59c0e16895bc5262a2ca4fd6096d8c42",
+      "change_note": "First version",
+      "approved_at": "2026-11-03T05:35:39+00:00",
+      "runs": [
+        "20261102-213554-deepseek-harness-v1"
+      ]
+    }
+  }
+}

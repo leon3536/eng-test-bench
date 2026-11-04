@@ -1,0 +1,180 @@
+# Dev profile: cheap open models through OpenRouter, for testing the bench
+# itself (preflight, run supervision, budget stop, results) before spending
+# on Opus 5.5.
+#
+#   .venv\Scripts\python -m bench --profile dev
+#
+# Its dashboard changes go to config/dev.overrides.yaml and its runs to
+# profiles/dev/. Results here are not comparable with the published figures:
+# Claude Code is built for Claude, and driving another model through it
+# changes how it behaves (see S1 in the evidence doc).
+
+dataset: terminal-bench@2.0
+tasks_file: config/tasks.txt
+
+providers:
+  openrouter:
+    env_key: OPENROUTER_API_KEY
+    model_prefix: openrouter/
+
+modes:
+  pilot:  {n_tasks: 1, n_attempts: 1}
+  sample: {n_tasks: 3, n_attempts: 1}
+
+run:
+  effort: medium
+  n_concurrent: 1
+  parallel_arms: 5           # run up to five arms at once
+  budget_usd: 5              # checked as trials finish plus an estimate for trials in flight;
+                             # it can be exceeded by at most the trials in flight
+  per_trial_cap_usd: 1
+  max_turns: 150
+  timeout_multiplier: 1.0
+  # Harness setup. prefer runs each trial on a pre-baked image (the harness
+  # installed into the task image once; see the prebake section) and falls
+  # back to Harbor's stock install per trial where none is ready; require
+  # fails such a trial as infra instead; off always installs (stock A/B runs).
+  # None of these is part of the config hash.
+  prebake: prefer            # off | prefer | require
+  setup_timeout_multiplier: auto   # auto: 2x Harbor's 360 s for arms that may run stock setups; or a number
+  env_build_timeout_multiplier: 1.0  # task image pull/start limit (600 s); raise for first pulls of huge images
+
+baseline_arm: claude-code-deepseek
+# The model REPORT compares other models with under one harness (compare: models).
+baseline_model: openrouter:deepseek/deepseek-v4.1-flash
+
+
+# mini-swe-agent runs as a subclass that adds the mcp package (see bench.yaml).
+# The strands arms build strands-harness from Harbor's prebuilt OpenRouter
+# model instance, so strands-harness applies neither effort nor its own
+# prompt caching here; the Opus arms in bench.yaml pass model_spec and effort.
+arms:
+  - {name: claude-code-deepseek, agent: claude-code, provider: openrouter, model: deepseek/deepseek-v4.1-flash}
+  - {name: terminus-2-deepseek,  agent: terminus-2,  provider: openrouter, model: deepseek/deepseek-v4.1-flash}
+  - name: mini-swe-agent-deepseek
+    agent: bench.agents.mini_swe_agent:MiniSweAgentWithMcp
+    family: mini-swe-agent
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+  - {name: pi-deepseek,          agent: pi,          provider: openrouter, model: deepseek/deepseek-v4.1-flash}
+  - name: strands-deepseek
+    agent: strands
+    family: strands
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    effort: omit
+    options:
+      factory: bench_strands_factory:create_agent
+      factory_path: harnesses/strands_factory
+      version: "1.57.2"
+      factory_kwargs: {}
+  # Cline and Goose run as subclasses whose `version` installs exactly that
+  # release (bench/agents/cline.py, goose.py); OpenCode as one that keeps a run
+  # Bun's late EPIPE fails after it finished (bench/agents/opencode.py), and Kilo
+  # Code, an OpenCode fork, as that subclass with Kilo's package and switches
+  # (bench/agents/kilo.py). Both take their effort as a model variant, so they
+  # omit the run's effort.
+  - name: cline-deepseek
+    agent: bench.agents.cline:PinnedClineCli
+    family: cline-cli
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    options: {version: "3.0.74"}
+  - name: goose-deepseek
+    agent: bench.agents.goose:PinnedGoose
+    family: goose
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    options: {version: "1.57.0"}
+  - name: opencode-deepseek
+    agent: bench.agents.opencode:OpenCodeBunEpipe
+    family: opencode
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    effort: omit
+    options: {version: "1.19.5", variant: medium}
+  - name: kilo-deepseek
+    agent: bench.agents.kilo:KiloCode
+    family: kilo-code
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    effort: omit
+    options: {version: "7.8.18", variant: medium}
+  - {name: claude-code-glm,      agent: claude-code, provider: openrouter, model: z-ai/glm-5.3}
+  - {name: terminus-2-glm,       agent: terminus-2,  provider: openrouter, model: z-ai/glm-5.3}
+  - name: mini-swe-agent-glm
+    agent: bench.agents.mini_swe_agent:MiniSweAgentWithMcp
+    family: mini-swe-agent
+    provider: openrouter
+    model: z-ai/glm-5.3
+  - {name: pi-glm,               agent: pi,          provider: openrouter, model: z-ai/glm-5.3}
+  - name: strands-glm
+    agent: strands
+    family: strands
+    provider: openrouter
+    model: z-ai/glm-5.3
+    effort: omit
+    options:
+      factory: bench_strands_factory:create_agent
+      factory_path: harnesses/strands_factory
+      version: "1.57.2"
+      factory_kwargs: {}
+
+# The sections below match bench.yaml; see the comments there.
+report:
+  group_by: family
+  crashes: include
+  misconfigured_cap: exclude
+  exclusions: true
+  same_run_only: false
+  match_on: digest
+  # ci_level: 0.90            # defaults to stats.confidence
+  bootstrap_resamples: 2000
+  seed: 20261028
+  min_pairs_estimate: 3
+  min_pairs_verdict: 8
+  pricing: current
+
+stats:
+  confidence: 0.90
+  target_halfwidth: 0.25
+  prior_sd_log: 0.6
+  default_trial_tokens: {input: 600000, cache_share: 0.85, output: 60000}
+
+assistant:
+  enabled: true
+  effort: medium
+  max_tokens: 32000
+  max_steps: 12
+  per_turn_cap_usd: 1.00
+  daily_cap_usd: 5.00
+  fallbacks: default
+
+designs:
+  max_budget_usd: 10          # dev runs stay cheap
+  max_arms: 15                # every dev arm fits in one design
+  max_attempts: 5
+  warn_containers: 8
+  max_containers: 16
+  extra_harnesses: []
+  import_paths: {}
+
+queue:
+  on_failure: pause
+  global_cap_usd: null
+
+ledger:
+  extra_scan_roots: []
+
+# Pre-baked harness images (python -m bench.prebake). One image per task,
+# harness and version, named <prefix>/<harness>-<version>-r<recipe>/<task image>
+# and built FROM the local task image with Harbor's own install commands.
+prebake:
+  prefix: benchbake           # image repository prefix (benchprobe/ is the prototypes')
+  build_jobs: 3               # builds at once; Claude Code's take 7-11 min each
+  max_age_days: 14            # older images still run, with a warning: their apt lists go stale
+  keep_days: 14               # prune keeps an image no arm wants this long
+  auto_build: false           # true: the queue builds missing images before it starts an item
+  prepull: true               # a run pulls missing task images before its first arm
+  host_reserve_gb: 25         # a build leaves this much free on the drive holding Docker's disk
+  vm_reserve_gb: 50           # ... and inside Docker's VM

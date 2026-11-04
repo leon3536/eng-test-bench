@@ -1,0 +1,273 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": []
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 1,
+    "budget_usd": 0.3,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "goose"
+    ],
+    "arms": [
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:e683c1af87a4563613ca65c7031261785b582e32d292964849518f9361335189",
+    "warnings": [],
+    "peak_containers": 1,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "off",
+      "error": null,
+      "images": 0,
+      "build_min": 0.0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 4,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "lanes": 1,
+        "max_containers": 6,
+        "build_jobs": 6,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "goose"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 1,
+      "lanes": 1,
+      "max_containers": 6,
+      "build_jobs": 6,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "1 task race(s) x 1 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "goose"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:e683c1af87a4563613ca65c7031261785b582e32d292964849518f9361335189",
+    "ledger_fingerprint": "sha256:85ef10293f13080e",
+    "seed": 87500132919906,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "goose",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6c70065df64baa26",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "measured_any_options",
+        "basis_detail": "1 trials on 1 tasks of goose on fireworks:deepseek-v4p1-flash-1017, any options",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 1,
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.012752,
+          "p50": 0.008631,
+          "p90": 0.024954
+        },
+        "total": {
+          "p10": 0.002744,
+          "p50": 0.008858,
+          "p90": 0.025475
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.21,
+          "p90": 4.22
+        },
+        "arm_minutes": {
+          "p50": 3.06,
+          "p90": 5.29
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 73.91,
+          "basis": "measured",
+          "trials": 2
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.002744,
+        "p50": 0.008858,
+        "p90": 0.025475
+      },
+      "budget_usd": 0.3,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "goose"
+      ],
+      "inflight_allowance_usd": 0.049908,
+      "wall_minutes": {
+        "p50": 3.06,
+        "p90": 5.29
+      },
+      "peak_containers": 1,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "max_containers": 6,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [
+      {
+        "arm": "goose",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-10-31T20:23:21+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:47c69cb4279e4f69d842f75fd582e9598e2daee763d654df688530af45711737",
+  "ledger_fingerprint": "sha256:85ef10293f13080e",
+  "reuse_fingerprint": null
+}

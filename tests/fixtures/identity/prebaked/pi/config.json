@@ -1,0 +1,29 @@
+{
+    "task": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git",
+        "source": "terminal-bench"
+    },
+    "trial_name": "fix-git__pb-pi",
+    "trials_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\00000000-0000-0000-0000-000000000000\\scratchpad\\prebake\\envclass\\trials\\fixgit\\pi",
+    "install_only": true,
+    "agent": {
+        "name": "pi",
+        "model_name": "anthropic/claude-opus-5-5",
+        "kwargs": {
+            "reasoning_effort": "medium",
+            "max_turns": 300,
+            "version": "1.4.0"
+        }
+    },
+    "environment": {
+        "import_path": "prebake_env:PrebakedDockerEnvironment",
+        "kwargs": {
+            "prebake_harness": "pi",
+            "prebake_version": "1.4.0"
+        }
+    },
+    "verifier": {
+        "disable": true
+    },
+    "job_id": "b3b6c568-ba27-4df7-bb7f-1450dce95dc9"
+}

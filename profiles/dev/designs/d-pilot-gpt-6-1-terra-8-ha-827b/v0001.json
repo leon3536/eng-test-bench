@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "design_id": "d-pilot-gpt-6-1-terra-8-ha-827b",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-31T20:32:05+00:00",
+  "profile": "dev",
+  "title": "Pilot: GPT-6.1 Terra, 8 harnesses, openssl",
+  "purpose": "1-task pilot of the per-model design's harness arms (same arm and run settings, so the trials share their configuration), before the 27-task design runs.",
+  "rationale": "Effort medium, the run's effort. How each arm sends it: terminus-2: reasoning_effort to LiteLLM; mini-swe-agent: reasoning.effort on LiteLLM's Responses client; pi: --thinking; strands: factory effort (strands-harness's OpenAI Responses model); cline: --thinking; goose: GOOSE_THINKING_EFFORT; opencode: the model variant; kilo: the model variant.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "attempts": 1,
+    "baseline_arm": null,
+    "run": {
+      "budget_usd": 2.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "off",
+      "setup_timeout_multiplier": 4.0
+    },
+    "arms": [
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {},
+        "tasks": null
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": null
+      },
+      {
+        "name": "pi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "openai/gpt-6.1-terra",
+            "effort": "medium"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": null
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": null
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": null
+      },
+      {
+        "name": "kilo",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "7.8.18"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:da6cd442c10661fffce95bed0bde7598e01800226aa304cf4547a0d1bf1e5b89"
+}

@@ -1,0 +1,1143 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": []
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 8,
+    "budget_usd": 2.0,
+    "worst_case_capped_usd": 15.0,
+    "uncapped_arms": [
+      "terminus-2",
+      "pi",
+      "strands",
+      "cline",
+      "goose",
+      "opencode",
+      "kilo"
+    ],
+    "arms": [
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-grok-conv-id"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "e2619c059ce4",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2 --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-grok-conv-id\\\"] --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-grok-conv-id"
+            ],
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "157d500e1be9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\mini-swe-agent --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"15\\\" --ak session_id_headers=[\\\"x-grok-conv-id\\\"] --ak version=\\\"2.4.6\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "model_kwargs",
+            "value": {
+              "params": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2134be5a6307",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak \"model_kwargs={\\\"params\\\": {\\\"reasoning_effort\\\": \\\"medium\\\"}}\" --ak version=\\\"1.57.2\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\cline --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"3.0.74\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "medium",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "12ef5aff2915",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\opencode --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak variant=\\\"medium\\\" --ak version=\\\"1.19.5\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "medium",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8d84c00917db",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak variant=\\\"medium\\\" --ak version=\\\"7.8.18\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:1ccdeed8ae3b89374a0c7c057742926bd1dd46112b86a6abe26992816e186191",
+    "warnings": [],
+    "peak_containers": 6,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "off",
+      "error": null,
+      "images": 0,
+      "build_min": 0.0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 4,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 8,
+        "lanes": 8,
+        "max_containers": 6,
+        "build_jobs": 6,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "terminus-2",
+              "mini-swe-agent",
+              "pi",
+              "strands",
+              "cline",
+              "goose",
+              "opencode",
+              "kilo"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 8,
+      "lanes": 8,
+      "max_containers": 6,
+      "build_jobs": 6,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "1 task race(s) x 8 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "terminus-2",
+            "mini-swe-agent",
+            "pi",
+            "strands",
+            "cline",
+            "goose",
+            "opencode",
+            "kilo"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:1ccdeed8ae3b89374a0c7c057742926bd1dd46112b86a6abe26992816e186191",
+    "ledger_fingerprint": "sha256:956eb935066b25c3",
+    "seed": 138486587504303,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "terminus-2",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "1e943f37ecdc9c05",
+          "options_fingerprint": "e2619c059ce4"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "65 trials of terminus-2 on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 65,
+          "tasks": 32,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261029-214900-it-saas-scope-27-v3",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261028-222952-pilot",
+            "dev/20261029-055852-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.053414,
+          "p50": 0.044362,
+          "p90": 0.115429
+        },
+        "total": {
+          "p10": 0.012464,
+          "p50": 0.03953,
+          "p90": 0.11542
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.76,
+          "p90": 2.42
+        },
+        "arm_minutes": {
+          "p50": 2.76,
+          "p90": 3.42
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 13.69,
+          "basis": "measured",
+          "trials": 37
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "20e8a369738e2670",
+          "options_fingerprint": "157d500e1be9"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "59 trials of mini-swe-agent on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 59,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261029-055852-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.056379,
+          "p50": 0.033464,
+          "p90": 0.134387
+        },
+        "total": {
+          "p10": 0.01025,
+          "p50": 0.036257,
+          "p90": 0.138343
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 3.37,
+          "p90": 3.38
+        },
+        "arm_minutes": {
+          "p50": 3.54,
+          "p90": 4.38
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 93.32,
+          "basis": "measured",
+          "trials": 23
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi",
+        "cell": {
+          "family": "pi",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "2821adb389462338",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "60 trials of pi on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 60,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "dev/20261028-222952-pilot",
+            "dev/20261029-055852-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.029181,
+          "p50": 0.022697,
+          "p90": 0.049681
+        },
+        "total": {
+          "p10": 0.010242,
+          "p50": 0.02453,
+          "p90": 0.062239
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.71,
+          "p90": 2.85
+        },
+        "arm_minutes": {
+          "p50": 3.71,
+          "p90": 3.85
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 92.78,
+          "basis": "measured",
+          "trials": 34
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "harness default",
+          "config_hash": "85d9aba09bbc4412",
+          "options_fingerprint": "2134be5a6307"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "59 trials of strands on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 59,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261029-055852-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.114523,
+          "p50": 0.058202,
+          "p90": 0.276449
+        },
+        "total": {
+          "p10": 0.013892,
+          "p50": 0.056514,
+          "p90": 0.25638
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.27,
+          "p90": 3.35
+        },
+        "arm_minutes": {
+          "p50": 3.27,
+          "p90": 4.35
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 53.29,
+          "basis": "measured",
+          "trials": 22
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "cline",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "5af9893413e6e19e",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of cline-cli on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "dev/20261030-152750-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.061313,
+          "p50": 0.045202,
+          "p90": 0.130441
+        },
+        "total": {
+          "p10": 0.016697,
+          "p50": 0.052291,
+          "p90": 0.139593
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.5,
+          "p90": 5.01
+        },
+        "arm_minutes": {
+          "p50": 5.5,
+          "p90": 6.01
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 214.88,
+          "basis": "measured",
+          "trials": 3
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "goose",
+        "cell": {
+          "family": "goose",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "bd026e1957354fa6",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of goose on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "dev/20261030-152750-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.046191,
+          "p50": 0.035684,
+          "p90": 0.085185
+        },
+        "total": {
+          "p10": 0.010566,
+          "p50": 0.03551,
+          "p90": 0.091105
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.99,
+          "p90": 2.76
+        },
+        "arm_minutes": {
+          "p50": 2.99,
+          "p90": 3.76
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 60.34,
+          "basis": "measured",
+          "trials": 3
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "opencode",
+        "cell": {
+          "family": "opencode",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "harness default",
+          "config_hash": "cc794ca13039f230",
+          "options_fingerprint": "12ef5aff2915"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "59 trials of opencode on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 59,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "default/20261031-112219-new-harnesses-27-v2",
+            "dev/20261030-153615-pilot",
+            "dev/20261030-164039-pilot",
+            "dev/20261030-170820-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.071191,
+          "p50": 0.05637,
+          "p90": 0.145353
+        },
+        "total": {
+          "p10": 0.018181,
+          "p50": 0.057816,
+          "p90": 0.143066
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 6.56,
+          "p90": 7.36
+        },
+        "arm_minutes": {
+          "p50": 7.56,
+          "p90": 8.36
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 326.37,
+          "basis": "measured",
+          "trials": 5
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "kilo",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "harness default",
+          "config_hash": "07df263322666c83",
+          "options_fingerprint": "8d84c00917db"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of kilo-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, fireworks:deepseek-v4p1-flash-1017, fireworks:glm-5p3, openrouter:deepseek/deepseek-v4.1-flash, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-043735-kilo-code-27-tas-v2",
+            "default/20261031-104510-kilo-code-27-tas-v2",
+            "dev/20261031-013315-pilot",
+            "dev/20261031-125723-pilot-deepseek-v-v2",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.130151,
+          "p50": 0.105541,
+          "p90": 0.259456
+        },
+        "total": {
+          "p10": 0.032049,
+          "p50": 0.101447,
+          "p90": 0.262911
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.88,
+          "p90": 7.17
+        },
+        "arm_minutes": {
+          "p50": 6.88,
+          "p90": 8.17
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 281.4,
+          "basis": "measured",
+          "trials": 7
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.33799,
+        "p50": 0.528539,
+        "p90": 0.85777
+      },
+      "budget_usd": 2.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 1.0,
+      "worst_case_capped_usd": 15.0,
+      "uncapped_arms": [
+        "terminus-2",
+        "pi",
+        "strands",
+        "cline",
+        "goose",
+        "opencode",
+        "kilo"
+      ],
+      "inflight_allowance_usd": 99.0,
+      "wall_minutes": {
+        "p50": 10.24,
+        "p90": 11.16
+      },
+      "peak_containers": 6,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 8,
+        "max_containers": 6,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "mini-swe-agent",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "cline",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-10-31T20:32:06+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:47c69cb4279e4f69d842f75fd582e9598e2daee763d654df688530af45711737",
+  "ledger_fingerprint": "sha256:956eb935066b25c3",
+  "reuse_fingerprint": null
+}

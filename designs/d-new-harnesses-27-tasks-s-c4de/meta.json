@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "d-new-harnesses-27-tasks-s-c4de",
+  "title": "New harnesses: 27 tasks, Sonnet 5.5 (full)",
+  "created_at": "2026-10-31T08:08:13+00:00",
+  "updated_at": "2026-10-31T18:22:19+00:00",
+  "latest_version": 2,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T08:08:13+00:00",
+      "spec_hash": "sha256:2deb5c9137df11995df31b722c34ae4a97686b8ca67ec95bbf865cbcb1d08db7",
+      "change_note": "",
+      "approved_at": "2026-10-31T08:08:16+00:00",
+      "runs": [
+        "20261031-024618-new-harnesses-27-v1"
+      ]
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T11:37:30+00:00",
+      "spec_hash": "sha256:5d12083b6cec5313ee9f45ed192e5a27e907a67319b1f5694806da56610b5dac",
+      "change_note": "Gap fill.",
+      "approved_at": "2026-10-31T11:37:30+00:00",
+      "runs": [
+        "20261031-111322-new-harnesses-27-v2",
+        "20261031-112219-new-harnesses-27-v2"
+      ]
+    }
+  }
+}

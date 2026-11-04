@@ -1,0 +1,3253 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 4 models (anthropic/claude-opus-5-5, fireworks/glm-5p3, fireworks/deepseek-v4p1-flash-1017, xai/grok-4.7). Pairs form only within one model and provider, so each comparison needs its baseline on the same model",
+      "Arm 'claude-code' is skipped: the ledger already holds enough usable trials of all 27 of its tasks",
+      "Arm 'terminus-2-glm' runs 3 of the design's 27 tasks",
+      "Arm 'pi-glm' runs 3 of the design's 27 tasks",
+      "Arm 'cline-glm' runs 3 of the design's 27 tasks",
+      "Arm 'goose-glm' runs 2 of the design's 27 tasks",
+      "Arm 'opencode-glm' runs 1 of the design's 27 tasks",
+      "Arm 'kilo-glm' runs 1 of the design's 27 tasks",
+      "Arm 'goose-deepseek' runs 2 of the design's 27 tasks",
+      "Arm 'terminus-2-grok' runs 2 of the design's 27 tasks",
+      "Arm 'mini-swe-agent-grok' runs 2 of the design's 27 tasks",
+      "Arm 'pi-grok' runs 1 of the design's 27 tasks",
+      "Arm 'strands-grok' runs 4 of the design's 27 tasks",
+      "Arm 'cline-grok' runs 2 of the design's 27 tasks",
+      "Arm 'goose-grok' runs 1 of the design's 27 tasks",
+      "Arm 'opencode-grok' runs 1 of the design's 27 tasks"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 28,
+    "budget_usd": 40.0,
+    "worst_case_capped_usd": 30.0,
+    "uncapped_arms": [
+      "terminus-2-glm",
+      "pi-glm",
+      "cline-glm",
+      "goose-glm",
+      "opencode-glm",
+      "kilo-glm",
+      "goose-deepseek",
+      "terminus-2-grok",
+      "pi-grok",
+      "strands-grok",
+      "cline-grok",
+      "goose-grok",
+      "opencode-grok"
+    ],
+    "arms": [
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "c407c5f85bad",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-session-affinity\\\"] --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "fix-git",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.8,
+            "build_gb": 0.6,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi-glm",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 4.5,
+            "build_gb": 1.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "cline-glm",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 3,
+        "trials": 3,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\cline-glm --job-name nginx-request-logging --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name nginx-request-logging --ak reasoning_effort=\\\"high\\\" --ak version=\\\"3.0.74\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"cline-cli\\\" --ek prebake_version=\\\"3.0.74\\\" --ek prebake_recipe=\\\"075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "cline-cli",
+          "supported": true,
+          "reason": "",
+          "version": "3.0.74",
+          "recipe": "075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299",
+          "variant": "cline-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 3,
+            "ready": [],
+            "missing": [
+              "nginx-request-logging",
+              "mailman",
+              "cancel-async-tasks"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 6.0,
+            "build_gb": 2.7,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-glm",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-glm --job-name log-summary-date-ranges --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name log-summary-date-ranges --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "log-summary-date-ranges",
+              "kv-store-grpc"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.0,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode-glm",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72c0ddb80c5",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\opencode-glm --job-name kv-store-grpc --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name kv-store-grpc --ak variant=\\\"high\\\" --ak version=\\\"1.19.5\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"opencode\\\" --ek prebake_version=\\\"1.19.5\\\" --ek prebake_recipe=\\\"ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "opencode",
+          "supported": true,
+          "reason": "",
+          "version": "1.19.5",
+          "recipe": "ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e",
+          "variant": "opencode-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "kv-store-grpc"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.0,
+            "build_gb": 0.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo-glm",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72628531661",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo-glm --job-name sanitize-git-repo --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sanitize-git-repo --ak variant=\\\"high\\\" --ak version=\\\"7.8.18\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"kilo-code\\\" --ek prebake_version=\\\"7.8.18\\\" --ek prebake_recipe=\\\"4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "kilo-code",
+          "supported": true,
+          "reason": "",
+          "version": "7.8.18",
+          "recipe": "4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555",
+          "variant": "kilo-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "sanitize-git-repo"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-deepseek",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-deepseek --job-name financial-document-processor --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name financial-document-processor --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "financial-document-processor",
+              "pypi-server"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 3.0,
+            "build_gb": 1.0,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "terminus-2-grok",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-grok-conv-id"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "e2619c059ce4",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2-grok --job-name sqlite-with-gcov --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sqlite-with-gcov --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-grok-conv-id\\\"] --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "sqlite-with-gcov",
+              "db-wal-recovery"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.2,
+            "build_gb": 0.4,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent-grok",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-grok-conv-id"
+            ],
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "157d500e1be9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\mini-swe-agent-grok --job-name hf-model-inference --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name hf-model-inference --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"15\\\" --ak session_id_headers=[\\\"x-grok-conv-id\\\"] --ak version=\\\"2.4.6\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"mini-swe-agent\\\" --ek prebake_version=\\\"2.4.6\\\" --ek prebake_recipe=\\\"a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "mini-swe-agent",
+          "supported": true,
+          "reason": "",
+          "version": "2.4.6",
+          "recipe": "a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "hf-model-inference",
+              "mailman"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 7.2,
+            "build_gb": 3.4,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi-grok",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi-grok --job-name db-wal-recovery --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name db-wal-recovery --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "3e0c4215c17e853c6ce8d4b2d786aea709cb42f8e6364fa94de603421d219432",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "db-wal-recovery"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.6,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands-grok",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 4,
+        "trials": 4,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "model_kwargs",
+            "value": {
+              "params": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2134be5a6307",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands-grok --job-name sqlite-with-gcov --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sqlite-with-gcov --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak \"model_kwargs={\\\"params\\\": {\\\"reasoning_effort\\\": \\\"medium\\\"}}\" --ak version=\\\"1.57.2\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"strands\\\" --ek prebake_version=\\\"1.57.2\\\" --ek prebake_recipe=\\\"48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "strands",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.2",
+          "recipe": "48fa3ac6f0f9ce4524bc1a32b20ca795c639e591b459987fb9b7ea85b54fc813",
+          "variant": "strands-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 4,
+            "ready": [],
+            "missing": [
+              "sqlite-with-gcov",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "mailman"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 10.0,
+            "build_gb": 5.0,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "cline-grok",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 2,
+        "trials": 2,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\cline-grok --job-name sparql-university --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sparql-university --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"3.0.74\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"cline-cli\\\" --ek prebake_version=\\\"3.0.74\\\" --ek prebake_recipe=\\\"075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "cline-cli",
+          "supported": true,
+          "reason": "",
+          "version": "3.0.74",
+          "recipe": "075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299",
+          "variant": "cline-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 2,
+            "ready": [],
+            "missing": [
+              "sparql-university",
+              "hf-model-inference"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 4.0,
+            "build_gb": 1.8,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose-grok",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose-grok --job-name sqlite-with-gcov --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name sqlite-with-gcov --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "sqlite-with-gcov"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.5,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode-grok",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "medium",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "12ef5aff2915",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model xai/grok-4.7 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\opencode-grok --job-name multi-source-data-merger --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name multi-source-data-merger --ak variant=\\\"medium\\\" --ak version=\\\"1.19.5\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"opencode\\\" --ek prebake_version=\\\"1.19.5\\\" --ek prebake_recipe=\\\"ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "opencode",
+          "supported": true,
+          "reason": "",
+          "version": "1.19.5",
+          "recipe": "ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e",
+          "variant": "opencode-warm",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "multi-source-data-merger"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.0,
+            "build_gb": 0.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:6e838702519ad18381a0f34d5fd79b009bc122fff6905c3fe74d7372fc53ae61",
+    "warnings": [],
+    "peak_containers": 3,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 28,
+      "build_min": 50.7,
+      "build_wall_min": 17.1,
+      "build_gb": 25.18,
+      "jobs": 3,
+      "task_images": 14,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 14,
+        "arms": 14,
+        "lanes": 28,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 28,
+        "build_wall_min_total": 30.3,
+        "build_wall_min_max": 3.6,
+        "peak_disk_gb": 4.43,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "sparql-university",
+            "arms": [
+              "cline-grok"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 2.0,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.03
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "arms": [
+              "terminus-2-grok",
+              "strands-grok",
+              "goose-grok"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.6,
+            "build_wall_min": 2.5,
+            "disk_gb": 2.24
+          },
+          {
+            "task": "hf-model-inference",
+            "arms": [
+              "mini-swe-agent-grok",
+              "strands-grok",
+              "cline-grok"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 8.1,
+            "build_wall_min": 3.6,
+            "disk_gb": 4.43
+          },
+          {
+            "task": "db-wal-recovery",
+            "arms": [
+              "terminus-2-grok",
+              "pi-grok",
+              "strands-grok"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.6,
+            "build_wall_min": 2.5,
+            "disk_gb": 2.36
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "arms": [
+              "goose-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.57
+          },
+          {
+            "task": "nginx-request-logging",
+            "arms": [
+              "terminus-2-glm",
+              "pi-glm",
+              "cline-glm"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.1,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.95
+          },
+          {
+            "task": "multi-source-data-merger",
+            "arms": [
+              "pi-glm",
+              "opencode-grok"
+            ],
+            "images": 2,
+            "build": 2,
+            "build_min": 3.5,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.72
+          },
+          {
+            "task": "sanitize-git-repo",
+            "arms": [
+              "kilo-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 3.0,
+            "build_wall_min": 3.0,
+            "disk_gb": 1.49
+          },
+          {
+            "task": "kv-store-grpc",
+            "arms": [
+              "goose-glm",
+              "opencode-glm"
+            ],
+            "images": 2,
+            "build": 2,
+            "build_min": 3.5,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.61
+          },
+          {
+            "task": "fix-git",
+            "arms": [
+              "terminus-2-glm"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 0.6,
+            "build_wall_min": 0.6,
+            "disk_gb": 0.23
+          },
+          {
+            "task": "mailman",
+            "arms": [
+              "cline-glm",
+              "mini-swe-agent-grok",
+              "strands-grok"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 8.1,
+            "build_wall_min": 3.6,
+            "disk_gb": 4.43
+          },
+          {
+            "task": "cancel-async-tasks",
+            "arms": [
+              "terminus-2-glm",
+              "pi-glm",
+              "cline-glm"
+            ],
+            "images": 3,
+            "build": 3,
+            "build_min": 4.1,
+            "build_wall_min": 2.0,
+            "disk_gb": 1.95
+          },
+          {
+            "task": "financial-document-processor",
+            "arms": [
+              "goose-deepseek"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.57
+          },
+          {
+            "task": "pypi-server",
+            "arms": [
+              "goose-deepseek"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 1.5,
+            "build_wall_min": 1.5,
+            "disk_gb": 0.57
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 14,
+      "arms": 14,
+      "lanes": 28,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 28,
+      "build_wall_min_total": 30.3,
+      "build_wall_min_max": 3.6,
+      "peak_disk_gb": 4.43,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "14 task race(s) x 14 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "sparql-university",
+          "arms": [
+            "cline-grok"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 2.0,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.03
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "arms": [
+            "terminus-2-grok",
+            "strands-grok",
+            "goose-grok"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.6,
+          "build_wall_min": 2.5,
+          "disk_gb": 2.24
+        },
+        {
+          "task": "hf-model-inference",
+          "arms": [
+            "mini-swe-agent-grok",
+            "strands-grok",
+            "cline-grok"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 8.1,
+          "build_wall_min": 3.6,
+          "disk_gb": 4.43
+        },
+        {
+          "task": "db-wal-recovery",
+          "arms": [
+            "terminus-2-grok",
+            "pi-grok",
+            "strands-grok"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.6,
+          "build_wall_min": 2.5,
+          "disk_gb": 2.36
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "arms": [
+            "goose-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.57
+        },
+        {
+          "task": "nginx-request-logging",
+          "arms": [
+            "terminus-2-glm",
+            "pi-glm",
+            "cline-glm"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.1,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.95
+        },
+        {
+          "task": "multi-source-data-merger",
+          "arms": [
+            "pi-glm",
+            "opencode-grok"
+          ],
+          "images": 2,
+          "build": 2,
+          "build_min": 3.5,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.72
+        },
+        {
+          "task": "sanitize-git-repo",
+          "arms": [
+            "kilo-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 3.0,
+          "build_wall_min": 3.0,
+          "disk_gb": 1.49
+        },
+        {
+          "task": "kv-store-grpc",
+          "arms": [
+            "goose-glm",
+            "opencode-glm"
+          ],
+          "images": 2,
+          "build": 2,
+          "build_min": 3.5,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.61
+        },
+        {
+          "task": "fix-git",
+          "arms": [
+            "terminus-2-glm"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 0.6,
+          "build_wall_min": 0.6,
+          "disk_gb": 0.23
+        },
+        {
+          "task": "mailman",
+          "arms": [
+            "cline-glm",
+            "mini-swe-agent-grok",
+            "strands-grok"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 8.1,
+          "build_wall_min": 3.6,
+          "disk_gb": 4.43
+        },
+        {
+          "task": "cancel-async-tasks",
+          "arms": [
+            "terminus-2-glm",
+            "pi-glm",
+            "cline-glm"
+          ],
+          "images": 3,
+          "build": 3,
+          "build_min": 4.1,
+          "build_wall_min": 2.0,
+          "disk_gb": 1.95
+        },
+        {
+          "task": "financial-document-processor",
+          "arms": [
+            "goose-deepseek"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.57
+        },
+        {
+          "task": "pypi-server",
+          "arms": [
+            "goose-deepseek"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 1.5,
+          "build_wall_min": 1.5,
+          "disk_gb": 0.57
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:6e838702519ad18381a0f34d5fd79b009bc122fff6905c3fe74d7372fc53ae61",
+    "ledger_fingerprint": "sha256:75d453ba0aa313cc",
+    "seed": 1585920950637,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "terminus-2-glm",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "428907a254d4883b",
+          "options_fingerprint": "c407c5f85bad"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.560782,
+          "p50": 0.469853,
+          "p90": 0.973578
+        },
+        "total": {
+          "p10": 0.961064,
+          "p50": 1.531185,
+          "p90": 2.436883
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 15.1,
+          "p90": 31.36
+        },
+        "arm_minutes": {
+          "p50": 53.21,
+          "p90": 84.62
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.23,
+          "basis": "measured",
+          "trials": 208
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.5441): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "pi-glm",
+        "cell": {
+          "family": "pi",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "77ac746df276e9e3",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.784063,
+          "p50": 0.664865,
+          "p90": 1.411969
+        },
+        "total": {
+          "p10": 1.415401,
+          "p50": 2.25972,
+          "p90": 3.588317
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 15.38,
+          "p90": 33.28
+        },
+        "arm_minutes": {
+          "p50": 53.21,
+          "p90": 85.26
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 32.02,
+          "basis": "measured",
+          "trials": 206
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.8148): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "cline-glm",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "2e7730956daf5f00",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 3,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 3,
+          "runs": [
+            "default/20261031-173407-five-models-27-t-v1",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.104685,
+          "p50": 0.897142,
+          "p90": 1.993784
+        },
+        "total": {
+          "p10": 1.971827,
+          "p50": 3.145702,
+          "p90": 5.062311
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 8.56,
+          "p90": 19.6
+        },
+        "arm_minutes": {
+          "p50": 32.36,
+          "p90": 51.47
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 69.65,
+          "basis": "measured",
+          "trials": 233
+        },
+        "unpriced_models": [],
+        "notes": [
+          "3 trials that ran but recorded no usage are drawn at the most expensive measured trial ($1.1177): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "goose-glm",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "246ef53358a5d0c2",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 2,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.702833,
+          "p50": 0.593357,
+          "p90": 1.262553
+        },
+        "total": {
+          "p10": 0.718811,
+          "p50": 1.284061,
+          "p90": 2.280735
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 13.04,
+          "p90": 27.13
+        },
+        "arm_minutes": {
+          "p50": 30.21,
+          "p90": 51.78
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.04,
+          "basis": "measured",
+          "trials": 236
+        },
+        "unpriced_models": [],
+        "notes": [
+          "2 trials that ran but recorded no usage are drawn at the most expensive measured trial ($0.7094): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "opencode-glm",
+        "cell": {
+          "family": "opencode",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "harness default",
+          "config_hash": "25d943b03a67908d",
+          "options_fingerprint": "a72c0ddb80c5"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.651632,
+          "p50": 1.310912,
+          "p90": 2.806926
+        },
+        "total": {
+          "p10": 0.626591,
+          "p50": 1.311062,
+          "p90": 2.837415
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 12.16,
+          "p90": 31.18
+        },
+        "arm_minutes": {
+          "p50": 14.41,
+          "p90": 29.62
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 22.45,
+          "basis": "measured",
+          "trials": 239
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($1.5959): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "kilo-glm",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "harness default",
+          "config_hash": "881b5421cd1be62b",
+          "options_fingerprint": "a72628531661"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on fireworks:glm-5p3",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 1.727996,
+          "p50": 1.531038,
+          "p90": 2.993564
+        },
+        "total": {
+          "p10": 0.733423,
+          "p50": 1.573913,
+          "p90": 3.387403
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 13.65,
+          "p90": 26.77
+        },
+        "arm_minutes": {
+          "p50": 14.44,
+          "p90": 29.04
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 22.47,
+          "basis": "measured",
+          "trials": 232
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($1.8842): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "goose-deepseek",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6c70065df64baa26",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on fireworks:deepseek-v4p1-flash-1017",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "dev/20261031-133138-pilot-deepseek-v-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.146438,
+          "p50": 0.111347,
+          "p90": 0.333739
+        },
+        "total": {
+          "p10": 0.126485,
+          "p50": 0.259822,
+          "p90": 0.509219
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 3.57,
+          "p90": 9.48
+        },
+        "arm_minutes": {
+          "p50": 9.45,
+          "p90": 17.89
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.04,
+          "basis": "measured",
+          "trials": 236
+        },
+        "unpriced_models": [],
+        "notes": [
+          "1 trial that ran but recorded no usage is drawn at the most expensive measured trial ($0.2359): such trials often ran to the time limit."
+        ]
+      },
+      {
+        "arm": "terminus-2-grok",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "1e943f37ecdc9c05",
+          "options_fingerprint": "e2619c059ce4"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.196973,
+          "p50": 0.108344,
+          "p90": 0.446638
+        },
+        "total": {
+          "p10": 0.09287,
+          "p50": 0.324738,
+          "p90": 0.809432
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.72,
+          "p90": 15.49
+        },
+        "arm_minutes": {
+          "p50": 16.64,
+          "p90": 28.68
+        },
+        "p_infra": 0.0741,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.23,
+          "basis": "measured",
+          "trials": 208
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent-grok",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "20e8a369738e2670",
+          "options_fingerprint": "157d500e1be9"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.287692,
+          "p50": 0.10867,
+          "p90": 0.593578
+        },
+        "total": {
+          "p10": 0.123586,
+          "p50": 0.478936,
+          "p90": 1.187156
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 8.64,
+          "p90": 17.59
+        },
+        "arm_minutes": {
+          "p50": 18.81,
+          "p90": 30.66
+        },
+        "p_infra": 0.0385,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 5.39,
+          "basis": "measured",
+          "trials": 218
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi-grok",
+        "cell": {
+          "family": "pi",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "2821adb389462338",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.350355,
+          "p50": 0.144716,
+          "p90": 1.074434
+        },
+        "total": {
+          "p10": 0.05428,
+          "p50": 0.144716,
+          "p90": 1.351546
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.82,
+          "p90": 16.09
+        },
+        "arm_minutes": {
+          "p50": 6.82,
+          "p90": 17.09
+        },
+        "p_infra": 0.037,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 32.02,
+          "basis": "measured",
+          "trials": 206
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands-grok",
+        "cell": {
+          "family": "strands",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "harness default",
+          "config_hash": "85d9aba09bbc4412",
+          "options_fingerprint": "2134be5a6307"
+        },
+        "trials": 4,
+        "basis": "measured",
+        "basis_detail": "23 trials on 23 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 23,
+          "tasks": 23,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.182255,
+          "p50": 0.105199,
+          "p90": 0.5449
+        },
+        "total": {
+          "p10": 0.306883,
+          "p50": 0.683648,
+          "p90": 1.1863
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 3.73,
+          "p90": 15.66
+        },
+        "arm_minutes": {
+          "p50": 25.54,
+          "p90": 50.74
+        },
+        "p_infra": 0.1481,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.53,
+          "basis": "measured",
+          "trials": 214
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "cline-grok",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "5af9893413e6e19e",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 2,
+        "basis": "measured",
+        "basis_detail": "24 trials on 24 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 24,
+          "tasks": 24,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.57719,
+          "p50": 0.37558,
+          "p90": 1.575019
+        },
+        "total": {
+          "p10": 0.123423,
+          "p50": 0.855443,
+          "p90": 2.4094
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.19,
+          "p90": 19.6
+        },
+        "arm_minutes": {
+          "p50": 16.82,
+          "p90": 34.84
+        },
+        "p_infra": 0.1111,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 69.65,
+          "basis": "measured",
+          "trials": 233
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "goose-grok",
+        "cell": {
+          "family": "goose",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "bd026e1957354fa6",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "26 trials on 26 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 26,
+          "tasks": 26,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.291593,
+          "p50": 0.093268,
+          "p90": 0.896618
+        },
+        "total": {
+          "p10": 0.046994,
+          "p50": 0.093268,
+          "p90": 1.338608
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.53,
+          "p90": 13.33
+        },
+        "arm_minutes": {
+          "p50": 5.42,
+          "p90": 14.81
+        },
+        "p_infra": 0.037,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.04,
+          "basis": "measured",
+          "trials": 236
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "opencode-grok",
+        "cell": {
+          "family": "opencode",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "harness default",
+          "config_hash": "cc794ca13039f230",
+          "options_fingerprint": "12ef5aff2915"
+        },
+        "trials": 1,
+        "basis": "measured",
+        "basis_detail": "25 trials on 25 tasks of this configuration on xai:grok-4.7",
+        "confidence": "high",
+        "evidence": {
+          "trials": 25,
+          "tasks": 25,
+          "design_tasks_observed": 0,
+          "runs": [
+            "default/20261031-181842-five-models-27-t-v2",
+            "default/20261031-194013-five-models-27-t-v3",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.511873,
+          "p50": 0.24493,
+          "p90": 1.978894
+        },
+        "total": {
+          "p10": 0.06951,
+          "p50": 0.242194,
+          "p90": 1.978894
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.68,
+          "p90": 26.83
+        },
+        "arm_minutes": {
+          "p50": 5.37,
+          "p90": 27.83
+        },
+        "p_infra": 0.0385,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 22.45,
+          "basis": "measured",
+          "trials": 239
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 13.177934,
+        "p50": 16.346472,
+        "p90": 20.303509
+      },
+      "budget_usd": 40.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 23.5,
+      "worst_case_capped_usd": 30.0,
+      "uncapped_arms": [
+        "terminus-2-glm",
+        "pi-glm",
+        "cline-glm",
+        "goose-glm",
+        "opencode-glm",
+        "kilo-glm",
+        "goose-deepseek",
+        "terminus-2-grok",
+        "pi-grok",
+        "strands-grok",
+        "cline-grok",
+        "goose-grok",
+        "opencode-grok"
+      ],
+      "inflight_allowance_usd": 49.5,
+      "wall_minutes": {
+        "p50": 251.95,
+        "p90": 304.5
+      },
+      "peak_containers": 3,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 14,
+        "arms": 14,
+        "max_containers": 6,
+        "build_wall_min_total": 30.3,
+        "build_wall_min_max": 3.6,
+        "peak_disk_gb": 4.43,
+        "images_to_build": 28
+      }
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "cline-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-deepseek",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "terminus-2-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "mini-swe-agent-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "cline-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3598,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": {
+      "tasks": 27,
+      "trials": 27,
+      "cost_avoided_usd": 3.96129,
+      "unpriced_tasks": 0,
+      "arms": [
+        {
+          "arm": "claude-code",
+          "tasks": 27,
+          "trials": 27,
+          "cost_avoided_usd": 3.96129,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "openssl-selfsigned-cert",
+              "trials": 1,
+              "cost_avoided_usd": 0.083931
+            },
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.637019
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.246791
+            },
+            {
+              "task": "mteb-retrieve",
+              "trials": 1,
+              "cost_avoided_usd": 0.084975
+            },
+            {
+              "task": "sparql-university",
+              "trials": 1,
+              "cost_avoided_usd": 0.149109
+            },
+            {
+              "task": "sqlite-with-gcov",
+              "trials": 1,
+              "cost_avoided_usd": 0.082314
+            },
+            {
+              "task": "sqlite-db-truncate",
+              "trials": 1,
+              "cost_avoided_usd": 0.077968
+            },
+            {
+              "task": "hf-model-inference",
+              "trials": 1,
+              "cost_avoided_usd": 0.084277
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.069416
+            },
+            {
+              "task": "git-multibranch",
+              "trials": 1,
+              "cost_avoided_usd": 0.094454
+            },
+            {
+              "task": "log-summary-date-ranges",
+              "trials": 1,
+              "cost_avoided_usd": 0.07933
+            },
+            {
+              "task": "nginx-request-logging",
+              "trials": 1,
+              "cost_avoided_usd": 0.077884
+            },
+            {
+              "task": "multi-source-data-merger",
+              "trials": 1,
+              "cost_avoided_usd": 0.0866
+            },
+            {
+              "task": "reshard-c4-data",
+              "trials": 1,
+              "cost_avoided_usd": 0.496532
+            },
+            {
+              "task": "sanitize-git-repo",
+              "trials": 1,
+              "cost_avoided_usd": 0.173243
+            },
+            {
+              "task": "kv-store-grpc",
+              "trials": 1,
+              "cost_avoided_usd": 0.069625
+            },
+            {
+              "task": "fix-git",
+              "trials": 1,
+              "cost_avoided_usd": 0.083192
+            },
+            {
+              "task": "mailman",
+              "trials": 1,
+              "cost_avoided_usd": 0.220607
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.102016
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.082455
+            },
+            {
+              "task": "financial-document-processor",
+              "trials": 1,
+              "cost_avoided_usd": 0.410157
+            },
+            {
+              "task": "fix-code-vulnerability",
+              "trials": 1,
+              "cost_avoided_usd": 0.051339
+            },
+            {
+              "task": "git-leak-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.05878
+            },
+            {
+              "task": "headless-terminal",
+              "trials": 1,
+              "cost_avoided_usd": 0.127108
+            },
+            {
+              "task": "modernize-scientific-stack",
+              "trials": 1,
+              "cost_avoided_usd": 0.086843
+            },
+            {
+              "task": "pypi-server",
+              "trials": 1,
+              "cost_avoided_usd": 0.0742
+            },
+            {
+              "task": "regex-log",
+              "trials": 1,
+              "cost_avoided_usd": 0.071125
+            }
+          ]
+        }
+      ]
+    },
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 55,
+    "trials_reused": 27,
+    "trials_to_run": 28,
+    "cost_avoided_usd": 3.96129,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "c701410eb884a0d9",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 27,
+        "tasks_to_run": 0,
+        "trials_reused": 27,
+        "cost_avoided_usd": 3.96129,
+        "skipped": true,
+        "cell_trials": 33,
+        "reused": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.083931,
+            "lower_bound": 0
+          },
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/cobol-modernization__MfqKr8W"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.637019,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/build-cython-ext__nCUkH5h"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.246791,
+            "lower_bound": 0
+          },
+          {
+            "task": "mteb-retrieve",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/mteb-retrieve__EgAULDF"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.084975,
+            "lower_bound": 0
+          },
+          {
+            "task": "sparql-university",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sparql-university__zMmheqp"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.149109,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-with-gcov__RhBi6sU"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.082314,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-db-truncate",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-db-truncate__hByEfNX"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.077968,
+            "lower_bound": 0
+          },
+          {
+            "task": "hf-model-inference",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/hf-model-inference__2iGv9TG"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.084277,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/db-wal-recovery__8ZXwy2P"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.069416,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-multibranch",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/git-multibranch__ryNeHBR"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.094454,
+            "lower_bound": 0
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/log-summary-date-ranges__BbjVLyf"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.07933,
+            "lower_bound": 0
+          },
+          {
+            "task": "nginx-request-logging",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/nginx-request-logging__QVsw8ES"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.077884,
+            "lower_bound": 0
+          },
+          {
+            "task": "multi-source-data-merger",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/multi-source-data-merger__FeQb87y"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.0866,
+            "lower_bound": 0
+          },
+          {
+            "task": "reshard-c4-data",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/reshard-c4-data__WSLaSnr"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.496532,
+            "lower_bound": 0
+          },
+          {
+            "task": "sanitize-git-repo",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sanitize-git-repo__3B2fok4"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.173243,
+            "lower_bound": 0
+          },
+          {
+            "task": "kv-store-grpc",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/kv-store-grpc__nSuHGzU"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.069625,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-git",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/fix-git__HvfSQNN"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.083192,
+            "lower_bound": 0
+          },
+          {
+            "task": "mailman",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/mailman__tzSxhRF"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.220607,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/cancel-async-tasks__f78Ag9V"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.102016,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/constraints-scheduling__9JqKTZy"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.082455,
+            "lower_bound": 0
+          },
+          {
+            "task": "financial-document-processor",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/financial-document-processor__skRhE7U"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.410157,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/fix-code-vulnerability__XnMckjv"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.051339,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-leak-recovery",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/git-leak-recovery__LHPLUsg"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.05878,
+            "lower_bound": 0
+          },
+          {
+            "task": "headless-terminal",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/headless-terminal__fNLMVdQ"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.127108,
+            "lower_bound": 0
+          },
+          {
+            "task": "modernize-scientific-stack",
+            "trials": [
+              "d309475d-bab6-4926-8b20-fed72f869083/modernize-scientific-stack__uspXQ8x"
+            ],
+            "runs": [
+              "default/20261029-143816-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.086843,
+            "lower_bound": 0
+          },
+          {
+            "task": "pypi-server",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/pypi-server__9qnstYd"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.0742,
+            "lower_bound": 0
+          },
+          {
+            "task": "regex-log",
+            "trials": [
+              "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/regex-log__gVRGR5Y"
+            ],
+            "runs": [
+              "default/20261030-101721-it-saas-scope-27-v4"
+            ],
+            "cost_avoided_usd": 0.071125,
+            "lower_bound": 0
+          }
+        ],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "terminus-2-glm",
+        "family": "terminus-2",
+        "config_hash": "428907a254d4883b",
+        "harness_version": "harbor",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "pi-glm",
+        "family": "pi",
+        "config_hash": "77ac746df276e9e3",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "cline-glm",
+        "family": "cline-cli",
+        "config_hash": "2e7730956daf5f00",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 3,
+        "tasks_reused": 0,
+        "tasks_to_run": 3,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "goose-glm",
+        "family": "goose",
+        "config_hash": "246ef53358a5d0c2",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "opencode-glm",
+        "family": "opencode",
+        "config_hash": "25d943b03a67908d",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "kilo-glm",
+        "family": "kilo-code",
+        "config_hash": "881b5421cd1be62b",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "goose-deepseek",
+        "family": "goose",
+        "config_hash": "6c70065df64baa26",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "terminus-2-grok",
+        "family": "terminus-2",
+        "config_hash": "1e943f37ecdc9c05",
+        "harness_version": "harbor",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "mini-swe-agent-grok",
+        "family": "mini-swe-agent",
+        "config_hash": "20e8a369738e2670",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "pi-grok",
+        "family": "pi",
+        "config_hash": "2821adb389462338",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "strands-grok",
+        "family": "strands",
+        "config_hash": "85d9aba09bbc4412",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 4,
+        "tasks_reused": 0,
+        "tasks_to_run": 4,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 23,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "cline-grok",
+        "family": "cline-cli",
+        "config_hash": "5af9893413e6e19e",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 2,
+        "tasks_reused": 0,
+        "tasks_to_run": 2,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 24,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "goose-grok",
+        "family": "goose",
+        "config_hash": "bd026e1957354fa6",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 26,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      },
+      {
+        "arm": "opencode-grok",
+        "family": "opencode",
+        "config_hash": "cc794ca13039f230",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 25,
+        "reused": [],
+        "short": [],
+        "host_busy": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-11-03T03:21:34+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:dd4e79cc13d8aada143d45bdd29550cadcfb954b98d8203f76016baddb7dfe2e",
+  "ledger_fingerprint": "sha256:75d453ba0aa313cc",
+  "reuse_fingerprint": "sha256:9c68d53edd7b2c5b"
+}

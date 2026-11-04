@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-pilot-gpt-6-1-terra-8-ha-827b",
+  "title": "Pilot: GPT-6.1 Terra, 8 harnesses, openssl",
+  "created_at": "2026-10-31T20:32:05+00:00",
+  "updated_at": "2026-10-31T20:41:33+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T20:32:05+00:00",
+      "spec_hash": "sha256:da6cd442c10661fffce95bed0bde7598e01800226aa304cf4547a0d1bf1e5b89",
+      "change_note": "",
+      "approved_at": "2026-10-31T20:32:07+00:00",
+      "runs": [
+        "20261031-134133-pilot-gpt-6-1-te-v1"
+      ]
+    }
+  }
+}

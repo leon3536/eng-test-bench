@@ -1,0 +1,17 @@
+{
+    "task": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+        "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__RHyN59U",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\jobs\\20261029-122236-pilot\\terminus-2",
+    "agent": {
+        "name": "terminus-2",
+        "model_name": "anthropic/claude-opus-5-5",
+        "kwargs": {
+            "reasoning_effort": "medium",
+            "max_turns": 300
+        }
+    },
+    "job_id": "e339b17c-12dd-4e26-8fe9-e8415fd5a2be"
+}

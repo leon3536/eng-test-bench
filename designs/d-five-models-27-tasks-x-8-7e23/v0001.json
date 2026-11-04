@@ -1,0 +1,2382 @@
+{
+  "schema": 1,
+  "design_id": "d-five-models-27-tasks-x-8-7e23",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-01T00:32:01+00:00",
+  "profile": "default",
+  "title": "Five models: 27 tasks x 8 harnesses (DeepSeek, GLM, Kimi, Terra, Grok)",
+  "purpose": "Per-task races of 8 harnesses on DeepSeek V4.1, GLM 5.3, Kimi K3, GPT-6.1 Terra and Grok 4.7; baseline Claude Code on Opus 5.5 (reused).",
+  "rationale": "Effort high on DeepSeek/GLM/Kimi (no medium), medium on Terra/Grok. Per-model caps tracked by hand: DeepSeek 17, Terra 22, GLM 45, Kimi 55, Grok 55.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 194.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-deepseek",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-deepseek",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-deepseek",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-deepseek",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-deepseek",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-deepseek",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-glm",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-glm",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-glm",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-glm",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-glm",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-glm",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-glm",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-kimi",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-kimi",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-kimi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-kimi",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-kimi",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-kimi",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-kimi",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-kimi",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-terra",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {},
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-terra",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-terra",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-terra",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "openai/gpt-6.1-terra",
+            "effort": "medium"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-terra",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-terra",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-terra",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-terra",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2-grok",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "session_id_headers": [
+            "x-grok-conv-id"
+          ]
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-grok",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "session_id_headers": [
+            "x-grok-conv-id"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi-grok",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands-grok",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "medium"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "cline-grok",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "goose-grok",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "opencode-grok",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "kilo-grok",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "omit",
+        "options": {
+          "variant": "medium",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "build-cython-ext",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "cancel-async-tasks",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/cobol-modernization__MfqKr8W"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/build-cython-ext__nCUkH5h"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/mteb-retrieve__EgAULDF"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sparql-university__zMmheqp"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-with-gcov__RhBi6sU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-db-truncate__hByEfNX"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/hf-model-inference__2iGv9TG"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/db-wal-recovery__8ZXwy2P"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-multibranch__ryNeHBR"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/log-summary-date-ranges__BbjVLyf"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/nginx-request-logging__QVsw8ES"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/multi-source-data-merger__FeQb87y"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/reshard-c4-data__WSLaSnr"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sanitize-git-repo__3B2fok4"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/kv-store-grpc__nSuHGzU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-git__HvfSQNN"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/mailman__tzSxhRF"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/cancel-async-tasks__f78Ag9V"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/constraints-scheduling__9JqKTZy"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/financial-document-processor__skRhE7U"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-code-vulnerability__XnMckjv"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-leak-recovery__LHPLUsg"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/headless-terminal__fNLMVdQ"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/modernize-scientific-stack__uspXQ8x"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/pypi-server__9qnstYd"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/regex-log__gVRGR5Y"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        }
+      ],
+      "terminus-2-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "cc4c0096-ebb4-4113-a70b-de9fe4410133/openssl-selfsigned-cert__TNMbqJD"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "mini-swe-agent-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "53a89d6b-048a-4534-a2b4-36e7f497536d/openssl-selfsigned-cert__Hy2XDMB"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "pi-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f4d53465-7d65-4365-a3db-9790ebb58df5/openssl-selfsigned-cert__Whida7o"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "strands-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a5da778b-fd02-4e10-9a00-b04c9ae66d81/openssl-selfsigned-cert__Cyck85b"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "cline-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "956ea5bf-2612-4890-a71a-0ec939464480/openssl-selfsigned-cert__XqM7LeK"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "goose-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "ca1e34b8-5ecd-4f72-ae16-5b64064e1a11/openssl-selfsigned-cert__nJXt6W9"
+          ],
+          "runs": [
+            "dev/20261031-133138-pilot-deepseek-v-v1"
+          ]
+        }
+      ],
+      "opencode-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5fe4b407-f76a-40c7-aacb-db21a4851518/openssl-selfsigned-cert__gczTe6D"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "kilo-deepseek": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "eadf450c-3462-4471-9c4a-236f5f8ec673/openssl-selfsigned-cert__joWwLiU"
+          ],
+          "runs": [
+            "dev/20261031-125723-pilot-deepseek-v-v2"
+          ]
+        }
+      ],
+      "terminus-2-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "557380f1-d36d-4e36-a235-a4cf18fe7188/openssl-selfsigned-cert__ddKKUJW"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "mini-swe-agent-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "bc872b74-944b-4109-a674-b78747ffe4d0/openssl-selfsigned-cert__3uME8kq"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "pi-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "37d5e9dd-962b-4fdf-baf7-bab796f28633/openssl-selfsigned-cert__Yfhzpgj"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "strands-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "d64149bc-5e7f-4da4-ba87-460405c9a6ee/openssl-selfsigned-cert__Y8JYjZW"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "cline-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5dec28e3-127b-4764-a5ab-671d226f9fe7/openssl-selfsigned-cert__BZULGfm"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "goose-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "dc248eaa-7c33-4384-a07f-4bc151687ae4/openssl-selfsigned-cert__gM3dAxw"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "opencode-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "01faaacb-512e-4ed3-9d60-e8394d65150e/openssl-selfsigned-cert__FEhBMPM"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "kilo-glm": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "359e9cf1-ae3a-4ff4-bc9b-c4ad9f93168d/openssl-selfsigned-cert__inwNHw9"
+          ],
+          "runs": [
+            "dev/20261031-132330-pilot-glm-5-3-8-v1"
+          ]
+        }
+      ],
+      "terminus-2-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "74fd6842-cad4-485f-85f7-d8930dc783fe/openssl-selfsigned-cert__35tcVsn"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "mini-swe-agent-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "91ae93e0-187c-4449-b486-620f9dd41644/openssl-selfsigned-cert__QFNDRMG"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "pi-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0dd832f5-3ffa-488f-8d23-6f4ce4fbe321/openssl-selfsigned-cert__qxNnSpj"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "strands-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "6ee5bdc6-f88b-4693-b4c5-3d5bff2d65c9/openssl-selfsigned-cert__PX3r5Lw"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "cline-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "b1d5aaae-7dac-4ee5-bac3-58b1b1b4b629/openssl-selfsigned-cert__pTHR6zy"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "goose-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "3eab16a9-c410-4383-94e2-128658b3b964/openssl-selfsigned-cert__u7Ccje7"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "opencode-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a3b5abe0-c9c6-4383-a5f0-82aee3a25342/openssl-selfsigned-cert__4znPb5L"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "kilo-kimi": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "7bc8d91e-e5bb-418f-a636-0b4ec411f0ee/openssl-selfsigned-cert__rYZXA7U"
+          ],
+          "runs": [
+            "dev/20261031-133314-pilot-kimi-k3-8-v1"
+          ]
+        }
+      ],
+      "terminus-2-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f8cc8008-a47e-4385-a73e-bfff2dd9e915/openssl-selfsigned-cert__XRc9dDd"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "mini-swe-agent-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "1b485a20-358a-48f1-8bec-925e5e96a4ac/openssl-selfsigned-cert__AVxA4iU"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "pi-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "18ac4d5f-dba2-4240-88fb-cd4def359bf4/openssl-selfsigned-cert__fQLCvWs"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "strands-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "7db9f74c-0abc-4b26-bd25-e9b6d0db4867/openssl-selfsigned-cert__3yteQif"
+          ],
+          "runs": [
+            "dev/20261031-140719-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "cline-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "22e295e9-3e79-40c6-a73c-4671b9680307/openssl-selfsigned-cert__UCSZmkn"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "goose-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "3504b5f3-8451-46de-9b05-7a21e00d8491/openssl-selfsigned-cert__j7ni4qX"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "opencode-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "8197eaba-88c0-4cc9-a739-7258102db251/openssl-selfsigned-cert__mqDBAa3"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "kilo-terra": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "5afa1549-bb16-499b-8c03-3c1c6467fb37/openssl-selfsigned-cert__5QCMwak"
+          ],
+          "runs": [
+            "dev/20261031-134133-pilot-gpt-6-1-te-v1"
+          ]
+        }
+      ],
+      "terminus-2-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "56b23fc6-00fe-42bb-9294-57167cbd50ca/openssl-selfsigned-cert__A8rKk6J"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "mini-swe-agent-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "a7d7bb4d-6655-41c5-b3f8-a50b806c6e9f/openssl-selfsigned-cert__tY6FdyJ"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "pi-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "675dc7f4-132f-4ef9-81ba-012320e4387d/openssl-selfsigned-cert__AnVbHod"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "strands-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "f652ca5a-9799-4729-b3fe-fc1882e87d56/openssl-selfsigned-cert__487WDv7"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "cline-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "4e60e32c-9c4e-4ab1-a45d-9201fbac6405/openssl-selfsigned-cert__Fw9qaSn"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "goose-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "0eb69241-8ab7-4d6f-91f3-81969b2e4d7f/openssl-selfsigned-cert__HSeGLNB"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "opencode-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "aae35a9e-d1a3-43ea-bfac-99d373d20886/openssl-selfsigned-cert__AkqK98B"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ],
+      "kilo-grok": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "79202ed9-3593-42c2-9e35-cc9d8db607ad/openssl-selfsigned-cert__VVoksbt"
+          ],
+          "runs": [
+            "dev/20261031-135811-pilot-grok-4-7-8-v1"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:203978f2f0c5b892f0d638160b55a4c844c729d14232ea99cd3dfed3c00c15a7"
+}

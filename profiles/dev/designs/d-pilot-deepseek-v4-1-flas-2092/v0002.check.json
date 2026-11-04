@@ -1,0 +1,1127 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": []
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 8,
+    "budget_usd": 1.0,
+    "worst_case_capped_usd": 15.0,
+    "uncapped_arms": [
+      "terminus-2",
+      "pi",
+      "strands",
+      "cline",
+      "goose",
+      "opencode",
+      "kilo"
+    ],
+    "arms": [
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "c407c5f85bad",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\terminus-2 --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak session_id_headers=[\\\"x-session-affinity\\\"] --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "session_id_headers",
+            "value": [
+              "x-session-affinity"
+            ],
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "b5e7f1c8aa43",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\mini-swe-agent --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak cost_limit=\\\"15\\\" --ak session_id_headers=[\\\"x-session-affinity\\\"] --ak version=\\\"2.4.6\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.pi:PiProviders --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\pi --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "model_kwargs",
+            "value": {
+              "params": {
+                "reasoning_effort": "high"
+              }
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "56947a848038",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\strands --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak \"model_kwargs={\\\"params\\\": {\\\"reasoning_effort\\\": \\\"high\\\"}}\" --ak version=\\\"1.57.2\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\cline --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak version=\\\"3.0.74\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\goose --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72c0ddb80c5",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\opencode --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak variant=\\\"high\\\" --ak version=\\\"1.19.5\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "kilo",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "high",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a72628531661",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\kilo --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak variant=\\\"high\\\" --ak version=\\\"7.8.18\\\" --agent-setup-timeout-multiplier 4",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "off",
+          "setup_timeout_multiplier": 4.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:50cce1eaeb83caddbe7a85e352aed3187d60901f5bbfacdce3bdceded8969bbe",
+    "warnings": [],
+    "peak_containers": 6,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "off",
+      "error": null,
+      "images": 0,
+      "build_min": 0.0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 4,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 8,
+        "lanes": 8,
+        "max_containers": 6,
+        "build_jobs": 6,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "terminus-2",
+              "mini-swe-agent",
+              "pi",
+              "strands",
+              "cline",
+              "goose",
+              "opencode",
+              "kilo"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 8,
+      "lanes": 8,
+      "max_containers": 6,
+      "build_jobs": 6,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "1 task race(s) x 8 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "terminus-2",
+            "mini-swe-agent",
+            "pi",
+            "strands",
+            "cline",
+            "goose",
+            "opencode",
+            "kilo"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:50cce1eaeb83caddbe7a85e352aed3187d60901f5bbfacdce3bdceded8969bbe",
+    "ledger_fingerprint": "sha256:ded831a4b0e8eeec",
+    "seed": 267755865548610,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "terminus-2",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6ca7c4045bc7ede3",
+          "options_fingerprint": "c407c5f85bad"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "63 trials of terminus-2 on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 63,
+          "tasks": 32,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261029-214900-it-saas-scope-27-v3",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261028-222952-pilot",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.003802,
+          "p50": 0.002296,
+          "p90": 0.007725
+        },
+        "total": {
+          "p10": 0.000868,
+          "p50": 0.00303,
+          "p90": 0.010547
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.8,
+          "p90": 1.74
+        },
+        "arm_minutes": {
+          "p50": 1.81,
+          "p90": 2.85
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 12.89,
+          "basis": "measured",
+          "trials": 35
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "34e9ffa835e63070",
+          "options_fingerprint": "b5e7f1c8aa43"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of mini-swe-agent on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.00293,
+          "p50": 0.001994,
+          "p90": 0.005876
+        },
+        "total": {
+          "p10": 0.0007,
+          "p50": 0.002235,
+          "p90": 0.007226
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 2.16,
+          "p90": 4.36
+        },
+        "arm_minutes": {
+          "p50": 3.1,
+          "p90": 5.52
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 93.32,
+          "basis": "measured",
+          "trials": 21
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi",
+        "cell": {
+          "family": "pi",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "594696db9561af10",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "58 trials of pi on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 58,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-143252-it-saas-scope-27-v3",
+            "dev/20261028-222952-pilot",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.002987,
+          "p50": 0.002146,
+          "p90": 0.006098
+        },
+        "total": {
+          "p10": 0.000682,
+          "p50": 0.00218,
+          "p90": 0.006964
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.1,
+          "p90": 3.94
+        },
+        "arm_minutes": {
+          "p50": 3.01,
+          "p90": 5.12
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 93.66,
+          "basis": "measured",
+          "trials": 32
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "harness default",
+          "config_hash": "292427b887d12be5",
+          "options_fingerprint": "56947a848038"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of strands on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 28,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261030-145538-it-saas-scope-27-v5",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.003853,
+          "p50": 0.002585,
+          "p90": 0.00864
+        },
+        "total": {
+          "p10": 0.000744,
+          "p50": 0.002649,
+          "p90": 0.009359
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.36,
+          "p90": 3.56
+        },
+        "arm_minutes": {
+          "p50": 2.5,
+          "p90": 4.32
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 53.29,
+          "basis": "measured",
+          "trials": 20
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "cline",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "8237598f7deddb97",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "55 trials of cline-cli on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 55,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "dev/20261030-152750-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.005809,
+          "p50": 0.004415,
+          "p90": 0.0112
+        },
+        "total": {
+          "p10": 0.001852,
+          "p50": 0.004559,
+          "p90": 0.010988
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.12,
+          "p90": 5.18
+        },
+        "arm_minutes": {
+          "p50": 6.12,
+          "p90": 6.18
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 255.72,
+          "basis": "measured",
+          "trials": 1
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "goose",
+        "cell": {
+          "family": "goose",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "6c70065df64baa26",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "55 trials of goose on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 55,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "dev/20261030-152750-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.003738,
+          "p50": 0.002963,
+          "p90": 0.008245
+        },
+        "total": {
+          "p10": 0.000944,
+          "p50": 0.003089,
+          "p90": 0.008206
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.45,
+          "p90": 3.21
+        },
+        "arm_minutes": {
+          "p50": 3.45,
+          "p90": 4.21
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 87.48,
+          "basis": "measured",
+          "trials": 1
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "opencode",
+        "cell": {
+          "family": "opencode",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "harness default",
+          "config_hash": "293fc8d5892ad1fc",
+          "options_fingerprint": "a72c0ddb80c5"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "57 trials of opencode on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 57,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261030-214211-new-harnesses-27-v1",
+            "default/20261031-010828-new-harnesses-27-v2",
+            "default/20261031-024618-new-harnesses-27-v1",
+            "default/20261031-112219-new-harnesses-27-v2",
+            "dev/20261030-153615-pilot",
+            "dev/20261030-164039-pilot",
+            "dev/20261030-170820-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.005432,
+          "p50": 0.004391,
+          "p90": 0.010546
+        },
+        "total": {
+          "p10": 0.001455,
+          "p50": 0.004819,
+          "p90": 0.012147
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 14.95,
+          "p90": 15.75
+        },
+        "arm_minutes": {
+          "p50": 15.95,
+          "p90": 16.75
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 829.85,
+          "basis": "measured",
+          "trials": 3
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "kilo",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "harness default",
+          "config_hash": "a8a6d43d4c5ebfe0",
+          "options_fingerprint": "a72628531661"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "55 trials of kilo-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 55,
+          "tasks": 27,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261031-043735-kilo-code-27-tas-v2",
+            "default/20261031-104510-kilo-code-27-tas-v2",
+            "dev/20261031-013315-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.010364,
+          "p50": 0.004289,
+          "p90": 0.027702
+        },
+        "total": {
+          "p10": 0.001457,
+          "p50": 0.00462,
+          "p90": 0.026912
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 5.93,
+          "p90": 7.14
+        },
+        "arm_minutes": {
+          "p50": 6.93,
+          "p90": 8.14
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 279.36,
+          "basis": "measured",
+          "trials": 5
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.023699,
+        "p50": 0.037855,
+        "p90": 0.062832
+      },
+      "budget_usd": 1.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 15.0,
+      "uncapped_arms": [
+        "terminus-2",
+        "pi",
+        "strands",
+        "cline",
+        "goose",
+        "opencode",
+        "kilo"
+      ],
+      "inflight_allowance_usd": 99.0,
+      "wall_minutes": {
+        "p50": 17.73,
+        "p90": 18.58
+      },
+      "peak_containers": 6,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 8,
+        "max_containers": 6,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "mini-swe-agent",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "pi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "cline",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "kilo",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3681,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-10-31T19:57:06+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:47c69cb4279e4f69d842f75fd582e9598e2daee763d654df688530af45711737",
+  "ledger_fingerprint": "sha256:ded831a4b0e8eeec",
+  "reuse_fingerprint": null
+}

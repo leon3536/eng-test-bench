@@ -1,0 +1,19 @@
+{
+    "task": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\adaptive-rejection-sampler",
+        "source": "terminal-bench"
+    },
+    "trial_name": "adaptive-rejection-sampler__xU2wp2f",
+    "trials_dir": "C:\\Git\\EngineeringTestBench\\jobs\\20261029-122236-pilot\\claude-code",
+    "agent": {
+        "name": "claude-code",
+        "model_name": "anthropic/claude-opus-5-5",
+        "kwargs": {
+            "reasoning_effort": "medium",
+            "max_budget_usd": "15",
+            "max_turns": 300,
+            "version": "2.1.312"
+        }
+    },
+    "job_id": "852c9263-fef0-45b3-be84-54f15f77ebca"
+}

@@ -1,0 +1,1050 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "claude-code: run.prebake is require, but 14 of 27 pre-baked images are not ready (13 of 27 ready; 14 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "terminus-2: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "mini-swe-agent: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "pi: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "strands: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 135,
+    "budget_usd": 25.0,
+    "worst_case_capped_usd": 810.0,
+    "uncapped_arms": [
+      "terminus-2",
+      "pi",
+      "strands"
+    ],
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_budget_usd",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "54ba249e1265",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name claude-code --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_budget_usd=\\\"15\\\" --ak max_turns=300 --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "mailman",
+              "headless-terminal",
+              "pypi-server",
+              "regex-log"
+            ],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "db-wal-recovery",
+              "git-multibranch",
+              "multi-source-data-merger",
+              "fix-git",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "modernize-scientific-stack"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T16:29:42+00:00",
+            "build_min": 154.0,
+            "build_gb": 26.6,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 14 of 27 pre-baked images are not ready (13 of 27 ready; 14 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          }
+        ],
+        "options_fingerprint": "44136fa355b3",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent terminus-2 --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name terminus-2 --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"terminus-2\\\" --ek prebake_version=\\\"0.25.0\\\" --ek prebake_recipe=\\\"d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "terminus-2",
+          "supported": true,
+          "reason": "",
+          "version": "0.25.0",
+          "recipe": "d1db4d88b33aac5646770a227057c16f3e79969cc5de8bb67086303d72266fd0",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 16.2,
+            "build_gb": 5.4,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "cost_limit",
+            "value": "15",
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "2.4.6",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "a4945e4f8e73",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.mini_swe_agent:MiniSweAgentWithMcp --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name mini-swe-agent --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak cost_limit=\\\"15\\\" --ak version=\\\"2.4.6\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"mini-swe-agent\\\" --ek prebake_version=\\\"2.4.6\\\" --ek prebake_recipe=\\\"a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial, at most $15 (its dollar cap), from the run budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "mini-swe-agent",
+          "supported": true,
+          "reason": "",
+          "version": "2.4.6",
+          "recipe": "a2b6e8abbfff1f03c9212c98e04d56c3d7416bb2c859f84f06971b44a46a6893",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [
+              "build-cython-ext",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "fix-git",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "headless-terminal"
+            ],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "mailman",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T16:46:32+00:00",
+            "build_min": 68.4,
+            "build_gb": 32.3,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "pi",
+        "agent": "pi",
+        "family": "pi",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.4.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8472c3a66651",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent pi --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name pi --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.4.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"pi\\\" --ek prebake_version=\\\"1.4.0\\\" --ek prebake_recipe=\\\"1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "pi",
+          "supported": true,
+          "reason": "",
+          "version": "1.4.0",
+          "recipe": "1e59ecd1ba3b5327d02928527acdda64125cb6ca67104a31b431ab5ac7b2a6fc",
+          "variant": "pi-warm",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 40.5,
+            "build_gb": 16.2,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "kind": "name",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "factory",
+            "value": "bench_strands_factory:create_agent",
+            "source": "arm option"
+          },
+          {
+            "name": "factory_kwargs",
+            "value": {
+              "model_spec": "anthropic/claude-sonnet-5-5",
+              "effort": "medium"
+            },
+            "source": "arm option"
+          },
+          {
+            "name": "factory_path",
+            "value": "harnesses/strands_factory",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.57.2",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "5ede18973ca2",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent strands --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID --job-name strands --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak factory=\\\"bench_strands_factory:create_agent\\\" --ak \"factory_kwargs={\\\"model_spec\\\": \\\"anthropic/claude-sonnet-5-5\\\", \\\"effort\\\": \\\"medium\\\"}\" --ak factory_path=\\\"harnesses/strands_factory\\\" --ak version=\\\"1.57.2\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"strands\\\" --ek prebake_version=\\\"1.57.2\\\" --ek prebake_recipe=\\\"08233daa357806764ba46bf0ffe5d519b6d60e810fecaf1f49c43b6919f4ace6\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "strands",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.2",
+          "recipe": "08233daa357806764ba46bf0ffe5d519b6d60e810fecaf1f49c43b6919f4ace6",
+          "variant": "strands-skip",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [
+              "hf-model-inference",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "kv-store-grpc",
+              "fix-git",
+              "financial-document-processor",
+              "git-leak-recovery",
+              "headless-terminal"
+            ],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "db-wal-recovery",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "fix-code-vulnerability",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": "2026-10-30T17:10:36+00:00",
+            "build_min": 47.5,
+            "build_gb": 23.75,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [
+      "claude-code: run.prebake is require, but 14 of 27 pre-baked images are not ready (13 of 27 ready; 14 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "terminus-2: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "mini-swe-agent: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "pi: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "strands: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:f95df442a99d8905d50ad5b43db3472ae68332989c34282e9828e5fe90170f83",
+    "warnings": [],
+    "peak_containers": 5,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "require",
+      "error": null,
+      "images": 106,
+      "build_min": 326.6,
+      "build_wall_min": 82.0,
+      "build_gb": 119.89,
+      "jobs": 4,
+      "task_images": 27,
+      "pull": [],
+      "pull_error": null
+    },
+    "image_problems": [
+      "claude-code: run.prebake is require, but 14 of 27 pre-baked images are not ready (13 of 27 ready; 14 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "terminus-2: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "mini-swe-agent: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "pi: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "strands: run.prebake is require, but 19 of 27 pre-baked images are not ready (8 of 27 ready; 19 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ]
+  },
+  "estimate": {
+    "spec_hash": "sha256:f95df442a99d8905d50ad5b43db3472ae68332989c34282e9828e5fe90170f83",
+    "ledger_fingerprint": "sha256:ca6c427080cdf195",
+    "seed": 191594674926825,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code",
+        "cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "17369897101280de",
+          "options_fingerprint": "54ba249e1265"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "33 trials of claude-code on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 33,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.079433,
+          "p50": 0.038885,
+          "p90": 0.170723
+        },
+        "total": {
+          "p10": 0.821745,
+          "p50": 1.831388,
+          "p90": 4.04548
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 1.06,
+          "p90": 5.14
+        },
+        "arm_minutes": {
+          "p50": 68.14,
+          "p90": 93.23
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.95,
+          "basis": "measured",
+          "trials": 13
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "terminus-2",
+        "cell": {
+          "family": "terminus-2",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "bb9687e0a66c9653",
+          "options_fingerprint": "44136fa355b3"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "33 trials of terminus-2 on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 33,
+          "tasks": 32,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261029-214900-it-saas-scope-27-v3"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.097543,
+          "p50": 0.041866,
+          "p90": 0.229555
+        },
+        "total": {
+          "p10": 0.961043,
+          "p50": 2.071184,
+          "p90": 4.67487
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.65,
+          "p90": 8.38
+        },
+        "arm_minutes": {
+          "p50": 90.14,
+          "p90": 114.32
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 3.0,
+          "basis": "prior",
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "cell": {
+          "family": "mini-swe-agent",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "6a5a6f8e1f71b7bd",
+          "options_fingerprint": "a4945e4f8e73"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "28 trials of mini-swe-agent on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 28,
+          "tasks": 28,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.071628,
+          "p50": 0.030003,
+          "p90": 0.1417
+        },
+        "total": {
+          "p10": 0.71197,
+          "p50": 1.567853,
+          "p90": 3.529143
+        },
+        "cap_usd": 15.0,
+        "minutes_per_trial": {
+          "p50": 1.78,
+          "p90": 8.23
+        },
+        "arm_minutes": {
+          "p50": 102.45,
+          "p90": 136.23
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 5.73,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "pi",
+        "cell": {
+          "family": "pi",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "3ccf0e0c8a49cbe4",
+          "options_fingerprint": "8472c3a66651"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "28 trials of pi on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 28,
+          "tasks": 28,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.05783,
+          "p50": 0.028978,
+          "p90": 0.128404
+        },
+        "total": {
+          "p10": 0.520091,
+          "p50": 1.186413,
+          "p90": 2.533172
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.29,
+          "p90": 9.73
+        },
+        "arm_minutes": {
+          "p50": 135.15,
+          "p90": 187.41
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 20.0,
+          "basis": "prior",
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "strands",
+        "cell": {
+          "family": "strands",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "harness default",
+          "config_hash": "47af9f1c8593bd74",
+          "options_fingerprint": "5ede18973ca2"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "28 trials of strands on anthropic:claude-opus-5-5, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 28,
+          "tasks": 28,
+          "design_tasks_observed": 27,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-200017-it-saas-scope-27-v2",
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.076146,
+          "p50": 0.033363,
+          "p90": 0.165545
+        },
+        "total": {
+          "p10": 0.834719,
+          "p50": 1.767936,
+          "p90": 3.878858
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 1.44,
+          "p90": 15.36
+        },
+        "arm_minutes": {
+          "p50": 131.49,
+          "p90": 179.51
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 2.79,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 6.645972,
+        "p50": 9.677864,
+        "p90": 14.246407
+      },
+      "budget_usd": 25.0,
+      "p_within_budget": 0.998,
+      "suggested_budget_usd": 16.5,
+      "worst_case_capped_usd": 810.0,
+      "uncapped_arms": [
+        "terminus-2",
+        "pi",
+        "strands"
+      ],
+      "inflight_allowance_usd": 82.5,
+      "wall_minutes": {
+        "p50": 154.16,
+        "p90": 203.97
+      },
+      "peak_containers": 5
+    },
+    "pairing": [
+      {
+        "arm": "terminus-2",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1417,
+        "sd_log": 0.4037,
+        "sd_source": "pooled_all"
+      },
+      {
+        "arm": "mini-swe-agent",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1417,
+        "sd_log": 0.4037,
+        "sd_source": "pooled_all"
+      },
+      {
+        "arm": "pi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1417,
+        "sd_log": 0.4037,
+        "sd_source": "pooled_all"
+      },
+      {
+        "arm": "strands",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1417,
+        "sd_log": 0.4037,
+        "sd_source": "pooled_all"
+      }
+    ],
+    "reuse": {
+      "tasks": 0,
+      "trials": 0,
+      "cost_avoided_usd": 0.0,
+      "unpriced_tasks": 0,
+      "arms": []
+    },
+    "warnings": [],
+    "assumptions": [
+      "Harbor does not report cache writes; trial cache writes are priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 135,
+    "trials_reused": 0,
+    "trials_to_run": 135,
+    "cost_avoided_usd": 0.0,
+    "skipped_arms": [],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "17369897101280de",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "terminus-2",
+        "family": "terminus-2",
+        "config_hash": "bb9687e0a66c9653",
+        "harness_version": "harbor",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "mini-swe-agent",
+        "family": "mini-swe-agent",
+        "config_hash": "6a5a6f8e1f71b7bd",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "pi",
+        "family": "pi",
+        "config_hash": "3ccf0e0c8a49cbe4",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "strands",
+        "family": "strands",
+        "config_hash": "47af9f1c8593bd74",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-10-30T18:11:18+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:b03fea8d6d3b87ac56e0987aeddf2e7d2d7da9d277596b45a2b7178e14fd6b03",
+  "ledger_fingerprint": "sha256:ca6c427080cdf195",
+  "reuse_fingerprint": "sha256:51ad9e7647aadd89"
+}

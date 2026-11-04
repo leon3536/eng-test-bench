@@ -1,0 +1,112 @@
+{
+    "id": "95752356-70fa-4ec4-8744-e211f38c82a0",
+    "task_name": "fix-git",
+    "trial_name": "fix-git__pb-mini-swe-agent",
+    "trial_uri": "file:///C:/Users/user/AppData/Local/Temp/claude/c--Git-EngineeringTestBench/00000000-0000-0000-0000-000000000000/scratchpad/prebake/envclass/trials/fixgit/mini-swe-agent/fix-git__pb-mini-swe-agent",
+    "task_id": {
+        "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git"
+    },
+    "source": "terminal-bench",
+    "task_checksum": "7fa0a681f751d73f290d862522a82a5e448fa529834987ee1b80e5665c51aa7e",
+    "config": {
+        "task": {
+            "path": "C:\\Git\\EngineeringTestBench\\datasets\\terminal-bench@2.0\\terminal-bench\\fix-git",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "terminal-bench"
+        },
+        "trial_name": "fix-git__pb-mini-swe-agent",
+        "trials_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\c--Git-EngineeringTestBench\\00000000-0000-0000-0000-000000000000\\scratchpad\\prebake\\envclass\\trials\\fixgit\\mini-swe-agent",
+        "install_only": true,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": null,
+            "import_path": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+            "model_name": "anthropic/claude-opus-5-5",
+            "base_url": null,
+            "model_api_key_name": null,
+            "model_api_format": null,
+            "skip_model_parsing": false,
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {
+                "reasoning_effort": "medium",
+                "cost_limit": "15",
+                "version": "2.4.6"
+            },
+            "mcp_servers": []
+        },
+        "user_agent": null,
+        "environment": {
+            "type": null,
+            "import_path": "prebake_env:PrebakedDockerEnvironment",
+            "force_build": false,
+            "delete": true,
+            "stream": false,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {
+                "prebake_harness": "mini-swe-agent",
+                "prebake_version": "2.4.6"
+            },
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": true
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "extra_instructions": [],
+        "job_id": "b3b6c568-ba27-4df7-bb7f-1450dce95dc9",
+        "source_trial": null
+    },
+    "agent_info": {
+        "name": "mini-swe-agent",
+        "version": "2.4.6",
+        "model_info": {
+            "name": "claude-opus-5-5",
+            "provider": "anthropic"
+        }
+    },
+    "agent_result": null,
+    "verifier_result": null,
+    "verifier_environment_mode": "shared",
+    "exception_info": null,
+    "started_at": "2026-10-29T23:32:06.782523Z",
+    "finished_at": "2026-10-29T23:32:20.518272Z",
+    "environment_setup": {
+        "started_at": "2026-10-29T23:32:06.795516Z",
+        "finished_at": "2026-10-29T23:32:12.472647Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-10-29T23:32:12.472684Z",
+        "finished_at": "2026-10-29T23:32:16.029861Z"
+    },
+    "agent_execution": null,
+    "verifier": null,
+    "step_results": null
+}

@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "design_id": "d-speed-check-rerun-10-slo-bef0",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-02T08:53:59+00:00",
+  "profile": "default",
+  "title": "Speed check: rerun 10 slow trials + 2 controls on a quiet host",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "cobol-modernization",
+      "db-wal-recovery",
+      "headless-terminal",
+      "hf-model-inference",
+      "mteb-retrieve"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-opus-high",
+    "run": {
+      "budget_usd": 25.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "terminus-2-deepseek",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "db-wal-recovery"
+        ]
+      },
+      {
+        "name": "mini-swe-agent-deepseek",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ],
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "db-wal-recovery"
+        ]
+      },
+      {
+        "name": "strands-kimi",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_path": "harnesses/strands_factory",
+          "model_kwargs": {
+            "params": {
+              "reasoning_effort": "high"
+            }
+          },
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "hf-model-inference"
+        ]
+      },
+      {
+        "name": "pi-grok",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "headless-terminal"
+        ]
+      },
+      {
+        "name": "kilo-opus-low",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "low",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "hf-model-inference"
+        ]
+      },
+      {
+        "name": "claude-code-opus-high",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": [
+          "cobol-modernization"
+        ]
+      },
+      {
+        "name": "terminus-2-opus-high",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {},
+        "tasks": [
+          "cobol-modernization"
+        ]
+      },
+      {
+        "name": "pi-opus-high",
+        "agent": "pi",
+        "family": "pi",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "cobol-modernization",
+          "mteb-retrieve"
+        ]
+      },
+      {
+        "name": "strands-opus-high",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "anthropic/claude-opus-5-5",
+            "effort": "high"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "mteb-retrieve"
+        ]
+      },
+      {
+        "name": "goose-opus-high",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "hf-model-inference"
+        ]
+      },
+      {
+        "name": "kilo-opus-high",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "cobol-modernization"
+        ]
+      }
+    ]
+  },
+  "spec_hash": "sha256:c3bfc82d661557f8da8f944dd9eb1447f71c31a753b64dfca1ef2aad3de0f557"
+}

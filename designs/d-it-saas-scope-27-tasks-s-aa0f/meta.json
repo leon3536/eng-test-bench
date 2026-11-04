@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "id": "d-it-saas-scope-27-tasks-s-aa0f",
+  "title": "IT / SaaS scope: 27 tasks, Sonnet 5.5, 5 harnesses",
+  "created_at": "2026-10-30T18:11:18+00:00",
+  "updated_at": "2026-10-30T21:32:52+00:00",
+  "latest_version": 3,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T18:11:18+00:00",
+      "spec_hash": "sha256:f95df442a99d8905d50ad5b43db3472ae68332989c34282e9828e5fe90170f83",
+      "change_note": "",
+      "approved_at": "2026-10-30T19:36:31+00:00",
+      "runs": [
+        "20261030-123653-it-saas-scope-27-v1"
+      ]
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T19:49:43+00:00",
+      "spec_hash": "sha256:d4c30b1771716b273e0800a150e4dbad5e60f973613e0ad7bc38ad3f8ef48ca8",
+      "change_note": "Resumed after a dashboard restart: reuse keeps the finished trials and runs the rest.",
+      "approved_at": "2026-10-30T19:49:51+00:00",
+      "runs": [
+        "20261030-125004-it-saas-scope-27-v2"
+      ]
+    },
+    "3": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-30T21:32:48+00:00",
+      "spec_hash": "sha256:e22432fafc44e6af1d4bd2fc28b2668cd2a70d500a53c68a7e29f66d4d827a94",
+      "change_note": "Gap fill: trials refused by the workspace spend limit, Pi's npm 404 setups, and timeouts (excluded by policy).",
+      "approved_at": "2026-10-30T21:32:48+00:00",
+      "runs": [
+        "20261030-143252-it-saas-scope-27-v3"
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "harness": "strands",
+  "version": "1.57.2",
+  "task_image": "alexgshaw/fix-git:20251031",
+  "image": "benchprobe/strands-1.57.2/alexgshaw/fix-git:20251031",
+  "used": true,
+  "candidate": "benchprobe/strands-1.57.2/alexgshaw/fix-git:20251031",
+  "reason": "pre-baked image verified",
+  "image_id": "sha256:301454d2ffa2b26b3f5c5bca3fb557dd8f9819d0eb638bbe72af86b762f69207",
+  "task_image_id": "sha256:61e431c00c58df652287aadce5457634d9f9330cfdd153ebdf2802df0d540119",
+  "added_layers": 7,
+  "baked_at": "2026-10-29T22:42:35.462308509Z",
+  "recipe": null,
+  "skip_execs": [
+    "5174ef23451a966e03570c57857eb7b78d28bdfbbbdc53ce17411d42fd9c2889"
+  ],
+  "skipped_execs": [
+    {
+      "signature": "5174ef23451a966e03570c57857eb7b78d28bdfbbbdc53ce17411d42fd9c2889",
+      "command_head": "set -o pipefail; set -euo pipefail; curl -LsSf https://astral.sh/uv/install.sh | sh; if [ -f \"$HOME/.local/bin/env\" ]; t",
+      "at": "2026-10-29T23:32:14.648679+00:00"
+    }
+  ],
+  "written_at": "2026-10-29T23:32:14.648697+00:00"
+}

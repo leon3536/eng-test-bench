@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "d-pilot-deepseek-v4-1-flas-2092",
+  "title": "Pilot: DeepSeek V4.1 Flash, 8 harnesses, openssl",
+  "created_at": "2026-10-31T19:56:13+00:00",
+  "updated_at": "2026-10-31T19:57:23+00:00",
+  "latest_version": 2,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T19:56:13+00:00",
+      "spec_hash": "sha256:91cb72b47ac64de66042b4284f7e12b39357ac599500dcb500da1205c7960e07",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T19:57:06+00:00",
+      "spec_hash": "sha256:50cce1eaeb83caddbe7a85e352aed3187d60901f5bbfacdce3bdceded8969bbe",
+      "change_note": "setup_timeout_multiplier 4: designs allow at most 4",
+      "approved_at": "2026-10-31T19:57:22+00:00",
+      "runs": [
+        "20261031-125723-pilot-deepseek-v-v2"
+      ]
+    }
+  }
+}

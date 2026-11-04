@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-pilot-kimi-k3-8-harnesse-26f2",
+  "title": "Pilot: Kimi K3, 8 harnesses, openssl",
+  "created_at": "2026-10-31T20:32:04+00:00",
+  "updated_at": "2026-10-31T20:33:14+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T20:32:04+00:00",
+      "spec_hash": "sha256:8305fc15a3e1d8690f7e272d62f082803c13acdba83287cb8f4fcf53596f5797",
+      "change_note": "",
+      "approved_at": "2026-10-31T20:32:06+00:00",
+      "runs": [
+        "20261031-133314-pilot-kimi-k3-8-v1"
+      ]
+    }
+  }
+}

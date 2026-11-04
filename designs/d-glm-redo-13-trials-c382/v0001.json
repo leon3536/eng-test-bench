@@ -1,0 +1,415 @@
+{
+  "schema": 1,
+  "design_id": "d-glm-redo-13-trials-c382",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-02T16:01:07+00:00",
+  "profile": "default",
+  "title": "GLM redo: 13 trials",
+  "purpose": "Redo the 13 GLM trials that ended with no usage recorded (10 timeouts, 3 Cline crashes), at the user's request.",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 25.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": []
+      },
+      {
+        "name": "terminus-2-glm",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "session_id_headers": [
+            "x-session-affinity"
+          ]
+        },
+        "tasks": [
+          "nginx-request-logging",
+          "fix-git",
+          "cancel-async-tasks"
+        ]
+      },
+      {
+        "name": "pi-glm",
+        "agent": "bench.agents.pi:PiProviders",
+        "family": "pi",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "cancel-async-tasks"
+        ]
+      },
+      {
+        "name": "cline-glm",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "3.0.74"
+        },
+        "tasks": [
+          "nginx-request-logging",
+          "mailman",
+          "cancel-async-tasks"
+        ]
+      },
+      {
+        "name": "goose-glm",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.57.0"
+        },
+        "tasks": [
+          "log-summary-date-ranges",
+          "kv-store-grpc"
+        ]
+      },
+      {
+        "name": "opencode-glm",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "1.19.5"
+        },
+        "tasks": [
+          "kv-store-grpc"
+        ]
+      },
+      {
+        "name": "kilo-glm",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "omit",
+        "options": {
+          "variant": "high",
+          "version": "7.8.18"
+        },
+        "tasks": [
+          "sanitize-git-repo"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/cobol-modernization__MfqKr8W"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/build-cython-ext__nCUkH5h"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "mteb-retrieve",
+          "trials": [
+            "fce2b65b-0fee-4afe-99ce-32b268202291/mteb-retrieve__EgAULDF"
+          ],
+          "runs": [
+            "default/20261029-132042-sample"
+          ]
+        },
+        {
+          "task": "sparql-university",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sparql-university__zMmheqp"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-with-gcov__RhBi6sU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sqlite-db-truncate__hByEfNX"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "hf-model-inference",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/hf-model-inference__2iGv9TG"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/db-wal-recovery__8ZXwy2P"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-multibranch",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-multibranch__ryNeHBR"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/log-summary-date-ranges__BbjVLyf"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "nginx-request-logging",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/nginx-request-logging__QVsw8ES"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "multi-source-data-merger",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/multi-source-data-merger__FeQb87y"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "reshard-c4-data",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/reshard-c4-data__WSLaSnr"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "sanitize-git-repo",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/sanitize-git-repo__3B2fok4"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "kv-store-grpc",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/kv-store-grpc__nSuHGzU"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-git__HvfSQNN"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "mailman",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/mailman__tzSxhRF"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/cancel-async-tasks__f78Ag9V"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/constraints-scheduling__9JqKTZy"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/financial-document-processor__skRhE7U"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/fix-code-vulnerability__XnMckjv"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "git-leak-recovery",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/git-leak-recovery__LHPLUsg"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "headless-terminal",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/headless-terminal__fNLMVdQ"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "trials": [
+            "d309475d-bab6-4926-8b20-fed72f869083/modernize-scientific-stack__uspXQ8x"
+          ],
+          "runs": [
+            "default/20261029-143816-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "pypi-server",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/pypi-server__9qnstYd"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        },
+        {
+          "task": "regex-log",
+          "trials": [
+            "ec0780f8-7bc6-48f7-87fd-09cc85a1528c/regex-log__gVRGR5Y"
+          ],
+          "runs": [
+            "default/20261030-101721-it-saas-scope-27-v4"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:7fabbdf7936dfe6b73680eeedb912c0bfeeb48f1f7bdc42577d182ce21eebaa7"
+}

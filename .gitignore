@@ -1,0 +1,44 @@
+.venv/
+# Keys: .env and any copy of it (.env.local, .env.bak, ...). An .env.example
+# with placeholder values may be tracked.
+.env*
+!.env.example
+# Logs from any tool run outside jobs/ (anything written there is ignored already).
+*.log
+# Run data and downloads. Anchored to the project root (and to each profile)
+# so folders of the same name under tests/fixtures stay tracked.
+/jobs/
+/runs/
+profiles/*/jobs/
+profiles/*/runs/
+profiles/*/assistant/
+profiles/*/queue.json
+profiles/*/datasets/
+profiles/*/ledger/
+profiles/*/prebake/
+/datasets/
+/ledger/
+/assistant/
+/queue.json
+# The pre-bake builder's contexts, logs, build records and locks (bench/prebake).
+/prebake/
+# designs/ is tracked: small, readable records of what was run and why.
+/designs/**/*.tmp
+profiles/*/designs/**/*.tmp
+# Temp files fsutil leaves next to a data-root file (queue.json) after a crash.
+/.*.tmp
+profiles/*/.*.tmp
+# The instance lock (kept in runs/, listed here in case it moves) and the
+# copies the queue keeps of a queue.json it could not read.
+/.bench.lock
+profiles/*/.bench.lock
+/queue.json.corrupt-*
+profiles/*/queue.json.corrupt-*
+config/*.overrides.yaml
+config/overrides.yaml
+config/*.tmp
+__pycache__/
+*.pyc
+# Local tool state: Claude Code's scheduler lock and the headless browser driver's pid file.
+.claude/scheduled_tasks.lock
+drv.pid

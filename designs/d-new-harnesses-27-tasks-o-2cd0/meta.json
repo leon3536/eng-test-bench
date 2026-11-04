@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "d-new-harnesses-27-tasks-o-2cd0",
+  "title": "New harnesses: 27 tasks, Opus 5.5 (full)",
+  "created_at": "2026-10-31T04:23:07+00:00",
+  "updated_at": "2026-10-31T08:08:28+00:00",
+  "latest_version": 2,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T04:23:07+00:00",
+      "spec_hash": "sha256:648df438d5972b6ae2a837dbf04ee235f3f56b9ef9cc539bd5ecf8e7a8a2f19a",
+      "change_note": "",
+      "approved_at": null,
+      "runs": []
+    },
+    "2": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-10-31T08:08:14+00:00",
+      "spec_hash": "sha256:72a94b07dd20d0fd25a340b67f6fdababc32db8151fe0b85d57a435eac2939a7",
+      "change_note": "Resolved after the pilot: its 3 trials are reused.",
+      "approved_at": "2026-10-31T08:08:15+00:00",
+      "runs": [
+        "20261031-010828-new-harnesses-27-v2"
+      ]
+    }
+  }
+}

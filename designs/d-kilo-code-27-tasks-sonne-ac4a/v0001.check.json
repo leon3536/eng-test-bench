@@ -1,0 +1,789 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arm 'claude-code' is skipped: the ledger already holds enough usable trials of all 27 of its tasks",
+      "kilo: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 27,
+    "budget_usd": 5.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "kilo"
+    ],
+    "arms": [
+      {
+        "name": "kilo",
+        "agent": "bench.agents.kilo:KiloCode",
+        "family": "kilo-code",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "medium",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "7.8.18",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "8d84c00917db",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.kilo:KiloCode --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 3 --jobs-dir jobs\\RUN_ID --job-name kilo --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --include-task-name cobol-modernization --include-task-name build-cython-ext --include-task-name mteb-retrieve --include-task-name sparql-university --include-task-name sqlite-with-gcov --include-task-name sqlite-db-truncate --include-task-name hf-model-inference --include-task-name db-wal-recovery --include-task-name git-multibranch --include-task-name log-summary-date-ranges --include-task-name nginx-request-logging --include-task-name multi-source-data-merger --include-task-name reshard-c4-data --include-task-name sanitize-git-repo --include-task-name kv-store-grpc --include-task-name fix-git --include-task-name mailman --include-task-name cancel-async-tasks --include-task-name constraints-scheduling --include-task-name financial-document-processor --include-task-name fix-code-vulnerability --include-task-name git-leak-recovery --include-task-name headless-terminal --include-task-name modernize-scientific-stack --include-task-name pypi-server --include-task-name regex-log --ak variant=\\\"medium\\\" --ak version=\\\"7.8.18\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"kilo-code\\\" --ek prebake_version=\\\"7.8.18\\\" --ek prebake_recipe=\\\"4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "kilo-code",
+          "supported": true,
+          "reason": "",
+          "version": "7.8.18",
+          "recipe": "4ed800abf46242ce57c1ee6346d0e369191afafbff2875ed7d93ba9729f69555",
+          "variant": "kilo-warm",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 27,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert",
+              "cobol-modernization",
+              "build-cython-ext",
+              "mteb-retrieve",
+              "sparql-university",
+              "sqlite-with-gcov",
+              "sqlite-db-truncate",
+              "hf-model-inference",
+              "db-wal-recovery",
+              "git-multibranch",
+              "log-summary-date-ranges",
+              "nginx-request-logging",
+              "multi-source-data-merger",
+              "reshard-c4-data",
+              "sanitize-git-repo",
+              "kv-store-grpc",
+              "fix-git",
+              "mailman",
+              "cancel-async-tasks",
+              "constraints-scheduling",
+              "financial-document-processor",
+              "fix-code-vulnerability",
+              "git-leak-recovery",
+              "headless-terminal",
+              "modernize-scientific-stack",
+              "pypi-server",
+              "regex-log"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 81.0,
+            "build_gb": 35.1,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [
+      "kilo: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:ba4750a39774f7e9571f3cd4ffebb0b67a51cbcfa93dd0fb2a3672bc777e775a",
+    "warnings": [],
+    "peak_containers": 3,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "prebake": {
+      "mode": "require",
+      "error": null,
+      "images": 27,
+      "build_min": 81.0,
+      "build_wall_min": 21.0,
+      "build_gb": 40.37,
+      "jobs": 4,
+      "task_images": 27,
+      "pull": [],
+      "pull_error": null
+    },
+    "image_problems": [
+      "kilo: run.prebake is require, but 27 of 27 pre-baked images are not ready (0 of 27 ready; 27 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ]
+  },
+  "estimate": {
+    "spec_hash": "sha256:ba4750a39774f7e9571f3cd4ffebb0b67a51cbcfa93dd0fb2a3672bc777e775a",
+    "ledger_fingerprint": "sha256:7953193c4ebad2c3",
+    "seed": 179153412206730,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "kilo",
+        "cell": {
+          "family": "kilo-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "harness default",
+          "config_hash": "2d7dbc1e3a435f7b",
+          "options_fingerprint": "8d84c00917db"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "1 trials of kilo-code on openrouter:deepseek/deepseek-v4.1-flash, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 1,
+          "runs": [
+            "dev/20261031-013315-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.172456,
+          "p50": 0.12329,
+          "p90": 0.354415
+        },
+        "total": {
+          "p10": 1.830795,
+          "p50": 3.911106,
+          "p90": 8.212003
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 9.49,
+          "p90": 20.28
+        },
+        "arm_minutes": {
+          "p50": 104.4,
+          "p90": 122.68
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": null,
+          "basis": null,
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 1.830795,
+        "p50": 3.911106,
+        "p90": 8.212003
+      },
+      "budget_usd": 5.0,
+      "p_within_budget": 0.667,
+      "suggested_budget_usd": 9.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "kilo"
+      ],
+      "inflight_allowance_usd": 2.12649,
+      "wall_minutes": {
+        "p50": 104.4,
+        "p90": 122.68
+      },
+      "peak_containers": 3
+    },
+    "pairing": [
+      {
+        "arm": "kilo",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.1164,
+        "sd_log": 0.3355,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": {
+      "tasks": 27,
+      "trials": 27,
+      "cost_avoided_usd": 1.49956,
+      "unpriced_tasks": 0,
+      "arms": [
+        {
+          "arm": "claude-code",
+          "tasks": 27,
+          "trials": 27,
+          "cost_avoided_usd": 1.49956,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "openssl-selfsigned-cert",
+              "trials": 1,
+              "cost_avoided_usd": 0.027651
+            },
+            {
+              "task": "cobol-modernization",
+              "trials": 1,
+              "cost_avoided_usd": 0.066694
+            },
+            {
+              "task": "build-cython-ext",
+              "trials": 1,
+              "cost_avoided_usd": 0.134882
+            },
+            {
+              "task": "mteb-retrieve",
+              "trials": 1,
+              "cost_avoided_usd": 0.02313
+            },
+            {
+              "task": "sparql-university",
+              "trials": 1,
+              "cost_avoided_usd": 0.072667
+            },
+            {
+              "task": "sqlite-with-gcov",
+              "trials": 1,
+              "cost_avoided_usd": 0.023501
+            },
+            {
+              "task": "sqlite-db-truncate",
+              "trials": 1,
+              "cost_avoided_usd": 0.048016
+            },
+            {
+              "task": "hf-model-inference",
+              "trials": 1,
+              "cost_avoided_usd": 0.028679
+            },
+            {
+              "task": "db-wal-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.036487
+            },
+            {
+              "task": "git-multibranch",
+              "trials": 1,
+              "cost_avoided_usd": 0.035987
+            },
+            {
+              "task": "log-summary-date-ranges",
+              "trials": 1,
+              "cost_avoided_usd": 0.038734
+            },
+            {
+              "task": "nginx-request-logging",
+              "trials": 1,
+              "cost_avoided_usd": 0.028586
+            },
+            {
+              "task": "multi-source-data-merger",
+              "trials": 1,
+              "cost_avoided_usd": 0.038012
+            },
+            {
+              "task": "reshard-c4-data",
+              "trials": 1,
+              "cost_avoided_usd": 0.055351
+            },
+            {
+              "task": "sanitize-git-repo",
+              "trials": 1,
+              "cost_avoided_usd": 0.061429
+            },
+            {
+              "task": "kv-store-grpc",
+              "trials": 1,
+              "cost_avoided_usd": 0.028826
+            },
+            {
+              "task": "fix-git",
+              "trials": 1,
+              "cost_avoided_usd": 0.038534
+            },
+            {
+              "task": "mailman",
+              "trials": 1,
+              "cost_avoided_usd": 0.192429
+            },
+            {
+              "task": "cancel-async-tasks",
+              "trials": 1,
+              "cost_avoided_usd": 0.032814
+            },
+            {
+              "task": "constraints-scheduling",
+              "trials": 1,
+              "cost_avoided_usd": 0.035627
+            },
+            {
+              "task": "financial-document-processor",
+              "trials": 1,
+              "cost_avoided_usd": 0.273
+            },
+            {
+              "task": "fix-code-vulnerability",
+              "trials": 1,
+              "cost_avoided_usd": 0.025074
+            },
+            {
+              "task": "git-leak-recovery",
+              "trials": 1,
+              "cost_avoided_usd": 0.016563
+            },
+            {
+              "task": "headless-terminal",
+              "trials": 1,
+              "cost_avoided_usd": 0.045879
+            },
+            {
+              "task": "modernize-scientific-stack",
+              "trials": 1,
+              "cost_avoided_usd": 0.030349
+            },
+            {
+              "task": "pypi-server",
+              "trials": 1,
+              "cost_avoided_usd": 0.026437
+            },
+            {
+              "task": "regex-log",
+              "trials": 1,
+              "cost_avoided_usd": 0.034222
+            }
+          ]
+        }
+      ]
+    },
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 54,
+    "trials_reused": 27,
+    "trials_to_run": 27,
+    "cost_avoided_usd": 1.49956,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "17369897101280de",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 27,
+        "tasks_to_run": 0,
+        "trials_reused": 27,
+        "cost_avoided_usd": 1.49956,
+        "skipped": true,
+        "cell_trials": 27,
+        "reused": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/openssl-selfsigned-cert__2Zuqu4e"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.027651,
+            "lower_bound": 0
+          },
+          {
+            "task": "cobol-modernization",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/cobol-modernization__xrNcNvj"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.066694,
+            "lower_bound": 0
+          },
+          {
+            "task": "build-cython-ext",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/build-cython-ext__7dHsY5p"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.134882,
+            "lower_bound": 0
+          },
+          {
+            "task": "mteb-retrieve",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/mteb-retrieve__uRcPVsp"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.02313,
+            "lower_bound": 0
+          },
+          {
+            "task": "sparql-university",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/sparql-university__NxSPkEo"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.072667,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-with-gcov__diHUajb"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.023501,
+            "lower_bound": 0
+          },
+          {
+            "task": "sqlite-db-truncate",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/sqlite-db-truncate__k7pwXwe"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.048016,
+            "lower_bound": 0
+          },
+          {
+            "task": "hf-model-inference",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/hf-model-inference__NCifn4b"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.028679,
+            "lower_bound": 0
+          },
+          {
+            "task": "db-wal-recovery",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/db-wal-recovery__oRFThUG"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.036487,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-multibranch",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-multibranch__Uq4CQEd"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.035987,
+            "lower_bound": 0
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/log-summary-date-ranges__Xq75xRZ"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.038734,
+            "lower_bound": 0
+          },
+          {
+            "task": "nginx-request-logging",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/nginx-request-logging__WNWWZFt"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.028586,
+            "lower_bound": 0
+          },
+          {
+            "task": "multi-source-data-merger",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/multi-source-data-merger__yXNbmhX"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.038012,
+            "lower_bound": 0
+          },
+          {
+            "task": "reshard-c4-data",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/reshard-c4-data__xjxGCsw"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.055351,
+            "lower_bound": 0
+          },
+          {
+            "task": "sanitize-git-repo",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/sanitize-git-repo__9nAsYrt"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.061429,
+            "lower_bound": 0
+          },
+          {
+            "task": "kv-store-grpc",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/kv-store-grpc__NcvvxD2"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.028826,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-git",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/fix-git__yvZYiwW"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.038534,
+            "lower_bound": 0
+          },
+          {
+            "task": "mailman",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/mailman__pufunSf"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.192429,
+            "lower_bound": 0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/cancel-async-tasks__Eb8K35R"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.032814,
+            "lower_bound": 0
+          },
+          {
+            "task": "constraints-scheduling",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/constraints-scheduling__3G4Gekd"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.035627,
+            "lower_bound": 0
+          },
+          {
+            "task": "financial-document-processor",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/financial-document-processor__Pp8v9ug"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.273,
+            "lower_bound": 0
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "trials": [
+              "99758e69-43ba-4c5a-b948-6961a355ba17/fix-code-vulnerability__6fHftSa"
+            ],
+            "runs": [
+              "default/20261030-123653-it-saas-scope-27-v1"
+            ],
+            "cost_avoided_usd": 0.025074,
+            "lower_bound": 0
+          },
+          {
+            "task": "git-leak-recovery",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/git-leak-recovery__5v9eyUo"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.016563,
+            "lower_bound": 0
+          },
+          {
+            "task": "headless-terminal",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/headless-terminal__TsoguPL"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.045879,
+            "lower_bound": 0
+          },
+          {
+            "task": "modernize-scientific-stack",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/modernize-scientific-stack__4Lrqu4t"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.030349,
+            "lower_bound": 0
+          },
+          {
+            "task": "pypi-server",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/pypi-server__hqCXdY7"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.026437,
+            "lower_bound": 0
+          },
+          {
+            "task": "regex-log",
+            "trials": [
+              "9c7b5be9-f13e-4e32-a030-359b086b4c82/regex-log__L25bwAh"
+            ],
+            "runs": [
+              "default/20261030-125004-it-saas-scope-27-v2"
+            ],
+            "cost_avoided_usd": 0.034222,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      },
+      {
+        "arm": "kilo",
+        "family": "kilo-code",
+        "config_hash": "2d7dbc1e3a435f7b",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 27,
+        "tasks_reused": 0,
+        "tasks_to_run": 27,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-10-31T10:37:29+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:c610221a77b22a96fa867a23547293517b55cf6a54da703674bfc5462be0859a",
+  "ledger_fingerprint": "sha256:7953193c4ebad2c3",
+  "reuse_fingerprint": "sha256:5d59e78425d6a0c4"
+}

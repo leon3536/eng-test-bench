@@ -1,0 +1,667 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arm 'claude-code' is skipped: the ledger already holds enough usable trials of all 1 of its tasks",
+      "Arm 'cline' runs 1 of the design's 27 tasks",
+      "Arm 'goose' runs 1 of the design's 27 tasks",
+      "Arm 'opencode' runs 1 of the design's 27 tasks",
+      "cline: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "goose: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready",
+      "opencode: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build. The queue holds this design until they are ready"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 3,
+    "budget_usd": 5.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "cline",
+      "goose",
+      "opencode"
+    ],
+    "arms": [
+      {
+        "name": "cline",
+        "agent": "bench.agents.cline:PinnedClineCli",
+        "family": "cline-cli",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "3.0.74",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "d32cdba264c9",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.cline:PinnedClineCli --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID --job-name cline --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"3.0.74\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"cline-cli\\\" --ek prebake_version=\\\"3.0.74\\\" --ek prebake_recipe=\\\"075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "cline-cli",
+          "supported": true,
+          "reason": "",
+          "version": "3.0.74",
+          "recipe": "075d9534d1473d7b209c13428549b20846982ee69bc7c458b1874c0531b9e299",
+          "variant": "cline-warm",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.0,
+            "build_gb": 0.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "goose",
+        "agent": "bench.agents.goose:PinnedGoose",
+        "family": "goose",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "version",
+            "value": "1.57.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "3b5b08ca5cb1",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.goose:PinnedGoose --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID --job-name goose --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak max_turns=300 --ak version=\\\"1.57.0\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"goose\\\" --ek prebake_version=\\\"1.57.0\\\" --ek prebake_recipe=\\\"e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "goose",
+          "supported": true,
+          "reason": "",
+          "version": "1.57.0",
+          "recipe": "e7aa2484a5f38722693f512ca7aa56c0eb37aa749f0fbf28e49308375807acb1",
+          "variant": "goose-skip",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 1.5,
+            "build_gb": 0.5,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "opencode",
+        "agent": "bench.agents.opencode:OpenCodeBunEpipe",
+        "family": "opencode",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "harness default",
+        "kwargs": [
+          {
+            "name": "variant",
+            "value": "medium",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "1.19.5",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "12ef5aff2915",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.opencode:OpenCodeBunEpipe --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID --job-name opencode --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak variant=\\\"medium\\\" --ak version=\\\"1.19.5\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"opencode\\\" --ek prebake_version=\\\"1.19.5\\\" --ek prebake_recipe=\\\"ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=true",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "require",
+          "family": "opencode",
+          "supported": true,
+          "reason": "",
+          "version": "1.19.5",
+          "recipe": "ed9105ffbc8493192a4e68032767f5af29b4bef345fe616c18c1783b93959d3e",
+          "variant": "opencode-warm",
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "openssl-selfsigned-cert"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 2.0,
+            "build_gb": 0.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [
+          "run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+        ],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [
+      "cline: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "goose: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "opencode: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:ff7fc17d84363c60d4d2300bd7aef03466258223f4cd8a3091c902fd2e0b0cd1",
+    "warnings": [],
+    "peak_containers": 6,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "prebake": {
+      "mode": "require",
+      "error": null,
+      "images": 3,
+      "build_min": 5.5,
+      "build_wall_min": 2.0,
+      "build_gb": 2.64,
+      "jobs": 4,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null
+    },
+    "image_problems": [
+      "cline: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "goose: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build",
+      "opencode: run.prebake is require, but 1 of 1 pre-baked images are not ready (0 of 1 ready; 1 missing). Build them first: Build missing on LAUNCH, or python -m bench.prebake build"
+    ]
+  },
+  "estimate": {
+    "spec_hash": "sha256:ff7fc17d84363c60d4d2300bd7aef03466258223f4cd8a3091c902fd2e0b0cd1",
+    "ledger_fingerprint": "sha256:7615fda625cbf22d",
+    "seed": 215537286979403,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "cline",
+        "cell": {
+          "family": "cline-cli",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "76e03c2f9d6ce763",
+          "options_fingerprint": "d32cdba264c9"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "1 trials of cline-cli on openrouter:deepseek/deepseek-v4.1-flash, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 1,
+          "runs": [
+            "dev/20261030-152750-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.119631,
+          "p50": 0.078679,
+          "p90": 0.263112
+        },
+        "total": {
+          "p10": 0.029246,
+          "p50": 0.085484,
+          "p90": 0.253657
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 4.41,
+          "p90": 9.13
+        },
+        "arm_minutes": {
+          "p50": 5.3,
+          "p90": 10.26
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": null,
+          "basis": null,
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "goose",
+        "cell": {
+          "family": "goose",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "3b41a9d2a07bd1f6",
+          "options_fingerprint": "3b5b08ca5cb1"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "1 trials of goose on openrouter:deepseek/deepseek-v4.1-flash, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 1,
+          "runs": [
+            "dev/20261030-152750-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.076536,
+          "p50": 0.050752,
+          "p90": 0.158347
+        },
+        "total": {
+          "p10": 0.016826,
+          "p50": 0.048756,
+          "p90": 0.151449
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.69,
+          "p90": 4.92
+        },
+        "arm_minutes": {
+          "p50": 3.64,
+          "p90": 6.74
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": null,
+          "basis": null,
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "opencode",
+        "cell": {
+          "family": "opencode",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "harness default",
+          "config_hash": "5d2e27afc886346b",
+          "options_fingerprint": "12ef5aff2915"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "3 trials of opencode on openrouter:deepseek/deepseek-v4.1-flash, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 3,
+          "tasks": 1,
+          "design_tasks_observed": 1,
+          "runs": [
+            "dev/20261030-153615-pilot",
+            "dev/20261030-164039-pilot",
+            "dev/20261030-170820-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.107542,
+          "p50": 0.08681,
+          "p90": 0.218713
+        },
+        "total": {
+          "p10": 0.036748,
+          "p50": 0.089895,
+          "p90": 0.205508
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 15.31,
+          "p90": 22.73
+        },
+        "arm_minutes": {
+          "p50": 16.31,
+          "p90": 23.73
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": null,
+          "basis": null,
+          "trials": 0
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.141672,
+        "p50": 0.270703,
+        "p90": 0.512576
+      },
+      "budget_usd": 5.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 1.0,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "cline",
+        "goose",
+        "opencode"
+      ],
+      "inflight_allowance_usd": 1.578672,
+      "wall_minutes": {
+        "p50": 16.31,
+        "p90": 23.73
+      },
+      "peak_containers": 6
+    },
+    "pairing": [
+      {
+        "arm": "cline",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 1,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3935,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "goose",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 1,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3935,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "opencode",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "arm": "claude-code"
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 1,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3935,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": {
+      "tasks": 1,
+      "trials": 1,
+      "cost_avoided_usd": 0.083931,
+      "unpriced_tasks": 0,
+      "arms": [
+        {
+          "arm": "claude-code",
+          "tasks": 1,
+          "trials": 1,
+          "cost_avoided_usd": 0.083931,
+          "unpriced_tasks": 0,
+          "per_task": [
+            {
+              "task": "openssl-selfsigned-cert",
+              "trials": 1,
+              "cost_avoided_usd": 0.083931
+            }
+          ]
+        }
+      ]
+    },
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images.",
+      "Reused tasks are not run and cost nothing here; the cost avoided is each reused task's mean measured trial cost x attempts, and its trials count as pairs already in hand."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": {
+    "mode": "measured",
+    "trials_asked": 4,
+    "trials_reused": 1,
+    "trials_to_run": 3,
+    "cost_avoided_usd": 0.083931,
+    "skipped_arms": [
+      "claude-code"
+    ],
+    "arms": [
+      {
+        "arm": "claude-code",
+        "family": "claude-code",
+        "config_hash": "c701410eb884a0d9",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 1,
+        "tasks_to_run": 0,
+        "trials_reused": 1,
+        "cost_avoided_usd": 0.083931,
+        "skipped": true,
+        "cell_trials": 33,
+        "reused": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "trials": [
+              "fce2b65b-0fee-4afe-99ce-32b268202291/openssl-selfsigned-cert__iZAnmC2"
+            ],
+            "runs": [
+              "default/20261029-132042-sample"
+            ],
+            "cost_avoided_usd": 0.083931,
+            "lower_bound": 0
+          }
+        ],
+        "short": []
+      },
+      {
+        "arm": "cline",
+        "family": "cline-cli",
+        "config_hash": "76e03c2f9d6ce763",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "goose",
+        "family": "goose",
+        "config_hash": "3b41a9d2a07bd1f6",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      },
+      {
+        "arm": "opencode",
+        "family": "opencode",
+        "config_hash": "5d2e27afc886346b",
+        "harness_version": "pinned",
+        "reason": null,
+        "tasks_asked": 1,
+        "tasks_reused": 0,
+        "tasks_to_run": 1,
+        "trials_reused": 0,
+        "cost_avoided_usd": 0.0,
+        "skipped": false,
+        "cell_trials": 0,
+        "reused": [],
+        "short": []
+      }
+    ],
+    "current": true,
+    "changes": [],
+    "notes": []
+  },
+  "checked_at": "2026-10-31T04:22:50+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:bb5b3424b9e6f0301d6684fee1cdb9c6c495d069885f61c87e7b95cb42b318e7",
+  "ledger_fingerprint": "sha256:7615fda625cbf22d",
+  "reuse_fingerprint": "sha256:6bbc564d29b3d567"
+}

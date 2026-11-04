@@ -1,0 +1,408 @@
+{
+  "schema": 1,
+  "design_id": "d-it-saas-scope-27-tasks-s-aa0f",
+  "version": 2,
+  "parent_version": 1,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-10-30T19:49:43+00:00",
+  "profile": "default",
+  "title": "IT / SaaS scope: 27 tasks, Sonnet 5.5, 5 harnesses",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "Resumed after a dashboard restart: reuse keeps the finished trials and runs the rest.",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code",
+    "run": {
+      "budget_usd": 25.0,
+      "parallel_arms": 5,
+      "n_concurrent": 1,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "prebake": "require"
+    },
+    "arms": [
+      {
+        "name": "claude-code",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "mailman",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "terminus-2",
+        "agent": "terminus-2",
+        "family": "terminus-2",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {},
+        "tasks": null
+      },
+      {
+        "name": "mini-swe-agent",
+        "agent": "bench.agents.mini_swe_agent:MiniSweAgentWithMcp",
+        "family": "mini-swe-agent",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "2.4.6"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert",
+          "cobol-modernization",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "db-wal-recovery",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "constraints-scheduling",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "pi",
+        "agent": "pi",
+        "family": "pi",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.4.0"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      },
+      {
+        "name": "strands",
+        "agent": "strands",
+        "family": "strands",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "omit",
+        "options": {
+          "factory": "bench_strands_factory:create_agent",
+          "factory_kwargs": {
+            "model_spec": "anthropic/claude-sonnet-5-5",
+            "effort": "medium"
+          },
+          "factory_path": "harnesses/strands_factory",
+          "version": "1.57.2"
+        },
+        "tasks": [
+          "openssl-selfsigned-cert",
+          "mteb-retrieve",
+          "sparql-university",
+          "sqlite-with-gcov",
+          "sqlite-db-truncate",
+          "hf-model-inference",
+          "git-multibranch",
+          "log-summary-date-ranges",
+          "nginx-request-logging",
+          "multi-source-data-merger",
+          "reshard-c4-data",
+          "sanitize-git-repo",
+          "kv-store-grpc",
+          "fix-git",
+          "mailman",
+          "financial-document-processor",
+          "fix-code-vulnerability",
+          "git-leak-recovery",
+          "headless-terminal",
+          "modernize-scientific-stack",
+          "pypi-server",
+          "regex-log"
+        ]
+      }
+    ],
+    "reuse": "measured",
+    "reused": {
+      "claude-code": [
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cobol-modernization__xrNcNvj"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/build-cython-ext__7dHsY5p"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/db-wal-recovery__oRFThUG"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-git",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-git__yvZYiwW"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/cancel-async-tasks__Eb8K35R"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/constraints-scheduling__3G4Gekd"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "financial-document-processor",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/financial-document-processor__Pp8v9ug"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "trials": [
+            "99758e69-43ba-4c5a-b948-6961a355ba17/fix-code-vulnerability__6fHftSa"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        }
+      ],
+      "mini-swe-agent": [
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "b984c2a0-ab24-4917-840b-ef226dfe9ebe/build-cython-ext__Ugsk4e5"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "b984c2a0-ab24-4917-840b-ef226dfe9ebe/cancel-async-tasks__5Ywrs8m"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        }
+      ],
+      "pi": [
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "1a83bb7f-673d-46c9-a356-9386aa6f81ed/cobol-modernization__RZyWqCx"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "1a83bb7f-673d-46c9-a356-9386aa6f81ed/build-cython-ext__YxvUJwG"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "1a83bb7f-673d-46c9-a356-9386aa6f81ed/db-wal-recovery__kCXY6dc"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "1a83bb7f-673d-46c9-a356-9386aa6f81ed/cancel-async-tasks__6GgFu8q"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "1a83bb7f-673d-46c9-a356-9386aa6f81ed/constraints-scheduling__TWJB5UQ"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        }
+      ],
+      "strands": [
+        {
+          "task": "cobol-modernization",
+          "trials": [
+            "775b9a85-25bc-42bc-97f8-e34a9357ec4f/cobol-modernization__WJyotQg"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "build-cython-ext",
+          "trials": [
+            "775b9a85-25bc-42bc-97f8-e34a9357ec4f/build-cython-ext__nfbeWbL"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "db-wal-recovery",
+          "trials": [
+            "775b9a85-25bc-42bc-97f8-e34a9357ec4f/db-wal-recovery__AtS6bie"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "cancel-async-tasks",
+          "trials": [
+            "775b9a85-25bc-42bc-97f8-e34a9357ec4f/cancel-async-tasks__AuYVqQr"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        },
+        {
+          "task": "constraints-scheduling",
+          "trials": [
+            "775b9a85-25bc-42bc-97f8-e34a9357ec4f/constraints-scheduling__YE8nd8D"
+          ],
+          "runs": [
+            "default/20261030-123653-it-saas-scope-27-v1"
+          ]
+        }
+      ]
+    }
+  },
+  "spec_hash": "sha256:d4c30b1771716b273e0800a150e4dbad5e60f973613e0ad7bc38ad3f8ef48ca8"
+}
