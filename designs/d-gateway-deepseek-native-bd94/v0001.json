@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "design_id": "d-gateway-deepseek-native-bd94",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-06T09:12:57+00:00",
+  "profile": "default",
+  "title": "Gateway: DeepSeek (native, translated) and Kimi, remaining 18 tasks",
+  "purpose": "Finish the 3-arm gateway run paused after 9 of 27 tasks (run 20261104-135221) to free the machine",
+  "rationale": "Same arms and settings; only the 18 tasks not yet run.",
+  "change_note": "First version",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-gw-deepseek",
+    "run": {
+      "budget_usd": 15.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-deepseek",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-deepseek-tr",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "deepseek-v4.1-flash-translated",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      },
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "kimi-k3-fireworks",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:2ef07d05725977554ba10d563086feac04356c24507307dc5051bc8051ae4bc4"
+}

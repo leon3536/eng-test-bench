@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "design_id": "d-pilot-from-config-b88c",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-04T22:29:51+00:00",
+  "profile": "default",
+  "title": "pilot from config",
+  "purpose": "",
+  "rationale": "",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert"
+    ],
+    "attempts": 1,
+    "baseline_arm": null,
+    "run": {
+      "budget_usd": 100.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-terra",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "gpt-6.1-terra",
+        "effort": "medium",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:78e309729ddf79045182bd9205494796e7932e87ee2c25fc2cef5fd6e4cf98b7"
+}

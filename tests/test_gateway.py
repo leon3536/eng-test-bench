@@ -29,6 +29,7 @@ from bench.extract import RunContext
 from bench.settings import ConfigError
 
 KEY = "sk-fake-gateway-0000000000000000"
+KEY_CLAUDE = "sk-fake-claude-gateway-1111111111111"
 URL = "http://192.0.2.10:4000"
 MOVED = "http://192.0.2.11:4000"
 ROOT_ROUTE = "${LITELLM_URL}"
@@ -39,8 +40,11 @@ ARMS = {
     "claude-code-gw-deepseek": ("deepseek-v4.1-flash", ROOT_ROUTE, "high"),
     "claude-code-gw-deepseek-tr": ("deepseek-v4.1-flash-translated", ROOT_ROUTE, "high"),
     "claude-code-gw-kimi": ("kimi-k3-fireworks", ROOT_ROUTE, "high"),
-    "claude-code-gw-sol": ("gpt-6.1-sol", ROOT_ROUTE, "medium"),
+    "claude-code-gw-terra": ("gpt-6.1-terra", ROOT_ROUTE, "medium"),
 }
+# The Claude arm has its own provider (and virtual key); every other arm is on litellm.
+PROVIDER_OF = {"claude-code-gw-opus": "litellm-claude"}
+KEY_VAR_OF = {"litellm": "LITELLM_API_KEY", "litellm-claude": "LITELLM_API_KEY_CLAUDE"}
 IDENTITY = Path(__file__).parent / "fixtures" / "identity" / "stock" / "claude-code"
 
 GATEWAY_YAML = """\
@@ -48,6 +52,7 @@ dataset: terminal-bench@2.0
 providers:
   anthropic: {env_key: ANTHROPIC_API_KEY, model_prefix: anthropic/}
   litellm: {env_key: LITELLM_API_KEY, base_url_env: LITELLM_URL, model_prefix: litellm_proxy/}
+  litellm-claude: {env_key: LITELLM_API_KEY_CLAUDE, base_url_env: LITELLM_URL, model_prefix: litellm_proxy/}
 modes:
   pilot: {n_tasks: 1}
 run:
@@ -59,10 +64,14 @@ arms:
 class GatewayCase(BenchTestCase):
     def setUp(self) -> None:
         super().setUp()
-        patcher = mock.patch.dict(os.environ, {"LITELLM_API_KEY": KEY, "LITELLM_URL": URL})
+        patcher = mock.patch.dict(os.environ, {"LITELLM_API_KEY": KEY, "LITELLM_API_KEY_CLAUDE": KEY_CLAUDE, "LITELLM_URL": URL})
         patcher.start()
         self.addCleanup(patcher.stop)
         self.cfg = self.load_shipped_config("bench")
+
+    def child(self, name: str) -> dict[str, str]:
+        """The child env a job for this arm gets."""
+        return keys.child_env(self.cfg.providers[PROVIDER_OF.get(name, "litellm")])
 
     def arm(self, name: str) -> spec.ArmSpec:
         return spec.spec_from_config(self.cfg, "pilot", [name]).arms[0]
@@ -97,13 +106,23 @@ class ShippedConfigTests(GatewayCase):
         self.assertEqual((provider.env_key, provider.base_url_env, provider.model_prefix, provider.enabled),
                          ("LITELLM_API_KEY", "LITELLM_URL", "litellm_proxy/", True))
 
+    def test_the_claude_provider_is_the_same_gateway_under_its_own_key(self) -> None:
+        plain, claude = self.cfg.providers["litellm"], self.cfg.providers["litellm-claude"]
+        self.assertEqual((claude.env_key, claude.base_url_env, claude.model_prefix, claude.enabled),
+                         ("LITELLM_API_KEY_CLAUDE", "LITELLM_URL", "litellm_proxy/", True))
+        self.assertNotEqual(claude.env_key, plain.env_key)
+        self.assertEqual(claude.upstream_models, {})
+        # Only the Opus arm is on it.
+        self.assertEqual([a.name for a in self.cfg.arms if a.provider == "litellm-claude"], ["claude-code-gw-opus"])
+
     def test_five_disabled_claude_code_arms_pinned_like_the_baseline(self) -> None:
         baseline = self.cfg.arm("claude-code")
-        gateway = {a.name: a for a in self.cfg.arms if a.provider == "litellm"}
+        gateway = {a.name: a for a in self.cfg.arms if a.provider in KEY_VAR_OF}
         self.assertEqual(sorted(gateway), sorted(ARMS))
         for name, (model, _, effort) in ARMS.items():
             arm = gateway[name]
             with self.subTest(arm=name):
+                self.assertEqual(arm.provider, PROVIDER_OF.get(name, "litellm"))
                 self.assertEqual((arm.agent, arm.family, arm.model, arm.enabled), ("claude-code", "claude-code",
                                                                                     model, False))
                 self.assertEqual(arm.options["version"], baseline.options["version"])
@@ -114,7 +133,7 @@ class ShippedConfigTests(GatewayCase):
         direct, _ = self.kwargs(self.arm("claude-code"))
         gateway, source = self.kwargs(self.arm("claude-code-gw-opus"))
         self.assertEqual((gateway["max_budget_usd"], source["max_budget_usd"]), (direct["max_budget_usd"], "run cap"))
-        for name in ("claude-code-gw-deepseek", "claude-code-gw-kimi", "claude-code-gw-sol"):
+        for name in ("claude-code-gw-deepseek", "claude-code-gw-kimi", "claude-code-gw-terra"):
             with self.subTest(arm=name):
                 # Claude Code would price these models at Claude rates.
                 self.assertNotIn("max_budget_usd", self.kwargs(self.arm(name))[0])
@@ -127,17 +146,32 @@ class ShippedConfigTests(GatewayCase):
                       "deepseek-v4.1-flash": ("fireworks", "deepseek-v4p1-flash-1017"),
                       "deepseek-v4.1-flash-translated": ("fireworks", "deepseek-v4p1-flash-1017"),
                       "kimi-k3-fireworks": ("fireworks", "kimi-k3"),
+                      "gpt-6.1-terra": ("openai", "gpt-6.1-terra"),
                       # The gateway name before 2026-11-04, kept for the smoke run's trials on it.
                       "kimi-k3": ("fireworks", "kimi-k3")}
         for model, (provider, row) in underlying.items():
             with self.subTest(model=model):
                 self.assertEqual(self.cfg.price_exact("litellm", model), self.cfg.price_exact(provider, row))
-        # OpenAI's pricing page, 2026-11-04.
+                if provider == "anthropic":
+                    self.assertEqual(self.cfg.price_exact("litellm-claude", model), self.cfg.price_exact(provider, row))
+        # Sol is on no arm; its row only prices the five trials that ran on it.
         self.assertEqual(self.cfg.price_exact("litellm", "gpt-6.1-sol"),
-                         settings.Price(input=2.0, output=10.0, cache_read=0.10, cache_write_5m=2.5,
-                                        cache_write_1h=5.0))
+                         settings.Price(input=2.0, output=10.0, cache_read=0.1, cache_write_5m=2.5, cache_write_1h=5.0))
+        self.assertFalse(any(model == "gpt-6.1-sol" for model, _, _ in ARMS.values()))
         for name, (model, _, _) in ARMS.items():
-            self.assertIsNotNone(self.cfg.price_exact("litellm", model), name)
+            self.assertIsNotNone(self.cfg.price_exact(PROVIDER_OF.get(name, "litellm"), model), name)
+
+    def test_gw_terra_is_priced_and_run_like_the_direct_terra_arms(self) -> None:
+        # Its cost is compared with the direct arms' (goose-terra and the rest of the Terra design), so
+        # the gateway row must be OpenAI's own, and the effort the same medium those arms inherit.
+        direct = self.cfg.price_exact("openai", "gpt-6.1-terra")
+        self.assertIsNotNone(direct)
+        self.assertEqual(self.cfg.price_exact("litellm", "gpt-6.1-terra"), direct)
+        arm = self.cfg.arm("claude-code-gw-terra")
+        self.assertEqual(runs.resolve_effort(self.cfg.run, arm, fixture_schema(arm.agent)), ("medium", "medium"))
+        self.assertNotIn("base_url_route", arm.options)
+        # Sol is no arm of the bench any more.
+        self.assertFalse([a.name for a in self.cfg.arms if a.model == "gpt-6.1-sol"])
 
 
 class RouteRuleTests(BenchTestCase):
@@ -214,14 +248,14 @@ class PlanTests(GatewayCase):
                 preview = self.command(name)
                 single, aks = _flags(preview)
                 self.assertEqual(single, {"--agent": "claude-code", "--model": f"litellm_proxy/{model}",
-                                          "--api-key-name": "LITELLM_API_KEY"})
+                                          "--api-key-name": KEY_VAR_OF[PROVIDER_OF.get(name, "litellm")]})
                 self.assertIn(f"base_url={json.dumps(planned)}", aks)
                 self.assertNotIn(URL, " ".join(preview))
-                real = self.command(name, env=keys.child_env(self.cfg.providers["litellm"]))
+                real = self.command(name, env=self.child(name))
                 self.assertIn(f"base_url={json.dumps(planned.replace(ROOT_ROUTE, URL))}", _flags(real)[1])
 
     def test_agent_env_goes_to_harbor_as_ae_and_never_as_a_kwarg(self) -> None:
-        cmd = self.command("claude-code-gw-opus", env=keys.child_env(self.cfg.providers["litellm"]))
+        cmd = self.command("claude-code-gw-opus", env=self.child("claude-code-gw-opus"))
         self.assertEqual(_aes(cmd), [f"{k}={v}" for k, v in sorted(OPUS_ENV.items())])
         self.assertFalse(any(a.startswith("agent_env=") for a in _flags(cmd)[1]))
         self.assertEqual(_aes(self.command("claude-code-gw-kimi")), [])
@@ -271,7 +305,7 @@ class PlanTests(GatewayCase):
 
     def test_the_arm_log_shows_the_variable_not_the_address(self) -> None:
         # RunManager._supervise writes each command it starts to the arm log, which the dashboard serves.
-        env = keys.child_env(self.cfg.providers["litellm"])
+        env = self.child("claude-code-gw-opus")
         cmd = self.command("claude-code-gw-opus", env=env)
         self.assertIn(URL, " ".join(cmd))
         shown = keys.hide_gateway_urls(cmd, env)
@@ -311,6 +345,24 @@ class ChildEnvTests(GatewayCase):
         for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
             self.assertNotIn(name, env)  # ... and never passed on
 
+    def test_each_gateway_arm_gets_only_its_own_key(self) -> None:
+        for name in ARMS:
+            with self.subTest(arm=name):
+                env = self.child(name)
+                own = KEY_VAR_OF[PROVIDER_OF.get(name, "litellm")]
+                other = ({"LITELLM_API_KEY", "LITELLM_API_KEY_CLAUDE"} - {own}).pop()
+                self.assertEqual(env.get(own), KEY if own == "LITELLM_API_KEY" else KEY_CLAUDE)
+                self.assertEqual(env.get("LITELLM_URL"), URL)
+                self.assertNotIn(other, env)
+                self.assertNotIn(KEY if other == "LITELLM_API_KEY" else KEY_CLAUDE, json.dumps(env))
+                names = [a for a in self.command(name, env=env) if a.startswith("LITELLM_API_KEY")]
+                self.assertEqual(names, [own])  # --api-key-name is the arm's own variable
+        # No other provider's job, and no helper, gets either key.
+        for provider in (self.cfg.providers["anthropic"], self.cfg.providers["fireworks"], None):
+            env = keys.child_env(provider)
+            self.assertNotIn("LITELLM_API_KEY", env)
+            self.assertNotIn("LITELLM_API_KEY_CLAUDE", env)
+
     def test_other_arms_and_helpers_never_get_the_gateway_url(self) -> None:
         self.assertEqual(os.environ.get("LITELLM_URL"), URL)
         for provider in (self.cfg.providers["anthropic"], self.cfg.providers["fireworks"], None):
@@ -337,7 +389,7 @@ class HarborAdapterTests(GatewayCase):
 
         from harbor.cli.utils import parse_env_vars
 
-        env = keys.child_env(self.cfg.providers["litellm"])
+        env = self.child(name)
         cmd = self.command(name, env=env)
         single, aks = _flags(cmd)
         config = AgentConfig(name=single["--agent"], model_name=single["--model"], kwargs=parse_kwargs(aks),
@@ -355,7 +407,7 @@ class HarborAdapterTests(GatewayCase):
             with self.subTest(arm=name):
                 env, command = self.claude_env(name)
                 self.assertEqual(env["ANTHROPIC_BASE_URL"], planned.replace(ROOT_ROUTE, URL))
-                self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], KEY)
+                self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], KEY_CLAUDE if name in PROVIDER_OF else KEY)
                 self.assertEqual(env["ANTHROPIC_API_KEY"], "")
                 self.assertEqual(env["CLAUDE_CODE_OAUTH_TOKEN"], "")
                 self.assertEqual(env["ANTHROPIC_MODEL"], model)
@@ -387,7 +439,7 @@ class ConfigHashTests(GatewayCase):
 
     def facts(self, result: dict[str, Any], planned: str | None) -> extract.TrialFacts:
         ctx = RunContext(run_key="default/r1", profile="default", run_id="r1", source="bench",
-                         arm="claude-code-gw-opus", provider="litellm", model_prefix="litellm_proxy/",
+                         arm="claude-code-gw-opus", provider="litellm-claude", model_prefix="litellm_proxy/",
                          effort_label="medium", dataset="terminal-bench@2.0", local_snapshot=None,
                          family="claude-code", base_url=planned)
         return extract.facts_from_result(result, None, None, trial_dir="t", ctx=ctx,
@@ -468,18 +520,19 @@ class UpstreamIdTests(GatewayCase):
         self.assertEqual(extract.provider_upstreams()["litellm"], declared)
         for model, upstream in declared.items():
             self.assertEqual(self.cfg.upstream_model("litellm", model), upstream)
-        # Claude and Sol stream back their own names; other providers declare nothing.
-        for model in ("claude-opus-5-5", "gpt-6.1-sol", "kimi-k3"):
+        # Claude and OpenAI models stream back their own names (Sol did in the smoke run); other providers
+        # declare nothing.
+        for model in ("claude-opus-5-5", "gpt-6.1-terra", "kimi-k3"):
             self.assertIsNone(self.cfg.upstream_model("litellm", model), model)
         self.assertIsNone(extract.upstream_of("fireworks", "deepseek-v4p1-flash"))
 
     def test_the_run_context_carries_the_arms_upstream_id(self) -> None:
-        run_spec = spec.spec_from_config(self.cfg, "pilot", ["claude-code-gw-deepseek", "claude-code-gw-sol",
+        run_spec = spec.spec_from_config(self.cfg, "pilot", ["claude-code-gw-deepseek", "claude-code-gw-terra",
                                                              "claude-code"])
         run = {"id": "r1", "resolved_arms": runs.resolve_arms(self.cfg, run_spec, "r1", found=({}, None))}
         self.assertEqual(extract.context_for_bench_arm(run, "claude-code-gw-deepseek", "default").upstream_model,
                          DS_UPSTREAM)
-        self.assertIsNone(extract.context_for_bench_arm(run, "claude-code-gw-sol", "default").upstream_model)
+        self.assertIsNone(extract.context_for_bench_arm(run, "claude-code-gw-terra", "default").upstream_model)
         self.assertIsNone(extract.context_for_bench_arm(run, "claude-code", "default").upstream_model)
 
     def test_usage_under_the_upstream_id_is_the_arms_model_and_priced(self) -> None:
@@ -547,9 +600,10 @@ class UpstreamIdTests(GatewayCase):
         self.assertFalse(usage[DS_UPSTREAM]["primary"])
 
     def test_an_arm_without_a_declared_id_is_unchanged(self) -> None:
-        # Sol declares none, so a stray upstream id stays its own entry.
-        facts = self.facts("claude-code-gw-sol", {"gpt-6.1-sol": _usage(1000, 0, 100), DS_UPSTREAM: _usage(10, 0, 1)})
-        self.assertEqual(sorted(json.loads(facts.usage_json)), [DS_UPSTREAM, "gpt-6.1-sol"])
+        # Terra declares none, so a stray upstream id stays its own entry.
+        facts = self.facts("claude-code-gw-terra", {"gpt-6.1-terra": _usage(1000, 0, 100),
+                                                    DS_UPSTREAM: _usage(10, 0, 1)})
+        self.assertEqual(sorted(json.loads(facts.usage_json)), [DS_UPSTREAM, "gpt-6.1-terra"])
 
     def test_a_logged_call_under_the_upstream_id_gives_its_cache_writes_to_the_arms_model(self) -> None:
         # The OpenRouter fallback's name ends like Kimi's upstream id, so a name match alone would pick it.

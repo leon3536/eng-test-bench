@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "design_id": "d-gateway-kimi-rerun-of-kv-5faa",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-06T14:15:10+00:00",
+  "profile": "default",
+  "title": "Gateway: Kimi rerun of kv-store-grpc",
+  "purpose": "Rerun the one Kimi gateway trial lost to a busy host (infra)",
+  "rationale": "AgentTimeoutError while host CPU was busy: our fault, so rerun.",
+  "change_note": "First version",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "kv-store-grpc"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-gw-kimi",
+    "run": {
+      "budget_usd": 3.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "kimi-k3-fireworks",
+        "effort": "high",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:6c76b6716ae27b774ad0f04813e57b689e876e73a226de4ac36cca2875296401"
+}

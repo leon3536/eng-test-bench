@@ -1,0 +1,295 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "claude-code-gw-kimi: base_url: Sends model traffic somewhere other than the provider's API.",
+      "claude-code-gw-kimi: max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "kv-store-grpc"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 1,
+    "budget_usd": 3.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "claude-code-gw-kimi"
+    ],
+    "arms": [
+      {
+        "name": "claude-code-gw-kimi",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "kind": "name",
+        "provider": "litellm",
+        "model": "litellm_proxy/kimi-k3-fireworks",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "max_turns",
+            "value": 300,
+            "source": "run cap"
+          },
+          {
+            "name": "base_url",
+            "value": "${LITELLM_URL}",
+            "source": "arm option"
+          },
+          {
+            "name": "version",
+            "value": "2.1.312",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "7bb4ab1c98c8",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent claude-code --model litellm_proxy/kimi-k3-fireworks --n-attempts 1 --n-concurrent 2 --jobs-dir jobs\\RUN_ID\\claude-code-gw-kimi --job-name kv-store-grpc --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name kv-store-grpc --api-key-name LITELLM_API_KEY --ak reasoning_effort=\\\"high\\\" --ak max_turns=300 --ak base_url=\\\"${LITELLM_URL}\\\" --ak version=\\\"2.1.312\\\" --env bench.environments.prebaked:PrebakedDockerEnvironment --ek prebake_harness=\\\"claude-code\\\" --ek prebake_version=\\\"2.1.312\\\" --ek prebake_recipe=\\\"419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b\\\" --ek prebake_prefix=\\\"benchbake\\\" --ek prebake_required=false",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "claude-code",
+          "supported": true,
+          "reason": "",
+          "version": "2.1.312",
+          "recipe": "419cd264886607a31cb532a4518020dff22a4e1639b42c2a626fd03f6ce18b2b",
+          "variant": "plain",
+          "prefix": "benchbake",
+          "expect_stock": false,
+          "setup_timeout_multiplier": null,
+          "env_build_timeout_multiplier": 1.0,
+          "images": {
+            "tasks": 1,
+            "ready": [],
+            "missing": [
+              "kv-store-grpc"
+            ],
+            "stale": {},
+            "unverifiable": [],
+            "unknown": {},
+            "noop": [],
+            "over_age": [],
+            "oldest_baked_at": null,
+            "build_min": 11.0,
+            "build_gb": 1.9,
+            "all_ready": false,
+            "error": null
+          }
+        },
+        "problems": [],
+        "warnings": [
+          "base_url: Sends model traffic somewhere other than the provider's API.",
+          "max_budget_usd: Not applied: this harness prices other providers' models at its own rates, so its cap would stop trials early. The turn cap and run budget still apply."
+        ],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:6c76b6716ae27b774ad0f04813e57b689e876e73a226de4ac36cca2875296401",
+    "warnings": [],
+    "peak_containers": 1,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 1,
+      "build_min": 11.0,
+      "build_wall_min": 11.0,
+      "build_gb": 2.18,
+      "jobs": 3,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "lanes": 1,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 1,
+        "build_wall_min_total": 11.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "kv-store-grpc",
+            "arms": [
+              "claude-code-gw-kimi"
+            ],
+            "images": 1,
+            "build": 1,
+            "build_min": 11.0,
+            "build_wall_min": 11.0,
+            "disk_gb": 2.18
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 1,
+      "lanes": 1,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 1,
+      "build_wall_min_total": 11.0,
+      "build_wall_min_max": 11.0,
+      "peak_disk_gb": 2.18,
+      "keep_images": false,
+      "n_concurrent": 2,
+      "note": "1 task race(s) x 1 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "kv-store-grpc",
+          "arms": [
+            "claude-code-gw-kimi"
+          ],
+          "images": 1,
+          "build": 1,
+          "build_min": 11.0,
+          "build_wall_min": 11.0,
+          "disk_gb": 2.18
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:6c76b6716ae27b774ad0f04813e57b689e876e73a226de4ac36cca2875296401",
+    "ledger_fingerprint": "sha256:44e03231c8d377d2",
+    "seed": 182689319929825,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "claude-code-gw-kimi",
+        "cell": {
+          "family": "claude-code",
+          "provider": "litellm",
+          "model": "kimi-k3-fireworks",
+          "effort": "high",
+          "config_hash": "813a3b064b60dac0",
+          "options_fingerprint": "7bb4ab1c98c8"
+        },
+        "trials": 1,
+        "basis": "borrowed",
+        "basis_detail": "116 trials of claude-code on anthropic:claude-opus-5-5, anthropic:claude-sonnet-5-5, openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at litellm:kimi-k3-fireworks prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 116,
+          "tasks": 32,
+          "design_tasks_observed": 1,
+          "runs": [
+            "default/20261029-122236-pilot",
+            "default/20261029-132042-sample",
+            "default/20261029-143816-it-saas-scope-27-v1",
+            "default/20261030-101721-it-saas-scope-27-v4",
+            "default/20261030-123653-it-saas-scope-27-v1",
+            "default/20261030-125004-it-saas-scope-27-v2",
+            "default/20261031-231855-five-models-27-t-v4",
+            "default/20261031-235201-five-models-27-t-v5",
+            "default/20261102-072420-grok-reruns-2-in-v1",
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.056703,
+          "p50": 0.046483,
+          "p90": 0.110471
+        },
+        "total": {
+          "p10": 0.021105,
+          "p50": 0.048248,
+          "p90": 0.10926
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 0.79,
+          "p90": 1.14
+        },
+        "arm_minutes": {
+          "p50": 1.72,
+          "p90": 2.14
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "prebaked",
+          "seconds": 0.84,
+          "basis": "measured",
+          "trials": 94
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.021105,
+        "p50": 0.048248,
+        "p90": 0.10926
+      },
+      "budget_usd": 3.0,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "claude-code-gw-kimi"
+      ],
+      "inflight_allowance_usd": 0.220942,
+      "wall_minutes": {
+        "p50": 12.72,
+        "p90": 13.14
+      },
+      "peak_containers": 1,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "max_containers": 6,
+        "build_wall_min_total": 11.0,
+        "build_wall_min_max": 11.0,
+        "peak_disk_gb": 2.18,
+        "images_to_build": 1
+      }
+    },
+    "pairing": [],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-11-06T14:15:10+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:18c6f14a244c564e0d378c680231aa382e4c7165ad7bb774a026144dbef455ab",
+  "ledger_fingerprint": "sha256:44e03231c8d377d2",
+  "reuse_fingerprint": null
+}

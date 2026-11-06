@@ -48,6 +48,16 @@ providers:
       deepseek-v4.1-flash: accounts/fireworks/models/deepseek-v4p1-flash
       deepseek-v4.1-flash-translated: accounts/fireworks/models/deepseek-v4p1-flash
       kimi-k3-fireworks: accounts/fireworks/models/kimi-k3
+  # The same gateway under its Claude virtual key, for claude-code-gw-opus alone. The
+  # gateway has two keys: the one above is allowed the non-Claude models, this one only
+  # Claude's. Separate providers so each arm is sent its own key and never the other's
+  # (keys.child_env puts back just the arm's env_key). Same URL variable and prefix. Priced
+  # under litellm-claude in pricing.yaml. Claude Code's dollar cap and reported cost stay
+  # trusted: they follow the claude-* model name, not the provider name.
+  litellm-claude:
+    env_key: LITELLM_API_KEY_CLAUDE   # the Claude LiteLLM virtual key
+    base_url_env: LITELLM_URL
+    model_prefix: litellm_proxy/
 
 modes:
   pilot:  {n_tasks: 1,  n_attempts: 1}   # prices one trial per arm before committing
@@ -210,18 +220,20 @@ arms:
     options:
       version: "0.2.1-rc.5"    # npm latest = next; pi-ai pinned to 1.3.0 inside the adapter
 
-  # Claude Code through the LiteLLM gateway (provider litellm). Claude models take
+  # Claude Code through the LiteLLM gateway (provider litellm; litellm-claude for the
+  # Claude arm, which has its own key). Claude models take
   # the raw pass-through, /anthropic (body and anthropic-beta forwarded unchanged);
   # the others the gateway's root, its own /v1/messages, which drops unknown betas
   # and body fields: that filtering is part of what these arms measure. Pairs:
   # gw-opus against claude-code (does the gateway itself change anything),
   # gw-deepseek (Fireworks' Anthropic format) against gw-deepseek-tr (the same
   # model translated from OpenAI format), gw-deepseek-tr and gw-kimi against the
-  # Goose arms on the same models. kimi-k3-fireworks is Fireworks' Kimi K3 with no
-  # fallback, so a Fireworks failure shows as an error in the trial (the gateway's
-  # kimi-k3, which fell back to OpenRouter, is off the bench keys). DeepSeek and
-  # Kimi run at high, as in the per-model designs: they offer low, high and max,
-  # no medium. Off until a design asks for them.
+  # Goose arms on the same models, gw-terra against the direct Terra arms.
+  # kimi-k3-fireworks is Fireworks' Kimi K3 with no fallback, so a Fireworks failure
+  # shows as an error in the trial (the gateway's kimi-k3, which fell back to
+  # OpenRouter, is off the bench keys). DeepSeek and Kimi run at high, as in the
+  # per-model designs: they offer low, high and max, no medium. Terra runs at
+  # medium, as its direct arms do. Off until a design asks for them.
   - name: claude-code-gw-opus
     # Matches claude-code but for the gateway. With a base URL, Harbor points
     # every model alias and the subagent model at Opus; agent_env puts back
@@ -230,7 +242,7 @@ arms:
     # since the key has no Fable model. It keeps Claude Code's dollar cap too:
     # that prices claude-* models right on any route.
     agent: claude-code
-    provider: litellm
+    provider: litellm-claude
     model: claude-opus-5-5
     enabled: false
     options:
@@ -260,6 +272,10 @@ arms:
       version: "2.1.312"
 
   - name: claude-code-gw-kimi
+    # Pass-through to Fireworks' Anthropic Messages endpoint since 2026-11-04
+    # 21:29 UTC. Before that the gateway translated it to OpenAI format, which
+    # Fireworks rejected on multi-turn thinking (messages[].thinking_blocks);
+    # those trials are excluded.
     agent: claude-code
     provider: litellm
     model: kimi-k3-fireworks
@@ -268,13 +284,17 @@ arms:
     options:
       version: "2.1.312"
 
-  - name: claude-code-gw-sol
-    # Translated to OpenAI's Responses API. Budgeted thinking fails there
-    # (enabled + budget_tokens becomes an effort Sol rejects); Claude Code's
+  - name: claude-code-gw-terra
+    # Translated to OpenAI's Responses API. Caching works upstream, but LiteLLM
+    # 1.83.7 does not report cached tokens back: cache_read_input_tokens is always
+    # 0 and input_tokens includes the cached ones. So the bench's cost for this arm
+    # is an upper bound until reconciled with the gateway's spend log. Budgeted
+    # thinking (enabled + budget_tokens) fails on this route; Claude Code's
     # adaptive thinking works.
     agent: claude-code
     provider: litellm
-    model: gpt-6.1-sol
+    model: gpt-6.1-terra
+    effort: medium
     enabled: false
     options:
       version: "2.1.312"

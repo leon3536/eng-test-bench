@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "design_id": "d-gateway-claude-code-on-g-df7f",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-04T22:29:55+00:00",
+  "profile": "default",
+  "title": "Gateway: Claude Code on GPT-6.1 Terra, 27 tasks",
+  "purpose": "Measure Claude Code through a self-hosted LiteLLM gateway on GPT-6.1 Terra (translated to the OpenAI Responses API), for comparison with the direct Terra arms",
+  "rationale": "Terra is the bench canonical OpenAI model (Sol dropped). Cached tokens are not reported back by the gateway, so the bench cost is an upper bound until reconciled with the gateway spend log; the bench budget has headroom for that.",
+  "change_note": "First version",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "claude-code-gw-terra",
+    "run": {
+      "budget_usd": 60.0,
+      "parallel_arms": 1,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "claude-code-gw-terra",
+        "agent": "claude-code",
+        "family": "claude-code",
+        "provider": "litellm",
+        "model": "gpt-6.1-terra",
+        "effort": "medium",
+        "options": {
+          "version": "2.1.312"
+        },
+        "tasks": null
+      }
+    ],
+    "reuse": "measured",
+    "reused": {}
+  },
+  "spec_hash": "sha256:79fde8f5e85f21a230b36074f0eaf1d7106b2dbe7fbe0f804c41ef9cee3846e6"
+}

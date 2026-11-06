@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-gateway-claude-code-on-g-df7f",
+  "title": "Gateway: Claude Code on GPT-6.1 Terra, 27 tasks",
+  "created_at": "2026-11-04T22:29:55+00:00",
+  "updated_at": "2026-11-06T13:05:26+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-04T22:29:55+00:00",
+      "spec_hash": "sha256:79fde8f5e85f21a230b36074f0eaf1d7106b2dbe7fbe0f804c41ef9cee3846e6",
+      "change_note": "First version",
+      "approved_at": "2026-11-04T22:29:56+00:00",
+      "runs": [
+        "20261106-050526-gateway-claude-c-v1"
+      ]
+    }
+  }
+}

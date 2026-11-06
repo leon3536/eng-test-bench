@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-gateway-claude-code-on-d-bfd9",
+  "title": "Gateway: Claude Code on DeepSeek (native, translated) and Kimi K3, 27 tasks",
+  "created_at": "2026-11-04T21:52:16+00:00",
+  "updated_at": "2026-11-04T21:52:21+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-04T21:52:16+00:00",
+      "spec_hash": "sha256:6ede76bd2770837fb9e700b434a732ccba138102c38e19ee7e49c10a6aa25590",
+      "change_note": "First version",
+      "approved_at": "2026-11-04T21:52:18+00:00",
+      "runs": [
+        "20261104-135221-gateway-claude-c-v1"
+      ]
+    }
+  }
+}

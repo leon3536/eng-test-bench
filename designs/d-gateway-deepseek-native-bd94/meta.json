@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-gateway-deepseek-native-bd94",
+  "title": "Gateway: DeepSeek (native, translated) and Kimi, remaining 18 tasks",
+  "created_at": "2026-11-06T09:12:57+00:00",
+  "updated_at": "2026-11-06T09:13:12+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-06T09:12:57+00:00",
+      "spec_hash": "sha256:2ef07d05725977554ba10d563086feac04356c24507307dc5051bc8051ae4bc4",
+      "change_note": "First version",
+      "approved_at": "2026-11-06T09:12:58+00:00",
+      "runs": [
+        "20261106-011312-gateway-deepseek-v1"
+      ]
+    }
+  }
+}
