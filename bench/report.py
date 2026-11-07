@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 from typing import Any
 
-from . import classify, extract, harnesses, hostload, pricing, settings, stats
+from . import classify, extract, gateway_spend, harnesses, hostload, pricing, settings, stats
 from .fsutil import canonical_json
 from .ledger import Filters, parse_filters
 from .settings import Config
@@ -374,7 +374,16 @@ def _policy_reason(row: Mapping[str, Any], included: bool) -> str | None:
     return f"{outcome}: {detail}" if detail else outcome
 
 
+def _gateway_cost(row: Mapping[str, Any]) -> float | None:
+    """The cost a gateway's spend log gives a corrected trial (gateway_spend), else None."""
+    fix = _mapping(_mapping(row.get("flags")).get(gateway_spend.CORRECTED_FLAG))
+    return fix.get("cost_usd") if fix else None
+
+
 def _current_cost(row: Mapping[str, Any], table: Mapping[str, Any] | None) -> tuple[float | None, list[str]]:
+    corrected = _gateway_cost(row)
+    if corrected is not None:
+        return corrected, []
     usage = row.get("usage")
     if table is not None and isinstance(usage, Mapping):
         return pricing.price_usage(usage, row.get("provider") or "", table)
@@ -387,6 +396,10 @@ def _usable_reported(row: Mapping[str, Any]) -> float | None:
 
 
 def _chosen_cost(row: Mapping[str, Any], current: float | None, mode: str) -> float | None:
+    # What the gateway logged is the trial's cost under every pricing: the harness's figures were wrong.
+    corrected = _gateway_cost(row)
+    if corrected is not None:
+        return corrected
     if mode == "as_ingested":
         return row.get("cost_at_ingest_usd")
     if mode == "reported":
@@ -975,8 +988,9 @@ def _group(key: str, rows: list[dict], o: Options) -> dict[str, Any]:
                   "lo": interval[0] if interval else None, "hi": interval[1] if interval else None,
                   "trials": len(finished), "method": "wilson_trials"}
 
+    # Against the cost computed from list prices: a trial whose cost is a gateway's spend log has none.
     ratios = [r["reported_cost_usd"] / r["cost_current"] for r in rows
-              if r.get("reported_cost_usd") is not None and r.get("cost_current")]
+              if r.get("reported_cost_usd") is not None and r.get("cost_current") and _gateway_cost(r) is None]
     outcomes = Counter(r["outcome"] for r in rows)
     efforts = {effort_of(r) for r in rows}
     return {
@@ -1639,6 +1653,15 @@ def flag_caveats(sides: Sequence[tuple[Mapping[str, Any], Sequence[Mapping[str, 
         if gone:
             out.append(f"{lead(gone, ('had', 'had'))} no trial folder when last re-derived; their cache writes and "
                        "log checks are the figures stored before.")
+        corrected = flagged(gateway_spend.CORRECTED_FLAG)
+        if corrected:
+            out.append(f"{lead(corrected, ('takes', 'take'))} tokens, cache reads and cost from the gateway's spend "
+                       "log, because the harness saw no cached tokens through the gateway "
+                       "(cost from gateway spend log).")
+        upper = flagged(gateway_spend.UPPER_BOUND_FLAG)
+        if upper:
+            out.append(f"{lead(upper, ('has', 'have'))} no spend-log correction: the gateway reported no cached "
+                       "tokens, so every prompt token is priced as fresh input and the cost is an upper bound.")
     return out
 
 
