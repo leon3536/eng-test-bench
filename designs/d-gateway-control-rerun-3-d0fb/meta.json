@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-gateway-control-rerun-3-d0fb",
+  "title": "Gateway control rerun: 3 setup failures from the power outage",
+  "created_at": "2026-11-07T00:46:52+00:00",
+  "updated_at": "2026-11-07T00:47:18+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-07T00:46:52+00:00",
+      "spec_hash": "sha256:6a9268129da7edad677845432cad9732ca7e50c68e734137a7e702b86f03b38a",
+      "change_note": "",
+      "approved_at": "2026-11-07T00:47:15+00:00",
+      "runs": [
+        "20261106-164718-gateway-control-v1"
+      ]
+    }
+  }
+}
