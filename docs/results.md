@@ -23,7 +23,7 @@ Final, 3 Nov 2026, reruns included.
 
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
-| Claude Code | 25/27 | 27/27 | 26/27 | 25/27 | · | · | · | · | · |
+| Claude Code | 25/27 | 27/27 | 26/27 | 25/27 | 25/27† | 26/27† | 26/27† | · | · |
 | Pi | 26/27 ★ | 26/27 | 27/27 ★ | 26/27 ⭐ | 27/27 | 25/27 | 26/27 ⊘ ★ | 22/27 | 24/27 ⊘ |
 | Goose | 27/27 ⭐ | 27/27 | 27/27 ★ | 26/27 ★ | 26/27 | 25/27 | 23/27 | 21/27 | 26/27 |
 | OpenCode | 26/27 | 26/27 | 27/27 | 26/27 ★ | 26/27 | 25/27 | 26/27 ⊘2 ⭐ | 22/27 | 26/27 ⊘ |
@@ -37,12 +37,13 @@ Final, 3 Nov 2026, reruns included.
 ⭐ local optimum: beats both its column's reference harness and its own harness on Opus 5.5 medium.
 ★ beats one of the two. "Beats" means no fewer passes, cost and time within 5% or better, and at least 5% cheaper
 or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own answers), counted as fails. · not run.
+† Claude Code through the LiteLLM gateway, not a direct run (see the gateway section).
 
 ## Median cost per task
 
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
-| Claude Code | 7.6¢ | 8.4¢ | $0.11 | 3.6¢ | · | · | · | · | · |
+| Claude Code | 7.6¢ | 8.4¢ | $0.11 | 3.6¢ | $0.13† | 2.3¢† | 2.3¢† | · | · |
 | Pi | 5.6¢ ★ | 5.8¢ | 7.8¢ ★ | 2.1¢ ⭐ | 6.8¢ | 1.7¢ | 3.1¢ ★ | 2.6¢ | $0.20 |
 | Goose | 6.0¢ ⭐ | 7.4¢ | 8.8¢ ★ | 2.3¢ ★ | 7.0¢ | 1.6¢ | 3.1¢ | 2.6¢ | $0.13 |
 | OpenCode | $0.10 | 9.3¢ | $0.10 | 2.6¢ ★ | $0.14 | 3.6¢ | 2.2¢ ⭐ | 7.3¢ | $0.24 |
@@ -57,7 +58,7 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
-| Claude Code | 1.0 | 3.6 | 1.4 | 1.1 | · | · | · | · | · |
+| Claude Code | 1.0 | 3.6 | 1.4 | 1.1 | 1.8† | 1.3† | 2.0† | · | · |
 | Pi | 1.7 ★ | 4.1 | 1.9 ★ | 1.6 ⭐ | 2.4 | 2.1 | 2.7 ★ | 4.5 | 8.1 |
 | Goose | 1.0 ⭐ | 2.2 | 1.9 ★ | 1.1 ★ | 2.3 | 1.5 | 2.5 | 2.7 | 4.6 |
 | OpenCode | 1.8 | 3.2 | 1.8 | 1.7 ★ | 3.5 | 2.8 | 3.1 ⭐ | 4.6 | 5.7 |
@@ -128,6 +129,7 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 
 | Harness | Passes vs reference | Cost ÷ reference | Time ÷ reference |
 |---|---|---|---|
+| Claude Code | 25 vs 26 | 1.83× (1.57–2.13) | 1.12× (0.76–1.64) |
 | Pi | 27 vs 26 | 1.19× (1.03–1.39) | 1.12× (0.93–1.34) |
 | OpenCode | 26 vs 26 | 1.77× (1.50–2.09) | 1.50× (1.31–1.72) |
 | Kilo | 24 vs 26 | 2.16× (1.84–2.53) | 1.38× (1.10–1.73) |
@@ -140,6 +142,7 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 
 | Harness | Passes vs reference | Cost ÷ reference | Time ÷ reference |
 |---|---|---|---|
+| Claude Code | 26 vs 25 | 1.67× (1.46–1.91) | 1.50× (1.09–2.06) |
 | Pi | 25 vs 25 | 1.14× (0.98–1.32) | 1.39× (1.23–1.58) |
 | OpenCode | 25 vs 25 | 1.86× (1.61–2.16) | 2.17× (1.81–2.60) |
 | Kilo | 26 vs 25 | 2.78× (2.44–3.16) | 2.49× (2.08–2.99) |
@@ -152,6 +155,7 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 
 | Harness | Passes vs reference | Cost ÷ reference | Time ÷ reference |
 |---|---|---|---|
+| Claude Code | 26 vs 23 | 0.78× (0.63–0.96) | 1.11× (0.77–1.59) |
 | Pi ⭐ | 26 vs 23 | 0.90× (0.72–1.13) | 0.70× (0.56–0.87) |
 | OpenCode ⭐ | 26 vs 23 | 0.82× (0.63–1.07) | 0.83× (0.62–1.10) |
 | Kilo | 26 vs 23 | 1.18× (0.95–1.48) | 1.08× (0.84–1.39) |
@@ -194,6 +198,9 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 | Opus 5.5 low | 25 vs 27 | 0.81× (0.74–0.87) | 0.73× (0.65–0.82) |
 | Opus 5.5 high | 26 vs 27 | 1.27× (1.16–1.38) | 1.41× (1.18–1.68) |
 | Sonnet 5.5 | 25 vs 27 | 0.38× (0.33–0.44) | 0.74× (0.57–0.96) |
+| Kimi K3 | 25 vs 27 | 1.40× (1.14–1.71) | 2.05× (1.44–2.93) |
+| GPT-6.1 Terra | 26 vs 27 | 0.34× (0.26–0.45) | 1.60× (1.11–2.32) |
+| DeepSeek V4.1 Flash | 26 vs 27 | 0.24× (0.19–0.29) | 2.89× (2.13–3.93) |
 
 **Pi**, reference Pi on Opus 5.5 medium (26/27)
 
@@ -304,18 +311,20 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 A second, smaller experiment ran Claude Code 2.1.312 through a self-hosted LiteLLM gateway on the same 27 tasks, one
 attempt per task. The gateway sits between the harness and the model provider, so these runs show what the route
 correlated with, not what the model did. Ratios divide by the reference in the fifth column (0.80× means 20% less),
-using only the tasks both arms ran; time ratios compare summed trial minutes, not the medians shown. "Translated"
+using only the tasks both arms ran; time ratios compare summed trial minutes, not the medians shown, and the
+medians here are per task (each task's latest trial), where the tables above use per-trial medians. "Translated"
 means the gateway converts Claude Code's Anthropic-format requests into the provider's own API; "native" or
 "pass-through" means the provider accepts Anthropic-format requests directly. Rows compared with Goose change the
-harness as well as the route. These runs are kept out of the main results above.
+harness as well as the route. The Claude Code cells marked † in the tables above come from the DeepSeek (native),
+Kimi and Terra rows here; the control and the translated DeepSeek route appear only here.
 
 | Arm (all Claude Code) | Passed | Cost, 27 tasks | Median minutes | Reference | Cost ÷ reference | Total time ÷ reference |
 |---|---|---|---|---|---|---|
 | Opus 5.5 medium (control) | 26 of 27 | $5.86 | 2.3 | Claude Code direct, Opus 5.5 medium: 27 of 27 | 1.48× | 0.78× |
-| DeepSeek V4.1 Flash, native route | 26 of 27 | $1.09 | 2.0 | Goose, DeepSeek via Fireworks: 23 of 27 | 0.80× | 0.77× |
+| DeepSeek V4.1 Flash, native route | 26 of 27 | $1.09 | 2.0 | Goose, DeepSeek via Fireworks: 23 of 27 | 0.78× | 0.78× |
 | DeepSeek V4.1 Flash, translated route | 23 of 27 | $1.49 | 2.6 | Same model, native route: 26 of 27 | 1.37× | 1.51× |
-| Kimi K3, pass-through to Fireworks | 23 of 27 | $5.92 | 1.6 | Goose, Kimi K3 via Fireworks: 25 of 26 | 1.84× | 1.09× |
-| GPT-6.1 Terra, translated to the Responses API | 24 of 27 | $2.01 | 1.3 | Goose, Terra via OpenAI: 24 of 26 | 2.14× | 1.26× |
+| Kimi K3, pass-through to Fireworks | 25 of 27 | $5.92 | 1.6 | Goose, Kimi K3 via Fireworks: 26 of 27 | 1.83× | 1.08× |
+| GPT-6.1 Terra, translated to the Responses API | 26 of 27 | $2.01 | 1.3 | Goose, Terra via OpenAI: 25 of 27 | 2.13× | 1.24× |
 
 What the table showed:
 
@@ -330,17 +339,18 @@ What the table showed:
   total minutes.
 - **Kimi K3 passed only on the pass-through route.** The translated route failed on Fireworks rejecting
   `thinking_blocks` (two early trials were excluded). After the gateway forwarded to Fireworks' own Anthropic
-  endpoint, Kimi passed 23 of 27: two timeouts (`kv-store-grpc`, `pypi-server`), one plain fail (`sqlite-with-gcov`)
+  endpoint, Kimi passed 25 of 27: one plain fail (`sqlite-with-gcov`)
   and one API error (`financial-document-processor`).
 - **Terra's cost first read $11.41 and was $2.01.** LiteLLM 1.83.7 did not report cached tokens on the Responses-API
   translation, so the bench priced about 9.9M cached prompt tokens as fresh input. The gateway's own spend log
   (564 calls, all matched to trials) gave the corrected cost, and the ledger now carries both figures.
-  Terra passed 24 of 27 (misses: `sanitize-git-repo`, `kv-store-grpc`, `pypi-server`).
+  Terra passed 26 of 27 (miss: `sanitize-git-repo`).
 
 Notes: Harbor pointed every Claude Code model alias and its subagent model at each arm's own model; the Opus control put
 back Haiku, Sonnet and Claude Code's default subagent choice, as the direct arm uses them. DeepSeek and Kimi ran at
-high effort, Terra and Opus at medium. Costs are token counts at list prices. An agent timeout counts as a fail even where the tests passed afterwards (Kimi and Terra on `kv-store-grpc`
-and `pypi-server`); counted as passes, Kimi would be 25 of 27 and Terra 26 of 27. Three Opus control trials failed
+high effort, Terra and Opus at medium. Costs are token counts at list prices. A trial that hit the agent time limit counts by its tests, as in the rest of this report: Kimi and Terra each
+had two timeouts (`kv-store-grpc`, `pypi-server`) whose tests passed afterwards, and the four translated DeepSeek timeouts
+failed their tests. Three Opus control trials failed
 at setup because the container could not resolve the package mirrors (`apt-get update` failed before the agent
 started); they were rerun on the same arm and all three passed. With one attempt per task, a one-task difference is
 too small to read much into.
@@ -348,7 +358,7 @@ too small to read much into.
 ## Method
 
 terminal-bench 2.0 on Harbor 0.25.0. 37 trials (2%) that may have failed for reasons on our side were rerun, with 10 passes from the same period rerun as a control (9 passed again); both attempts count. Open models (DeepSeek, GLM, Kimi) ran through Fireworks at high effort; Terra and
-Grok at medium. Claude Code runs only on Claude models, so on the other models Goose is the reference harness. DeepSeek
+Grok at medium. Claude Code ran directly only on Claude models; its Kimi K3, Terra and DeepSeek results (†) came through a LiteLLM gateway (see the gateway section). On the other models Goose is the reference harness. DeepSeek
 Harness runs only on DeepSeek, so it has no model comparison. A pass is the task's own tests passing. Medians are per
 trial. Pass differences of one or two tasks are within noise at this sample size.
 

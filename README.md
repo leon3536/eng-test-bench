@@ -31,7 +31,7 @@ Opus 5.5 medium when comparing models.
 <!-- results:start -->
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
-| Claude Code | 25/27 | 27/27 | 26/27 | 25/27 | · | · | · | · | · |
+| Claude Code | 25/27 | 27/27 | 26/27 | 25/27 | 25/27† | 26/27† | 26/27† | · | · |
 | Pi | 26/27 ★ | 26/27 | 27/27 ★ | 26/27 ⭐ | 27/27 | 25/27 | 26/27 ⊘ ★ | 22/27 | 24/27 ⊘ |
 | Goose | 27/27 ⭐ | 27/27 | 27/27 ★ | 26/27 ★ | 26/27 | 25/27 | 23/27 | 21/27 | 26/27 |
 | OpenCode | 26/27 | 26/27 | 27/27 | 26/27 ★ | 26/27 | 25/27 | 26/27 ⊘2 ⭐ | 22/27 | 26/27 ⊘ |
@@ -45,6 +45,7 @@ Opus 5.5 medium when comparing models.
 ⭐ local optimum: beats both its column's reference harness and its own harness on Opus 5.5 medium.
 ★ beats one of the two. "Beats" means no fewer passes, cost and time within 5% or better, and at least 5% cheaper
 or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own answers), counted as fails. · not run.
+† Claude Code through the LiteLLM gateway, not a direct run (see the gateway section).
 <!-- results:end -->
 
 ### Claude Code through a LiteLLM gateway (6 Nov 2026)
@@ -54,7 +55,7 @@ A second experiment ran Claude Code through a self-hosted LiteLLM gateway on the
 
 - **The Opus control stayed within one trial of direct**: 26 of 27 passed against 27 of 27, at 1.48× the direct run's cost.
 - **Translating Claude Code's requests correlated with four DeepSeek timeouts**: 23 of 27 passed on the translated route (the gateway converts the requests to the provider's own API) and 26 of 27 on the native route (the provider takes them as they are).
-- **Kimi K3 passed only on the pass-through route** (23 of 27); **Terra's cost was corrected from $11.41 to $2.01** using the gateway's own spend log.
+- **Kimi K3 passed only on the pass-through route** (25 of 27); **Terra's cost was corrected from $11.41 to $2.01** using the gateway's own spend log.
 
 ## How it works
 
