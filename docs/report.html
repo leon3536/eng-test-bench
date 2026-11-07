@@ -158,6 +158,28 @@ footer { font-size: 0.82rem; color: var(--muted); display: grid; gap: 6px; max-w
     <div class="frame"><table class="cmp" id="cmp"></table></div>
   </section>
 
+  <section id="gateway">
+    <h2>Claude Code through a LiteLLM gateway (6 Nov 2026)</h2>
+    <p class="note">A second, smaller experiment ran Claude Code 2.1.312 through a self-hosted LiteLLM gateway on the same 27 tasks, one attempt per task. These runs show what the route correlated with, not what the model did, and they are kept out of the results above. Ratios divide by the reference, using only the tasks both arms ran (0.80× means 20% less); time ratios compare summed trial minutes, not the medians shown. Translated means the gateway converts Claude Code's Anthropic-format requests into the provider's own API; native or pass-through means the provider accepts them directly. Rows compared with Goose change the harness as well as the route.</p>
+    <div class="frame"><table class="cmp">
+      <thead><tr><th>Arm (all Claude Code)</th><th>Passed</th><th>Cost, 27 tasks</th><th>Median minutes</th><th>Reference</th><th>Cost ÷ reference</th><th>Total time ÷ reference</th></tr></thead>
+      <tbody>
+        <tr><td>Opus 5.5 medium (control)</td><td>26 of 27</td><td>$5.86</td><td>2.3</td><td>Claude Code direct, Opus 5.5 medium: 27 of 27</td><td>1.48×</td><td>0.78×</td></tr>
+        <tr><td>DeepSeek V4.1 Flash, native route</td><td>26 of 27</td><td>$1.09</td><td>2.0</td><td>Goose, DeepSeek via Fireworks: 23 of 27</td><td>0.80×</td><td>0.77×</td></tr>
+        <tr><td>DeepSeek V4.1 Flash, translated route</td><td>23 of 27</td><td>$1.49</td><td>2.6</td><td>Same model, native route: 26 of 27</td><td>1.37×</td><td>1.51×</td></tr>
+        <tr><td>Kimi K3, pass-through to Fireworks</td><td>23 of 27</td><td>$5.92</td><td>1.6</td><td>Goose, Kimi K3 via Fireworks: 25 of 26</td><td>1.84×</td><td>1.09×</td></tr>
+        <tr><td>GPT-6.1 Terra, translated to the Responses API</td><td>24 of 27</td><td>$2.01</td><td>1.3</td><td>Goose, Terra via OpenAI: 24 of 26</td><td>2.14×</td><td>1.26×</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>The control kept Opus within one trial of direct.</b> Through the gateway Claude Code passed 26 of 27 against 27 of 27 direct, and every trial used Opus 5.5 only. The miss was <code>sanitize-git-repo</code> (reward 0, not a timeout); the direct Claude Code run on that task passed. The gateway run cost 1.48× the direct run, and its uncached input was about 2.1× higher (696k against 333k tokens) while total prompt and cache-read tokens were similar. The cause was not established.</li>
+      <li><b>Translation correlated with four timeouts on DeepSeek.</b> The translated route passed 23 of 27 and the native route 26 of 27, with the same model behind both. All four translated misses (<code>cobol-modernization</code>, <code>mailman</code>, <code>financial-document-processor</code>, <code>headless-terminal</code>) were agent timeouts, and the translated route took 1.51× the total minutes.</li>
+      <li><b>Kimi K3 passed only on the pass-through route.</b> The translated route failed on Fireworks rejecting <code>thinking_blocks</code> (two early trials were excluded). After the gateway forwarded to Fireworks' own Anthropic endpoint, Kimi passed 23 of 27: two timeouts (<code>kv-store-grpc</code>, <code>pypi-server</code>), one plain fail (<code>sqlite-with-gcov</code>) and one API error (<code>financial-document-processor</code>).</li>
+      <li><b>Terra's cost first read $11.41 and was $2.01.</b> LiteLLM 1.83.7 did not report cached tokens on the Responses-API translation, so the bench priced about 9.9M cached prompt tokens as fresh input. The gateway's own spend log (564 calls, all matched to trials) gave the corrected cost, and the ledger now carries both figures. Terra passed 24 of 27 (misses: <code>sanitize-git-repo</code>, <code>kv-store-grpc</code>, <code>pypi-server</code>).</li>
+    </ul>
+    <p class="note">Harbor pointed every Claude Code model alias and its subagent model at each arm's own model; the Opus control put back Haiku, Sonnet and Claude Code's default subagent choice, as the direct arm uses them. DeepSeek and Kimi ran at high effort, Terra and Opus at medium. Costs are token counts at list prices. An agent timeout counts as a fail even where the tests passed afterwards (Kimi and Terra on `kv-store-grpc` and `pypi-server`); counted as passes, Kimi would be 25 of 27 and Terra 26 of 27. Three Opus control trials failed at setup because the container could not resolve the package mirrors (`apt-get update` failed before the agent started); they were rerun on the same arm and all three passed. With one attempt per task, a one-task difference is too small to read much into.</p>
+  </section>
+
   <section>
     <h2>How the results were checked</h2>
     <div class="caveats">

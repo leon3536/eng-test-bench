@@ -299,6 +299,52 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 | GLM 5.3 | 21 vs 25 | 0.45× (0.27–0.74) | 2.05× (1.49–2.83) |
 | Grok 4.7 | 24 vs 25 | 1.67× (1.14–2.43) | 2.61× (1.38–4.95) |
 
+## Claude Code through a LiteLLM gateway (6 Nov 2026)
+
+A second, smaller experiment ran Claude Code 2.1.312 through a self-hosted LiteLLM gateway on the same 27 tasks, one
+attempt per task. The gateway sits between the harness and the model provider, so these runs show what the route
+correlated with, not what the model did. Ratios divide by the reference in the fifth column (0.80× means 20% less),
+using only the tasks both arms ran; time ratios compare summed trial minutes, not the medians shown. "Translated"
+means the gateway converts Claude Code's Anthropic-format requests into the provider's own API; "native" or
+"pass-through" means the provider accepts Anthropic-format requests directly. Rows compared with Goose change the
+harness as well as the route. These runs are kept out of the main results above.
+
+| Arm (all Claude Code) | Passed | Cost, 27 tasks | Median minutes | Reference | Cost ÷ reference | Total time ÷ reference |
+|---|---|---|---|---|---|---|
+| Opus 5.5 medium (control) | 26 of 27 | $5.86 | 2.3 | Claude Code direct, Opus 5.5 medium: 27 of 27 | 1.48× | 0.78× |
+| DeepSeek V4.1 Flash, native route | 26 of 27 | $1.09 | 2.0 | Goose, DeepSeek via Fireworks: 23 of 27 | 0.80× | 0.77× |
+| DeepSeek V4.1 Flash, translated route | 23 of 27 | $1.49 | 2.6 | Same model, native route: 26 of 27 | 1.37× | 1.51× |
+| Kimi K3, pass-through to Fireworks | 23 of 27 | $5.92 | 1.6 | Goose, Kimi K3 via Fireworks: 25 of 26 | 1.84× | 1.09× |
+| GPT-6.1 Terra, translated to the Responses API | 24 of 27 | $2.01 | 1.3 | Goose, Terra via OpenAI: 24 of 26 | 2.14× | 1.26× |
+
+What the table showed:
+
+- **The control kept Opus within one trial of direct.** Through the gateway Claude Code passed 26 of 27 against 27 of
+  27 direct, and every trial used Opus 5.5 only. The miss was `sanitize-git-repo` (reward 0, not a timeout); the direct
+  Claude Code run on that task passed. The gateway run cost 1.48× the direct run, and its uncached input was about
+  2.1× higher (696k against 333k tokens) while total prompt and cache-read tokens were similar. The cause was not
+  established.
+- **Translation correlated with four timeouts on DeepSeek.** The translated route passed 23 of 27 and the native
+  route 26 of 27, with the same model behind both. All four translated misses (`cobol-modernization`, `mailman`,
+  `financial-document-processor`, `headless-terminal`) were agent timeouts, and the translated route took 1.51× the
+  total minutes.
+- **Kimi K3 passed only on the pass-through route.** The translated route failed on Fireworks rejecting
+  `thinking_blocks` (two early trials were excluded). After the gateway forwarded to Fireworks' own Anthropic
+  endpoint, Kimi passed 23 of 27: two timeouts (`kv-store-grpc`, `pypi-server`), one plain fail (`sqlite-with-gcov`)
+  and one API error (`financial-document-processor`).
+- **Terra's cost first read $11.41 and was $2.01.** LiteLLM 1.83.7 did not report cached tokens on the Responses-API
+  translation, so the bench priced about 9.9M cached prompt tokens as fresh input. The gateway's own spend log
+  (564 calls, all matched to trials) gave the corrected cost, and the ledger now carries both figures.
+  Terra passed 24 of 27 (misses: `sanitize-git-repo`, `kv-store-grpc`, `pypi-server`).
+
+Notes: Harbor pointed every Claude Code model alias and its subagent model at each arm's own model; the Opus control put
+back Haiku, Sonnet and Claude Code's default subagent choice, as the direct arm uses them. DeepSeek and Kimi ran at
+high effort, Terra and Opus at medium. Costs are token counts at list prices. An agent timeout counts as a fail even where the tests passed afterwards (Kimi and Terra on `kv-store-grpc`
+and `pypi-server`); counted as passes, Kimi would be 25 of 27 and Terra 26 of 27. Three Opus control trials failed
+at setup because the container could not resolve the package mirrors (`apt-get update` failed before the agent
+started); they were rerun on the same arm and all three passed. With one attempt per task, a one-task difference is
+too small to read much into.
+
 ## Method
 
 terminal-bench 2.0 on Harbor 0.25.0. 37 trials (2%) that may have failed for reasons on our side were rerun, with 10 passes from the same period rerun as a control (9 passed again); both attempts count. Open models (DeepSeek, GLM, Kimi) ran through Fireworks at high effort; Terra and

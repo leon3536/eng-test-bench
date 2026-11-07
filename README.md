@@ -47,6 +47,15 @@ Opus 5.5 medium when comparing models.
 or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own answers), counted as fails. · not run.
 <!-- results:end -->
 
+### Claude Code through a LiteLLM gateway (6 Nov 2026)
+
+A second experiment ran Claude Code through a self-hosted LiteLLM gateway on the same 27 tasks
+([details](docs/results.md#claude-code-through-a-litellm-gateway-6-nov-2026)). Ratios divide by a reference on the same tasks.
+
+- **The Opus control stayed within one trial of direct**: 26 of 27 passed against 27 of 27, at 1.48× the direct run's cost.
+- **Translating Claude Code's requests correlated with four DeepSeek timeouts**: 23 of 27 passed on the translated route (the gateway converts the requests to the provider's own API) and 26 of 27 on the native route (the provider takes them as they are).
+- **Kimi K3 passed only on the pass-through route** (23 of 27); **Terra's cost was corrected from $11.41 to $2.01** using the gateway's own spend log.
+
 ## How it works
 
 - **Designs and a queue.** You describe a run (harnesses × models × tasks); the bench estimates its cost and
