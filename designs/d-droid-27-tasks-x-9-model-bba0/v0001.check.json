@@ -1,0 +1,2178 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": [
+      "Arms use 7 models (anthropic/claude-opus-5-5, anthropic/claude-sonnet-5-5, fireworks/kimi-k3, openai/gpt-6.1-terra, fireworks/deepseek-v4p1-flash-1017, fireworks/glm-5p3, xai/grok-4.7). Pairs form only within one model and provider, so each comparison needs its baseline on the same model"
+    ]
+  },
+  "plan": {
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 243,
+    "budget_usd": 60.0,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "droid",
+      "droid-opus-low",
+      "droid-opus-high",
+      "droid-sonnet",
+      "droid-kimi",
+      "droid-terra",
+      "droid-deepseek",
+      "droid-glm",
+      "droid-grok"
+    ],
+    "arms": [
+      {
+        "name": "droid",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-opus-low",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "low",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "low",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-opus-low --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"low\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-opus-high",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model anthropic/claude-opus-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-opus-high --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-sonnet",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "anthropic",
+        "model": "anthropic/claude-sonnet-5-5",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model anthropic/claude-sonnet-5-5 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-sonnet --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-kimi",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/kimi-k3",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model fireworks_ai/accounts/fireworks/models/kimi-k3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-kimi --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-terra",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "openai",
+        "model": "openai/gpt-6.1-terra",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model openai/gpt-6.1-terra --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-terra --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-deepseek",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model fireworks_ai/accounts/fireworks/models/deepseek-v4p1-flash-1017 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-deepseek --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-glm",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "fireworks",
+        "model": "fireworks_ai/accounts/fireworks/models/glm-5p3",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "high",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "high",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model fireworks_ai/accounts/fireworks/models/glm-5p3 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-glm --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"high\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      },
+      {
+        "name": "droid-grok",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "xai",
+        "model": "xai/grok-4.7",
+        "tasks": 27,
+        "trials": 27,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model xai/grok-4.7 --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-grok --job-name openssl-selfsigned-cert --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name openssl-selfsigned-cert --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:9c8fafc53e2ea557ded6c35723c878c31524787b17f5e217220de24d4a871df7",
+    "warnings": [],
+    "peak_containers": 3,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 0,
+      "build_min": 0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 3,
+      "task_images": 27,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 27,
+        "arms": 9,
+        "lanes": 243,
+        "max_containers": 3,
+        "build_jobs": 3,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "openssl-selfsigned-cert",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "cobol-modernization",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "build-cython-ext",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "mteb-retrieve",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "sparql-university",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "sqlite-with-gcov",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "sqlite-db-truncate",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "hf-model-inference",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "db-wal-recovery",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "git-multibranch",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "log-summary-date-ranges",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "nginx-request-logging",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "multi-source-data-merger",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "reshard-c4-data",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "sanitize-git-repo",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "kv-store-grpc",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "fix-git",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "mailman",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "cancel-async-tasks",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "constraints-scheduling",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "financial-document-processor",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "fix-code-vulnerability",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "git-leak-recovery",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "headless-terminal",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "modernize-scientific-stack",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "pypi-server",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          },
+          {
+            "task": "regex-log",
+            "arms": [
+              "droid",
+              "droid-opus-low",
+              "droid-opus-high",
+              "droid-sonnet",
+              "droid-kimi",
+              "droid-terra",
+              "droid-deepseek",
+              "droid-glm",
+              "droid-grok"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 27,
+      "arms": 9,
+      "lanes": 243,
+      "max_containers": 3,
+      "build_jobs": 3,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 1,
+      "note": "27 task race(s) x 9 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 3 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "openssl-selfsigned-cert",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "cobol-modernization",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "build-cython-ext",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "mteb-retrieve",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "sparql-university",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "sqlite-with-gcov",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "sqlite-db-truncate",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "hf-model-inference",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "db-wal-recovery",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "git-multibranch",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "log-summary-date-ranges",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "nginx-request-logging",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "multi-source-data-merger",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "reshard-c4-data",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "sanitize-git-repo",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "kv-store-grpc",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "fix-git",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "mailman",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "cancel-async-tasks",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "constraints-scheduling",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "financial-document-processor",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "fix-code-vulnerability",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "git-leak-recovery",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "headless-terminal",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "modernize-scientific-stack",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "pypi-server",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        },
+        {
+          "task": "regex-log",
+          "arms": [
+            "droid",
+            "droid-opus-low",
+            "droid-opus-high",
+            "droid-sonnet",
+            "droid-kimi",
+            "droid-terra",
+            "droid-deepseek",
+            "droid-glm",
+            "droid-grok"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:9c8fafc53e2ea557ded6c35723c878c31524787b17f5e217220de24d4a871df7",
+    "ledger_fingerprint": "sha256:7c4ef067c435627b",
+    "seed": 123793666423498,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "droid",
+        "cell": {
+          "family": "droid",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "config_hash": "917641067bcdd0cb",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.27647,
+          "p50": 0.204148,
+          "p90": 0.590709
+        },
+        "total": {
+          "p10": 2.829392,
+          "p50": 6.187843,
+          "p90": 13.927464
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.77,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.34,
+          "p90": 168.62
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-opus-low",
+        "cell": {
+          "family": "droid",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "low",
+          "config_hash": "372f4b5ac2af15ba",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.273717,
+          "p50": 0.178989,
+          "p90": 0.576808
+        },
+        "total": {
+          "p10": 2.899098,
+          "p50": 6.395808,
+          "p90": 13.455789
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.77,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.55,
+          "p90": 168.64
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-opus-high",
+        "cell": {
+          "family": "droid",
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "config_hash": "7466389f7515020a",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at anthropic:claude-opus-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.287475,
+          "p50": 0.195135,
+          "p90": 0.617399
+        },
+        "total": {
+          "p10": 2.931487,
+          "p50": 6.417888,
+          "p90": 13.900879
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 3.14,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.33,
+          "p90": 168.23
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-sonnet",
+        "cell": {
+          "family": "droid",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "config_hash": "25d7684f6f2df3ab",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at anthropic:claude-sonnet-5-5 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.13486,
+          "p50": 0.095837,
+          "p90": 0.288605
+        },
+        "total": {
+          "p10": 1.426878,
+          "p50": 2.991744,
+          "p90": 6.791203
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.98,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.67,
+          "p90": 168.68
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-kimi",
+        "cell": {
+          "family": "droid",
+          "provider": "fireworks",
+          "model": "kimi-k3",
+          "effort": "high",
+          "config_hash": "4d40d56dd18a46e5",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:kimi-k3 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.217862,
+          "p50": 0.153981,
+          "p90": 0.463507
+        },
+        "total": {
+          "p10": 2.363769,
+          "p50": 5.040372,
+          "p90": 11.330083
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.77,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.18,
+          "p90": 169.23
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-terra",
+        "cell": {
+          "family": "droid",
+          "provider": "openai",
+          "model": "gpt-6.1-terra",
+          "effort": "medium",
+          "config_hash": "b306204c69535739",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at openai:gpt-6.1-terra prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.07122,
+          "p50": 0.04908,
+          "p90": 0.156188
+        },
+        "total": {
+          "p10": 0.703664,
+          "p50": 1.547804,
+          "p90": 3.364691
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 3.54,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.26,
+          "p90": 168.44
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-deepseek",
+        "cell": {
+          "family": "droid",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "effort": "high",
+          "config_hash": "fc6696b7d6872c83",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:deepseek-v4p1-flash-1017 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.017274,
+          "p50": 0.012089,
+          "p90": 0.038246
+        },
+        "total": {
+          "p10": 0.176254,
+          "p50": 0.372313,
+          "p90": 0.828553
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.91,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.94,
+          "p90": 168.83
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-glm",
+        "cell": {
+          "family": "droid",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "effort": "high",
+          "config_hash": "2a37098287e7009c",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at fireworks:glm-5p3 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.098853,
+          "p50": 0.07269,
+          "p90": 0.202959
+        },
+        "total": {
+          "p10": 1.036789,
+          "p50": 2.381314,
+          "p90": 5.277247
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.85,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 148.03,
+          "p90": 168.17
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      },
+      {
+        "arm": "droid-grok",
+        "cell": {
+          "family": "droid",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "effort": "medium",
+          "config_hash": "e5fd299bb6341db8",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 27,
+        "basis": "borrowed",
+        "basis_detail": "4 trials of droid on openrouter:deepseek/deepseek-v4.1-flash, openrouter:z-ai/glm-5.3, repriced at xai:grok-4.7 prices",
+        "confidence": "low",
+        "evidence": {
+          "trials": 4,
+          "tasks": 2,
+          "design_tasks_observed": 2,
+          "runs": [
+            "dev/20261112-220655-droid-smoke-2-ta-v1"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.171382,
+          "p50": 0.123037,
+          "p90": 0.357449
+        },
+        "total": {
+          "p10": 1.725779,
+          "p50": 3.728981,
+          "p90": 8.41528
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 2.77,
+          "p90": 9.33
+        },
+        "arm_minutes": {
+          "p50": 147.92,
+          "p90": 169.08
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 50.71,
+          "basis": "measured",
+          "trials": 8
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 29.773297,
+        "p50": 40.961083,
+        "p90": 56.409775
+      },
+      "budget_usd": 60.0,
+      "p_within_budget": 0.942,
+      "suggested_budget_usd": 65.0,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "droid",
+        "droid-opus-low",
+        "droid-opus-high",
+        "droid-sonnet",
+        "droid-kimi",
+        "droid-terra",
+        "droid-deepseek",
+        "droid-glm",
+        "droid-grok"
+      ],
+      "inflight_allowance_usd": 3.704394,
+      "wall_minutes": {
+        "p50": 517.86,
+        "p90": 544.85
+      },
+      "peak_containers": 3,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 27,
+        "arms": 9,
+        "max_containers": 3,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [
+      {
+        "arm": "droid-sonnet",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 27,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": 1.117,
+        "sd_log": 0.3371,
+        "sd_source": "pooled_model",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "droid-kimi",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "kimi-k3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3597,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "droid-terra",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "openai",
+          "model": "gpt-6.1-terra",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3597,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "droid-deepseek",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "deepseek-v4p1-flash-1017",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3597,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "droid-glm",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "fireworks",
+          "model": "glm-5p3",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3597,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      },
+      {
+        "arm": "droid-grok",
+        "baseline_cell": {
+          "family": "claude-code",
+          "provider": "xai",
+          "model": "grok-4.7",
+          "arm": null
+        },
+        "metric": "cost",
+        "pairs_now": 0,
+        "pairs_after": 0,
+        "multiple_now": null,
+        "ci_factor_now": null,
+        "ci_factor_after": null,
+        "sd_log": 0.3597,
+        "sd_source": "pooled_all",
+        "scope": {
+          "tasks": 27,
+          "tasks_file": "config/tasks.txt",
+          "outside": 0
+        }
+      }
+    ],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-11-13T06:29:03+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:fceedfc32e3151109c6634e01b5965677fab92184fcef3781d90bbc05b86a126",
+  "ledger_fingerprint": "sha256:7c4ef067c435627b",
+  "reuse_fingerprint": null
+}

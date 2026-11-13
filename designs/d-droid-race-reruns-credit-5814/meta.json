@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-droid-race-reruns-credit-5814",
+  "title": "Droid race reruns (credit and Docker)",
+  "created_at": "2026-11-13T14:51:17+00:00",
+  "updated_at": "2026-11-13T14:51:20+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-13T14:51:17+00:00",
+      "spec_hash": "sha256:77fbc1abdc84d56b8a1c6a2187d56ab77d3cf617af0dce5a1069d9e0e7d5cd62",
+      "change_note": "",
+      "approved_at": "2026-11-13T14:51:19+00:00",
+      "runs": [
+        "20261113-065120-droid-race-rerun-v1"
+      ]
+    }
+  }
+}

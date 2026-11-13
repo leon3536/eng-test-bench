@@ -2,7 +2,7 @@
 
 **Which AI coding agent (harness) gets the most out of each model, and at what cost?**
 
-The bench runs ten agent harnesses on six models over the same 27 real-world IT, e-commerce and SaaS tasks
+The bench runs eleven agent harnesses (Droid added 13 Nov 2026) on seven models over the same 27 real-world IT, e-commerce and SaaS tasks
 (terminal-bench 2.0), and compares task success, cost and speed on the same tasks.
 
 **[Read the report →](https://leon3536.github.io/eng-test-bench/report.html)** (interactive; also in the repo: [docs/report.html](docs/report.html)) · [Full tables](docs/results.md) · [Guide](docs/guide.md)
@@ -17,12 +17,13 @@ The bench runs ten agent harnesses on six models over the same 27 real-world IT,
 4. **Open models cost less, and each tended to do best on a particular harness.**
 5. **Grok 4.7 was the most expensive and slowest option in this test.**
 6. **Some agents with internet access looked up the benchmark's answers.** We count those as fails.
+7. **Droid's handling of the agent's background processes correlated with failures on tasks that ask the agent to leave a service running.** On exit, the Droid program (Droid added 13 Nov) stopped the servers the tasks needed; without those three tasks Droid matched or beat the reference harness in 8 of 9 model columns.
 
 **Scope and limitations.** 27 terminal-bench 2.0 tasks on Harbor 0.25.0, one attempt per task (two where a
 trial was rerun). Model and harness versions and list prices are as of 3 Nov 2026. A busy test machine slowed
 some trials, so treat small timing differences with care. The results hold for these tasks and versions only.
 
-2,225 trials, $358 in model fees. Every number is relative to a reference on the same tasks: Claude Code on
+2,225 trials, $358 in model fees (3 Nov run; Droid adds 243 trials and $46.23). Every number is relative to a reference on the same tasks: Claude Code on
 Opus 5.5 medium overall, Claude Code (Claude models) or Goose (other models) when comparing harnesses, and
 Opus 5.5 medium when comparing models.
 
@@ -40,6 +41,7 @@ Opus 5.5 medium when comparing models.
 | Terminus-2 | 25/27 | 27/27 | 27/27 | 26/27 | 25/27 | 26/27 | 26/27 | 23/27 | 24/27 ⊘ |
 | mini-swe-agent | 27/27 ★ | 26/27 | 26/27 | 26/27 ★ | 26/27 | 26/27 | 24/27 ⊘2 ★ | 20/27 | 27/27 |
 | Strands | 27/27 ★ | 25/27 | 27/27 | 27/27 ★ | 24/27 | 26/27 | 24/27 ⊘ | 21/27 | 24/27 |
+| Droid | 24/27 ★ | 24/27 | 25/27 | 22/27 | 26/27 | 23/27 | 25/27 ⊘ | 22/27 | 22/27 |
 | DeepSeek Harness | · | · | · | · | · | · | 24/27 ⊘ ★ | · | · |
 
 ⭐ local optimum: beats both its column's reference harness and its own harness on Opus 5.5 medium.
@@ -56,6 +58,13 @@ A second experiment ran Claude Code through a self-hosted LiteLLM gateway on the
 - **The Opus control stayed within one trial of direct**: 26 of 27 passed against 27 of 27, at 1.48× the direct run's cost.
 - **Translating Claude Code's requests correlated with four DeepSeek timeouts**: 23 of 27 passed on the translated route (the gateway converts the requests to the provider's own API) and 26 of 27 on the native route (the provider takes them as they are).
 - **Kimi K3 passed only on the pass-through route** (25 of 27); **Terra's cost was corrected from $11.41 to $2.01** using the gateway's own spend log.
+
+### Droid (13 Nov 2026)
+
+Factory's Droid 1.0.0 ran the same 27 tasks in all nine model columns ([details](docs/results.md#droid-13-nov-2026)).
+
+- **The Droid program's log shows it stopping the server the task needed in 17 of Droid's 20 failed server-task trials**: on exit it stops the background processes the agent started through it. `kv-store-grpc` passed 0 of 9, `hf-model-inference` 4 of 9 and `pypi-server` 3 of 9 (other harnesses: about 95%), 20 of Droid's 30 failed trials.
+- **Without those three tasks, Droid matched or beat the reference harness in 8 of 9 model columns**, including 22 of 24 on GLM 5.3, more than any other harness on that model.
 
 ## How it works
 

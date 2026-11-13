@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-droid-27-tasks-x-9-model-bba0",
+  "title": "Droid: 27 tasks x 9 model columns",
+  "created_at": "2026-11-13T06:29:03+00:00",
+  "updated_at": "2026-11-13T06:29:10+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-13T06:29:03+00:00",
+      "spec_hash": "sha256:9c8fafc53e2ea557ded6c35723c878c31524787b17f5e217220de24d4a871df7",
+      "change_note": "",
+      "approved_at": "2026-11-13T06:29:09+00:00",
+      "runs": [
+        "20261112-222910-droid-27-tasks-x-v1"
+      ]
+    }
+  }
+}

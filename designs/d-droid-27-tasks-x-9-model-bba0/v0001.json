@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "design_id": "d-droid-27-tasks-x-9-model-bba0",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-13T06:29:03+00:00",
+  "profile": "default",
+  "title": "Droid: 27 tasks x 9 model columns",
+  "purpose": "Add Factory's Droid 1.0.0 as an eleventh harness across the report's nine model columns.",
+  "rationale": "Same tasks, models and efforts as the other harnesses; at most 3 containers at once, as the user asked.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "openssl-selfsigned-cert",
+      "cobol-modernization",
+      "build-cython-ext",
+      "mteb-retrieve",
+      "sparql-university",
+      "sqlite-with-gcov",
+      "sqlite-db-truncate",
+      "hf-model-inference",
+      "db-wal-recovery",
+      "git-multibranch",
+      "log-summary-date-ranges",
+      "nginx-request-logging",
+      "multi-source-data-merger",
+      "reshard-c4-data",
+      "sanitize-git-repo",
+      "kv-store-grpc",
+      "fix-git",
+      "mailman",
+      "cancel-async-tasks",
+      "constraints-scheduling",
+      "financial-document-processor",
+      "fix-code-vulnerability",
+      "git-leak-recovery",
+      "headless-terminal",
+      "modernize-scientific-stack",
+      "pypi-server",
+      "regex-log"
+    ],
+    "attempts": 1,
+    "baseline_arm": "droid",
+    "run": {
+      "budget_usd": 60.0,
+      "parallel_arms": 1,
+      "n_concurrent": 1,
+      "effort": "medium",
+      "per_trial_cap_usd": 15.0,
+      "max_turns": 300,
+      "timeout_multiplier": 1.0,
+      "max_containers": 3
+    },
+    "arms": [
+      {
+        "name": "droid",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-opus-low",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "low",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-opus-high",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-sonnet",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-kimi",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "fireworks",
+        "model": "kimi-k3",
+        "effort": "high",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-terra",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "openai",
+        "model": "gpt-6.1-terra",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-deepseek",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "fireworks",
+        "model": "deepseek-v4p1-flash-1017",
+        "effort": "high",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-glm",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "fireworks",
+        "model": "glm-5p3",
+        "effort": "high",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-grok",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "xai",
+        "model": "grok-4.7",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:9c8fafc53e2ea557ded6c35723c878c31524787b17f5e217220de24d4a871df7"
+}
