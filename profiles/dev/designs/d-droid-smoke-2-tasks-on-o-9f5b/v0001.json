@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "design_id": "d-droid-smoke-2-tasks-on-o-9f5b",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-13T04:52:48+00:00",
+  "profile": "dev",
+  "title": "Droid smoke: 2 tasks on OpenRouter DeepSeek and GLM",
+  "purpose": "First live trials of the new Droid adapter (bench/agents/droid.py) before any real run.",
+  "rationale": "Dev-profile smoke on cheap OpenRouter models, per the standing rule for Claude's own test trials.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "fix-git",
+      "log-summary-date-ranges"
+    ],
+    "attempts": 1,
+    "baseline_arm": "droid-deepseek",
+    "run": {
+      "budget_usd": 1.0,
+      "parallel_arms": 2,
+      "n_concurrent": 2,
+      "effort": "medium",
+      "per_trial_cap_usd": 1.0,
+      "max_turns": 150,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "droid-deepseek",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      },
+      {
+        "name": "droid-glm",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "openrouter",
+        "model": "z-ai/glm-5.3",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:765b8f3f82fc62063317beb0c645594575f8bbad9015e5655acac3162d3383a3"
+}

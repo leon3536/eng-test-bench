@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "design_id": "d-droid-diagnostic-1-trial-9f08",
+  "version": 1,
+  "parent_version": null,
+  "author": "user",
+  "conversation_id": null,
+  "created_at": "2026-11-13T05:35:49+00:00",
+  "profile": "dev",
+  "title": "Droid diagnostic: 1 trial with Droid's own log copied",
+  "purpose": "Find what SIGKILLs Droid's first shell commands inside Harbor trials.",
+  "rationale": "Dev profile, 1 cheap trial.",
+  "change_note": "",
+  "spec": {
+    "dataset": "terminal-bench@2.0",
+    "tasks": [
+      "fix-git"
+    ],
+    "attempts": 1,
+    "baseline_arm": "droid-deepseek",
+    "run": {
+      "budget_usd": 0.5,
+      "parallel_arms": 1,
+      "n_concurrent": 1,
+      "effort": "medium",
+      "per_trial_cap_usd": 0.5,
+      "max_turns": 150,
+      "timeout_multiplier": 1.0
+    },
+    "arms": [
+      {
+        "name": "droid-deepseek",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "effort": "inherit",
+        "options": {
+          "version": "1.0.0"
+        },
+        "tasks": null
+      }
+    ]
+  },
+  "spec_hash": "sha256:f01dfa0caadda8dd5337c9165a9e43b3aff0fe4ff594cb46c67acdf3902e4102"
+}

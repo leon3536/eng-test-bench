@@ -95,7 +95,8 @@ class ShippedConfigTests(BenchTestCase):
                   "goose": ("bench.agents.goose:PinnedGoose", "goose"),
                   "opencode": ("bench.agents.opencode:OpenCodeBunEpipe", "opencode"),
                   "kilo": ("bench.agents.kilo:KiloCode", "kilo-code"),
-                  "dsh": ("bench.agents.dsh:DeepSeekHarness", "deepseek-harness")}
+                  "dsh": ("bench.agents.dsh:DeepSeekHarness", "deepseek-harness"),
+                  "droid": ("bench.agents.droid:Droid", "droid")}
     FACTORY = {"factory": "bench_strands_factory:create_agent",
                "factory_path": "harnesses/strands_factory", "version": "1.57.2"}
 
@@ -143,8 +144,8 @@ class ShippedConfigTests(BenchTestCase):
     def test_dev_yaml(self) -> None:
         cfg = self.load_shipped_config("dev")
         self.check_arms(cfg)
-        self.assertEqual(len(cfg.arms), 14)
-        for name in ("cline-deepseek", "goose-deepseek", "opencode-deepseek", "kilo-deepseek"):
+        self.assertEqual(len(cfg.arms), 16)
+        for name in ("cline-deepseek", "goose-deepseek", "opencode-deepseek", "kilo-deepseek", "droid-deepseek", "droid-glm"):
             self.assertRegex(str(cfg.arm(name).options["version"]), r"^\d+\.\d+\.\d+$")
         self.assertEqual(cfg.arm("strands-glm").options["factory_kwargs"], {})
         self.assertEqual(cfg.designs.max_budget_usd, 10)

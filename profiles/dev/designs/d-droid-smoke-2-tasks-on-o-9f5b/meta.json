@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "d-droid-smoke-2-tasks-on-o-9f5b",
+  "title": "Droid smoke: 2 tasks on OpenRouter DeepSeek and GLM",
+  "created_at": "2026-11-13T04:52:48+00:00",
+  "updated_at": "2026-11-13T06:06:55+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-13T04:52:48+00:00",
+      "spec_hash": "sha256:765b8f3f82fc62063317beb0c645594575f8bbad9015e5655acac3162d3383a3",
+      "change_note": "",
+      "approved_at": "2026-11-13T04:53:04+00:00",
+      "runs": [
+        "20261112-205304-droid-smoke-2-ta-v1",
+        "20261112-220655-droid-smoke-2-ta-v1"
+      ]
+    }
+  }
+}

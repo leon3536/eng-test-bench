@@ -220,6 +220,23 @@ arms:
     options:
       version: "0.2.1-rc.5"    # npm latest = next; pi-ai pinned to 1.3.0 inside the adapter
 
+  # Factory's Droid CLI (droid exec --auto high), on the bench's own provider keys
+  # through Droid's custom-model route; no Factory account (bench/agents/droid.py).
+  # One checksummed binary per release; 1.0.0 (2026-10-29) is the newest release
+  # at least two weeks old on 2026-11-12. Effort reaches it as -r, which it sends
+  # as Claude Code does on Opus (adaptive thinking, output_config.effort) and as
+  # reasoning_effort elsewhere. Only telemetry and the auto-update are off.
+  # No pre-bake adapter yet, so it sets up stock in every trial. Off until a
+  # design asks for it.
+  - name: droid
+    agent: bench.agents.droid:Droid
+    family: droid
+    provider: anthropic
+    model: claude-opus-5-5
+    enabled: false
+    options:
+      version: "1.0.0"
+
   # Claude Code through the LiteLLM gateway (provider litellm; litellm-claude for the
   # Claude arm, which has its own key). Claude models take
   # the raw pass-through, /anthropic (body and anthropic-beta forwarded unchanged);

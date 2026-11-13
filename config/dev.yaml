@@ -100,6 +100,13 @@ arms:
     model: deepseek/deepseek-v4.1-flash
     effort: omit
     options: {version: "7.8.18", variant: medium}
+  # Factory's Droid on its custom-model route (bench/agents/droid.py); effort is -r.
+  - name: droid-deepseek
+    agent: bench.agents.droid:Droid
+    family: droid
+    provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    options: {version: "1.0.0"}
   - {name: claude-code-glm,      agent: claude-code, provider: openrouter, model: z-ai/glm-5.3}
   - {name: terminus-2-glm,       agent: terminus-2,  provider: openrouter, model: z-ai/glm-5.3}
   - name: mini-swe-agent-glm
@@ -119,6 +126,12 @@ arms:
       factory_path: harnesses/strands_factory
       version: "1.57.2"
       factory_kwargs: {}
+  - name: droid-glm
+    agent: bench.agents.droid:Droid
+    family: droid
+    provider: openrouter
+    model: z-ai/glm-5.3
+    options: {version: "1.0.0"}
 
 # The sections below match bench.yaml; see the comments there.
 report:
@@ -152,7 +165,7 @@ assistant:
 
 designs:
   max_budget_usd: 10          # dev runs stay cheap
-  max_arms: 15                # every dev arm fits in one design
+  max_arms: 16                # every dev arm fits in one design
   max_attempts: 5
   warn_containers: 8
   max_containers: 16

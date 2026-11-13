@@ -12,8 +12,9 @@ fix-code-vulnerability) is allowed, and so is a README.
 
 The scan reads the agent's tool calls in order, with what each returned,
 from Harbor's ATIF trajectory (agent/trajectory.json), which every installed
-harness gets, so one reader serves them all; DeepSeek Harness, which gets
-none, is read from its own event stream (agent/dsh.jsonl) the same way. A
+harness gets, so one reader serves them all; DeepSeek Harness and Droid, which
+get none, are read from their own event streams (agent/dsh.jsonl,
+agent/droid.jsonl) the same way. A
 call is an answer fetch when it names a benchmark source and an answer
 file (solution.sh, solve.sh, solution/, tests/, test_outputs.py, task.yaml,
 run-tests.sh), or, after a bulk download of a source (a git clone, an
@@ -195,6 +196,35 @@ def dsh_calls(text: str) -> list[ToolCall] | None:
             for call_id, name, args in calls]
 
 
+def droid_calls(text: str) -> list[ToolCall] | None:
+    """The tool calls of a Droid stream-json log (droid.jsonl) with their
+    outputs: each tool_call event, in order, with the value (or the error) of
+    the tool_result event that has its id (None when none came). None when
+    no line is an event, so an empty or garbled log is searched as text."""
+    calls: list[tuple[Any, str, Any]] = []
+    results: dict[Any, str] = {}
+    events = 0
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, Mapping) or not event.get("type"):
+            continue
+        events += 1
+        if event["type"] == "tool_call":
+            calls.append((event.get("id"), str(event.get("toolName") or event.get("toolId") or ""),
+                          event.get("parameters")))
+        elif event["type"] == "tool_result" and event.get("id") is not None:
+            results[event["id"]] = _content(event.get("value") if event.get("value") is not None
+                                            else event.get("error"))
+    if not events:
+        return None
+    return [ToolCall(name=name, text="\n".join(_strings(args)), runs="\n".join(_strings(args, _PROSE_KEYS)),
+                     output=results.get(call_id) if call_id is not None else None)
+            for call_id, name, args in calls]
+
+
 def _received(output: str | None) -> bool | None:
     """Whether a fetch brought something back; None when nothing was logged."""
     if output is None:
@@ -293,7 +323,8 @@ def _fallback(agent: Path) -> dict[str, Any] | None:
 
 # The step-by-step logs scan reads, in order: the file in the agent folder and its reader.
 _LOGS = (("trajectory.json", lambda raw: atif_calls(json.loads(raw))),
-         ("dsh.jsonl", lambda raw: dsh_calls(raw.decode("utf-8", "ignore"))))
+         ("dsh.jsonl", lambda raw: dsh_calls(raw.decode("utf-8", "ignore"))),
+         ("droid.jsonl", lambda raw: droid_calls(raw.decode("utf-8", "ignore"))))
 
 
 def log_path(agent: Path) -> Path | None:

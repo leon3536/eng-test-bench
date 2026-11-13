@@ -1489,6 +1489,67 @@ def _dsh_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
                                  "bound": "none (dsh reports no cost)"}}
 
 
+def _droid_usage(agent: Path) -> tuple[Mapping[str, Any], bool] | None:
+    """(usage, finished) of a Droid trial, or None without its log. Finished:
+    the stream's last `completion` (or `result`) event, Droid's own total for
+    the run. Otherwise the largest tokenUsage among the session settings
+    files bench/agents/droid.py copies out while the run goes: a killed run's
+    total up to its last copy, a lower bound."""
+    path = agent / "droid.jsonl"
+    if not path.is_file():
+        return None
+    final = None
+    for event in _jsonl(path):
+        if event.get("type") in ("completion", "result") and isinstance(event.get("usage"), Mapping):
+            final = event["usage"]
+    if final is not None:
+        return final, True
+    best: dict[str, Any] = {}
+    try:
+        files = sorted((agent / "droid-sessions").rglob("*.settings.json"))
+    except OSError:
+        files = []
+    for file in files:
+        data = read_json(file)
+        usage = (data.get("inclusiveTokenUsage") or data.get("tokenUsage")) if isinstance(data, Mapping) else None
+        if isinstance(usage, Mapping):
+            mapped = {"input_tokens": usage.get("inputTokens"), "output_tokens": usage.get("outputTokens"),
+                      "cache_read_input_tokens": usage.get("cacheReadTokens"),
+                      "cache_creation_input_tokens": usage.get("cacheCreationTokens")}
+            if sum(_int(v) for v in mapped.values()) > sum(_int(v) for v in best.values()):
+                best = mapped
+    return best, False
+
+
+def _droid_calls(agent: Path) -> list[_Call] | None:
+    """droid.jsonl, the `droid exec -o stream-json` stream that
+    bench/agents/droid.py writes. Droid reports usage once, for the whole
+    run, so a trial is one entry. Its counts are disjoint, as in Anthropic's
+    usage: input_tokens is uncached input only, and the cache reads and
+    writes come apart. Droid computes no dollar cost (factory_credits is 0
+    on a custom model)."""
+    found = _droid_usage(agent)
+    if found is None:
+        return None
+    usage, _finished = found
+    read, write = _int(usage.get("cache_read_input_tokens")), _int(usage.get("cache_creation_input_tokens"))
+    prompt, output = _int(usage.get("input_tokens")) + read + write, _int(usage.get("output_tokens"))
+    if not prompt and not output:
+        return []
+    return [(None, prompt, read, output, None, write, 0)]
+
+
+def _droid_flags(agent: Path, calls: Sequence[_Call]) -> dict[str, Any]:
+    """A Droid run that never reached its final usage event (a kill): what
+    was counted is a copy from mid-run, so later calls are missing."""
+    found = _droid_usage(agent)
+    if found is None or found[1]:
+        return {}
+    return {"unfinished_calls": {"calls": 1, "cost_usd_max": None, "source": "agent/droid.jsonl",
+                                 "bound": "none (cut before Droid's final usage; counts are from its last "
+                                          "session copy)"}}
+
+
 _GOOSE_DB = Path("goose") / "xdg-data" / "goose" / "sessions" / "sessions.db"
 
 
@@ -1623,6 +1684,7 @@ _RECOVERY = (("agent/pi/sessions", _pi_calls), ("agent/sessions/projects", _clau
              ("agent/opencode.txt", _opencode_calls), ("agent/kilo.txt", _kilo_calls),
              ("agent/" + _GOOSE_DB.as_posix(), _goose_calls),
              ("agent/goose.txt", _goose_complete), ("agent/dsh.jsonl", _dsh_calls),
+             ("agent/droid.jsonl", _droid_calls),
              ("agent/trajectory.json", _atif_calls))
 
 # Logs whose calls replace Harbor's usage of a finished trial, not just add its
@@ -1630,13 +1692,13 @@ _RECOVERY = (("agent/pi/sessions", _pi_calls), ("agent/sessions/projects", _clau
 # or, for Goose, reads only the main run's final `complete` event, while the
 # database holds every call of every session.
 _REPLACES_HARBOR = frozenset({"agent/cline.txt", "agent/opencode.txt", "agent/kilo.txt",
-                              "agent/" + _GOOSE_DB.as_posix(), "agent/dsh.jsonl"})
+                              "agent/" + _GOOSE_DB.as_posix(), "agent/dsh.jsonl", "agent/droid.jsonl"})
 
 
 # The checks only a harness's own log can make, by where its calls came from.
 _FLAG_READERS = {"agent/sessions/projects": _claude_code_flags,
                  "agent/mini-swe-agent.trajectory.json": _mini_swe_agent_flags, "agent/pi/sessions": _pi_flags,
-                 "agent/dsh.jsonl": _dsh_flags}
+                 "agent/dsh.jsonl": _dsh_flags, "agent/droid.jsonl": _droid_flags}
 
 
 @dataclass(frozen=True)

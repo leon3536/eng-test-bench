@@ -373,8 +373,9 @@ class PlanTestCase(BenchTestCase):
 # Parity ------------------------------------------------------------------------
 
 
-# Shipped arms that set up stock every trial: DeepSeek Harness (2026-11-02) has no pre-bake adapter yet.
-NO_PREBAKE_ADAPTER = frozenset({"deepseek-harness"})
+# Shipped arms that set up stock every trial: DeepSeek Harness (2026-11-02) and Droid (2026-11-12)
+# have no pre-bake adapter yet.
+NO_PREBAKE_ADAPTER = frozenset({"deepseek-harness", "droid"})
 
 
 class GoldenParityTests(PlanTestCase):

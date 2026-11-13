@@ -1,0 +1,253 @@
+{
+  "validation": {
+    "status": "valid",
+    "problems": [],
+    "warnings": []
+  },
+  "plan": {
+    "tasks": [
+      "fix-git"
+    ],
+    "n_attempts": 1,
+    "dataset": "terminal-bench@2.0",
+    "dataset_snapshot": {
+      "dataset": "terminal-bench@2.0",
+      "tasks_dir": "terminal-bench",
+      "tasks": 89,
+      "downloaded_at": "2026-10-29T05:29:58+00:00",
+      "harbor": "0.25.0",
+      "path": "datasets\\terminal-bench@2.0\\terminal-bench"
+    },
+    "trials": 1,
+    "budget_usd": 0.5,
+    "worst_case_capped_usd": 0.0,
+    "uncapped_arms": [
+      "droid-deepseek"
+    ],
+    "arms": [
+      {
+        "name": "droid-deepseek",
+        "agent": "bench.agents.droid:Droid",
+        "family": "droid",
+        "kind": "import_path",
+        "provider": "openrouter",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "tasks": 1,
+        "trials": 1,
+        "effort": "medium",
+        "kwargs": [
+          {
+            "name": "reasoning_effort",
+            "value": "medium",
+            "source": "effort"
+          },
+          {
+            "name": "version",
+            "value": "1.0.0",
+            "source": "arm option"
+          }
+        ],
+        "options_fingerprint": "2afa0f3c420a",
+        "command": "harbor --% run --path datasets\\terminal-bench@2.0\\terminal-bench --agent-import-path bench.agents.droid:Droid --model openrouter/deepseek/deepseek-v4.1-flash --n-attempts 1 --n-concurrent 1 --jobs-dir jobs\\RUN_ID\\droid-deepseek --job-name fix-git --timeout-multiplier 1 --max-retries 0 --quiet --include-task-name fix-git --ak reasoning_effort=\\\"medium\\\" --ak version=\\\"1.0.0\\\" --agent-setup-timeout-multiplier 2",
+        "reserve_note": "While its trials run, each holds back the spend of the largest finished trial from the run budget. Before any trial finishes nothing is held back, and this arm has no dollar cap, so trials in flight can take the run past its budget.",
+        "prebake": {
+          "mode": "prefer",
+          "family": "droid",
+          "supported": false,
+          "reason": "no pre-bake adapter for droid",
+          "version": null,
+          "recipe": null,
+          "variant": null,
+          "prefix": "benchbake",
+          "expect_stock": true,
+          "setup_timeout_multiplier": 2.0,
+          "env_build_timeout_multiplier": 1.0
+        },
+        "problems": [],
+        "warnings": [],
+        "setup_warnings": []
+      }
+    ],
+    "problems": [],
+    "source": "design",
+    "label": "design",
+    "spec_hash": "sha256:f01dfa0caadda8dd5337c9165a9e43b3aff0fe4ff594cb46c67acdf3902e4102",
+    "warnings": [],
+    "peak_containers": 1,
+    "skipped_arms": [],
+    "prebake": {
+      "mode": "prefer",
+      "error": null,
+      "images": 0,
+      "build_min": 0,
+      "build_wall_min": 0.0,
+      "build_gb": 0.0,
+      "jobs": 3,
+      "task_images": 1,
+      "pull": [],
+      "pull_error": null,
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "lanes": 1,
+        "max_containers": 6,
+        "build_jobs": 3,
+        "images_to_build": 0,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "keep_images": false,
+        "per_task": [
+          {
+            "task": "fix-git",
+            "arms": [
+              "droid-deepseek"
+            ],
+            "images": 0,
+            "build": 0,
+            "build_min": 0,
+            "build_wall_min": 0.0,
+            "disk_gb": 0.0
+          }
+        ]
+      }
+    },
+    "image_problems": [],
+    "schedule": "tasks",
+    "race": {
+      "tasks": 1,
+      "arms": 1,
+      "lanes": 1,
+      "max_containers": 6,
+      "build_jobs": 3,
+      "images_to_build": 0,
+      "build_wall_min_total": 0.0,
+      "build_wall_min_max": 0.0,
+      "peak_disk_gb": 0.0,
+      "keep_images": false,
+      "n_concurrent": 1,
+      "note": "1 task race(s) x 1 arm(s): each task's pre-baked images are built just before its race and removed after it; at most 6 containers race at once. parallel_arms does not apply.",
+      "per_task": [
+        {
+          "task": "fix-git",
+          "arms": [
+            "droid-deepseek"
+          ],
+          "images": 0,
+          "build": 0,
+          "build_min": 0,
+          "build_wall_min": 0.0,
+          "disk_gb": 0.0
+        }
+      ]
+    }
+  },
+  "estimate": {
+    "spec_hash": "sha256:f01dfa0caadda8dd5337c9165a9e43b3aff0fe4ff594cb46c67acdf3902e4102",
+    "ledger_fingerprint": "sha256:1dd98ffbe490501c",
+    "seed": 75129501448004,
+    "replicates": 2000,
+    "arms": [
+      {
+        "arm": "droid-deepseek",
+        "cell": {
+          "family": "droid",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4.1-flash",
+          "effort": "medium",
+          "config_hash": "c4844f5c717c2592",
+          "options_fingerprint": "2afa0f3c420a"
+        },
+        "trials": 1,
+        "basis": "prior",
+        "basis_detail": "claude-code on openrouter:deepseek/deepseek-v4.1-flash x 0.4 (reference consensus cost_per_trial)",
+        "confidence": "low",
+        "evidence": {
+          "trials": 1,
+          "tasks": 1,
+          "design_tasks_observed": 0,
+          "runs": [
+            "dev/20261029-055852-pilot"
+          ]
+        },
+        "per_trial": {
+          "mean": 0.031306,
+          "p50": 0.024272,
+          "p90": 0.067105
+        },
+        "total": {
+          "p10": 0.008065,
+          "p50": 0.023647,
+          "p90": 0.067373
+        },
+        "cap_usd": null,
+        "minutes_per_trial": {
+          "p50": 9.35,
+          "p90": 23.6
+        },
+        "arm_minutes": {
+          "p50": 11.06,
+          "p90": 22.41
+        },
+        "p_infra": 0.0,
+        "setup": {
+          "mode": "stock",
+          "seconds": 69.46,
+          "basis": "measured",
+          "trials": 3
+        },
+        "unpriced_models": [],
+        "notes": []
+      }
+    ],
+    "run": {
+      "total": {
+        "p10": 0.008065,
+        "p50": 0.023647,
+        "p90": 0.067373
+      },
+      "budget_usd": 0.5,
+      "p_within_budget": 1.0,
+      "suggested_budget_usd": 0.5,
+      "worst_case_capped_usd": 0.0,
+      "uncapped_arms": [
+        "droid-deepseek"
+      ],
+      "inflight_allowance_usd": 0.13421,
+      "wall_minutes": {
+        "p50": 11.06,
+        "p90": 22.41
+      },
+      "peak_containers": 1,
+      "schedule": "tasks",
+      "race": {
+        "tasks": 1,
+        "arms": 1,
+        "max_containers": 6,
+        "build_wall_min_total": 0.0,
+        "build_wall_min_max": 0.0,
+        "peak_disk_gb": 0.0,
+        "images_to_build": 0
+      }
+    },
+    "pairing": [],
+    "reuse": null,
+    "warnings": [],
+    "assumptions": [
+      "Cache writes are priced at their own rates (pricing.yaml cache_write_5m, cache_write_1h) from the counts in each trial's harness log; a trial whose log gives none has its writes priced at the input rate.",
+      "Infrastructure failures are not discounted from spend.",
+      "Each trial resamples measured per-trial costs of its task; tasks never seen draw from tasks of the same difficulty, then from the whole cell.",
+      "Figures from fewer than 3 trials, from another model or from a prior carry an extra spread set by stats.prior_sd_log, once per arm (the level is uncertain); a trial drawn from fewer than 3 measured values gets the same spread on its own.",
+      "Pairs after the run assume the new trials succeed and run the same task versions as earlier ones; trials pair by the report's rule (report.match_on, report.same_run_only).",
+      "Wall time: 1 minute of preflight per arm, trials longest first on n_concurrent slots, arms in design order on parallel_arms slots. Under schedule tasks: per task, the plan's build minutes for its missing pre-baked images (6 at once), then each arm's job on it (1 minute of preflight, its attempts on n_concurrent slots) in arm order, as many at once as run.max_containers holds, tasks one after another.",
+      "Trial minutes count the harness setup each arm's plan expects (a stock install, or a pre-baked image when every trial should get one) in place of the setup each measured trial had: the ledger's median for that setup, else a prior for pre-baked images."
+    ]
+  },
+  "estimate_note": null,
+  "reuse": null,
+  "checked_at": "2026-11-13T05:35:52+00:00",
+  "stale": false,
+  "config_fingerprint": "sha256:3c1e30b24f4af8f559dc8d47f8c02c8d14f0aee2064c3fe55ff114b3223db1e7",
+  "ledger_fingerprint": "sha256:1dd98ffbe490501c",
+  "reuse_fingerprint": null
+}

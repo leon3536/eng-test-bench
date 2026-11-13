@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "d-droid-diagnostic-1-trial-9f08",
+  "title": "Droid diagnostic: 1 trial with Droid's own log copied",
+  "created_at": "2026-11-13T05:35:49+00:00",
+  "updated_at": "2026-11-13T05:35:57+00:00",
+  "latest_version": 1,
+  "archived": false,
+  "versions": {
+    "1": {
+      "author": "user",
+      "conversation_id": null,
+      "created_at": "2026-11-13T05:35:49+00:00",
+      "spec_hash": "sha256:f01dfa0caadda8dd5337c9165a9e43b3aff0fe4ff594cb46c67acdf3902e4102",
+      "change_note": "",
+      "approved_at": "2026-11-13T05:35:56+00:00",
+      "runs": [
+        "20261112-213556-droid-diagnostic-v1"
+      ]
+    }
+  }
+}
