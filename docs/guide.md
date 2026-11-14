@@ -2,13 +2,15 @@
 
 The full guide to running and extending the bench. For the results and a short overview, see the [README](../README.md).
 
-This bench screens agent harnesses (Claude Code, Terminus 2, mini-swe-agent,
-Pi, Strands, Cline, Goose, OpenCode, Kilo and DeepSeek Harness) on fixed models
-with [Harbor](https://harborframework.com).
+This bench screens agent harnesses (Claude Code, Terminus-2, mini-swe-agent,
+Pi, Strands, Cline, Goose, OpenCode, Kilo, DeepSeek Harness and Droid) on fixed
+models with [Harbor](https://harborframework.com).
 It compares their token use and cost per trial with published figures. The
-basis is "Agent harness evidence, ranked" (28 Oct 2026): changing harness
-moves cost 2x to 3x and accuracy by under 5 points. The bench checks whether
-your own sample shows roughly the same thing.
+basis is our own review of published harness comparisons ("Agent harness
+evidence, ranked", 28 Oct 2026; not included in this repository, and its
+figures in `config/reference.yaml` are cited by source number, some of them
+secondhand): changing harness moves cost 2x to 3x and accuracy by under 5
+points. The bench checks whether your own sample shows roughly the same thing.
 
 Every trial from every run goes into one ledger. Runs add up over time, and
 the **REPORT** tab tells you where the comparison stands and what to run next.
@@ -19,7 +21,7 @@ It runs natively on Windows 11 with Docker Desktop.
 ## Start
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1               # default profile: Opus 5.5 on all five harnesses
+powershell -ExecutionPolicy Bypass -File .\start.ps1               # default profile: the arms in config/bench.yaml
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -Profile dev  # cheap OpenRouter models (DeepSeek, GLM)
 ```
 
@@ -68,9 +70,17 @@ restart:
 
 ```
 ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+XAI_API_KEY=
 FIREWORKS_AI_API_KEY=
 OPENROUTER_API_KEY=
+LITELLM_API_KEY=
+LITELLM_URL=
+LAUNCH_CODE=
 ```
+
+Fill in only the providers your arms use; the `LITELLM_*` variables are needed only for the
+`claude-code-gw-*` arms. `LAUNCH_CODE` is left over from an earlier version and is no longer read; leave it empty.
 
 - **Key tests are free.** They call read-only endpoints and use no tokens.
 - **Each Harbor process gets only its own provider's key.** Before the bench
@@ -158,7 +168,7 @@ tasks, so the bench now keeps one task's images at a time.
 designs). For each task, in the run's order (after reuse has taken out what
 the ledger already has, per arm):
 1. **Build.** The pre-baked image every arm that runs the task needs is built
-   (the IMAGES panel's build manager, up to 6 at once, one per arm image).
+   (the IMAGES panel's build manager, `prebake.build_jobs` at once (3 by default, never more than 6), one per arm image).
    Arms that share a harness, version and install recipe share one image. An
    image that is ready already is used as it is. The disk check runs for this
    task's images only. The verification is the usual one; Harbor's
@@ -292,7 +302,7 @@ as arms, save a new version with `schedule: arms`.
   There the bench does not pass it the run's cap, and the plan says so. If an
   arm sets such a cap in its own options anyway, the report leaves the trials
   it stopped out by default.
-- **Turn cap.** Terminus 2, Pi and Claude Code take a turn cap.
+- **Turn cap.** Terminus-2, Pi and Claude Code take a turn cap.
 - **Strands takes neither.** It runs the Strands team's `strands-harness`
   0.3.2 through Harbor's strands adapter (see *Harnesses* below). A strands
   trial is bounded only by its task timeout. The run budget sees its cost
@@ -411,9 +421,9 @@ before each campaign (`build --rebuild`).
 
 **Disk.** Images are per task and harness and share no layers across tasks:
 about 1.9 GB per Claude Code image, 1.7 mini-swe-agent, 1.25 strands, 0.6 pi
-and 0.2 terminus-2, so 27 tasks x 5 harnesses is about 135 GB built up front
+and 0.2 terminus-2, so 27 tasks x the first five harnesses is about 135 GB built up front
 (far more with the build cache). A task race (the default schedule, see *Task
-races*) keeps only one task's images, about 6 GB for five harnesses. They live in
+races*) keeps only one task's images, about 6 GB for those five harnesses. They live in
 Docker Desktop's disk image (`docker_data.vhdx`), which grows on the drive
 that holds it and does not shrink by itself after a prune. A build refuses
 unless that drive keeps `prebake.host_reserve_gb` (25 GB) and Docker's own
@@ -730,7 +740,7 @@ divided by.
   - how many more paired tasks reach the target of ±25% at 90%;
   - which tasks to run next, and roughly what that costs.
 - With no data yet, the target takes about 22 paired tasks. Coverage never
-  goes beyond the 20-task sample in `config/tasks.txt`, so in that case it
+  goes beyond the 27 tasks in `config/tasks.txt`, so in that case it
   says how wide the interval will remain.
 
 **Options and output.**
@@ -765,8 +775,8 @@ save drafts. Each version is:
 - estimated: expected and p90 cost, the chance of staying within budget, and
   the worst case under caps.
 
-**Limits** (`designs:`): a budget of at most $150 ($10 in dev), up to 12 arms
-and 5 attempts. A warning appears above 8 containers at once, and a design
+**Limits** (`designs:`): a budget of at most $1,000 ($10 in dev), up to 64 arms
+(16 in dev) and 5 attempts. A warning appears above 8 containers at once, and a design
 cannot run above 16.
 
 **Running one.**
@@ -868,7 +878,7 @@ The assistant drawer is available on every view. Claude Opus 5.5
 
 | File | What it holds |
 |---|---|
-| `config/bench.yaml` | Default profile: dataset, providers, modes, run settings, the five arms, and the report, stats, assistant, designs, queue and ledger settings |
+| `config/bench.yaml` | Default profile: dataset, providers, modes, run settings, the eleven harness arms and five gateway arms, and the report, stats, assistant, designs, queue and ledger settings |
 | `config/dev.yaml` | Dev profile: the same harnesses on DeepSeek and GLM through OpenRouter |
 | `config/<profile>.overrides.yaml`, `config/overrides.yaml` | Changes made in the dashboard. The YAML files above are never rewritten. |
 | `config/tasks.txt` | The task scope: the tasks runs take, in order, and the tasks REPORT compares on unless told otherwise |
@@ -894,7 +904,7 @@ Each arm's settings panel is built from `harbor agents schema <agent>`, so it
 offers only options that harness accepts:
 - Effort, where the harness supports it.
 - Thinking display and thinking budget (Claude Code).
-- Interleaved thinking (Terminus 2).
+- Interleaved thinking (Terminus-2).
 - Turn and cost limits, and everything else Harbor exposes.
 
 An arm's effort is one of three values:
@@ -910,7 +920,9 @@ strands arms run at the model default.
 
 ### Task sample
 
-`python -m bench.sample_tasks` redraws `config/tasks.txt`:
+`config/tasks.txt` is the 27-task IT / e-commerce / SaaS scope set on 29 Oct 2026 (the selection criteria are in
+the file's header); do not regenerate it. `python -m bench.sample_tasks` produced the earlier seeded sample, kept
+in `config/tasks-v1.txt`, and would overwrite `config/tasks.txt` if run:
 - The seed is fixed (`20261028`).
 - Tasks with an agent time limit over an hour are left out. For Terminal-Bench
   2.0 these are `build-pov-ray` and `sam-cell-seg`.
@@ -955,7 +967,7 @@ temporary file so `.env` is never read, and the Anthropic client is faked.
     bench itself goes away (see *Start*).
 - **Docker's disk image.** Docker Desktop keeps images in `docker_data.vhdx`,
   by default under `%LOCALAPPDATA%\Docker\wsl\disk` on C:. Pre-baked images
-  grow it by about 135 GB for 27 tasks x 5 harnesses, and it does not shrink
+  grow it by about 135 GB for 27 tasks x the first five harnesses (more with every harness added), and it does not shrink
   after a prune without a compaction. Move it to a roomy drive in Docker
   Desktop (Settings > Resources > Advanced > Disk image location); the bench
   finds a moved one through Docker Desktop's settings store.
@@ -973,7 +985,8 @@ temporary file so `.env` is never read, and the Anthropic client is faked.
 bench/             the bench: settings, keys, schemas, datasets, runs, results, checks, server,
                    plus ledger, report, stats, designs, runqueue, estimates, coverage and procs
 bench/agents/      harness subclasses run by import path (mini-swe-agent with mcp; pinned cline and
-                   goose; opencode past Bun's late EPIPE; kilo code on the same base)
+                   goose; opencode past Bun's late EPIPE; kilo code on the same base; pi with Fireworks
+                   and Responses routes; droid; deepseek harness; shared provider names)
 bench/prebake/     pre-baked harness images: recipes, builds, verify, prune (python -m bench.prebake)
 bench/environments/ the Harbor environment class a run passes with --env (pre-baked image, or stock fallback)
 bench/assistant/   the run-design assistant

@@ -1,10 +1,10 @@
 # Harness bench results
 
-Final, 3 Nov 2026, reruns included. Droid added 13 Nov 2026.
+Final, 3 Nov 2026, reruns included. Claude Code through the gateway added 6 Nov 2026; Droid added 13 Nov 2026.
 
-2,225 trials, $358 in model fees, 12 answer lookups counted as fails (3 Nov run); Droid adds 243 trials, $46.23 and 1 answer lookup.
+2,225 trials, $358 in model fees, 12 answer lookups counted as fails (3 Nov results, 41 runs); Droid adds 243 trials, $46.23 and 1 answer lookup. The 6 Nov gateway experiment ($16.37 across its five arms) is reported in its own section and not in these totals.
 
-- Eleven agent harnesses ran the same 27 IT, e-commerce and SaaS tasks (terminal-bench 2.0) on seven models (nine columns: Opus at three efforts; Droid, the eleventh harness, added 13 Nov 2026), one attempt per task (two where a trial was rerun; a task's result is the average of its trials).
+- Eleven agent harnesses ran the same 27 IT, e-commerce and SaaS tasks (terminal-bench 2.0) on seven models (nine columns: Opus at three efforts), one attempt per task (two where a trial was rerun; a task's result is the average of its trials). Droid, the eleventh harness, was added on 13 Nov 2026.
 - Every ratio divides by a reference on the same tasks: 0.80× means 20% less than the reference.
 - The overall reference is **Claude Code on Opus 5.5 medium**.
 - Harnesses are compared with **Claude Code** on Claude models and with **Goose** on the other models, at the same model and effort.
@@ -12,13 +12,13 @@ Final, 3 Nov 2026, reruns included. Droid added 13 Nov 2026.
 
 ## Executive insights
 
-1. **Model choice correlates more with task success; harness choice correlates more with cost.** On Claude models every harness passed 25–27 of 27 tasks, a spread too small to tell apart at this sample size. Cost varied widely: at Opus medium, Pi cost 31% less than Claude Code, Goose 21% less, and Cline 60% more.
-2. **Sonnet 5.5 stood out among the mid-tier models on these terminal-bench tasks.** Across the 8 harnesses that ran every model, Sonnet passed 209 of 216 (97%), against 92–94% for Kimi K3, GPT-6.1 Terra, DeepSeek and Grok, and 80% for GLM. It was also the fastest (1.6 min median per task, against 2.1–5.6) and tied with Terra as the cheapest (2.6¢). The pass gap to the next models is a few tasks; the cost and speed gaps are larger. For scale, Opus medium passed 211 of 216 at about three times Sonnet's cost.
-3. **Claude Code was the fastest harness on Claude models, not the cheapest.** The other harnesses took 1.3–2.2× as long as Claude Code at Opus medium. Where people wait on the agent, that speed may justify its cost; for unattended batch work, Pi and Goose reached the same pass counts for less.
-4. **Open models cost less, and each tended to do best on a particular harness.** The top harness differed by model: Kimi K3 on Pi (27 of 27, among the cheapest and fastest), DeepSeek V4.1 Flash on OpenCode or Terminus-2 (26 of 27 at the lowest cost), GLM 5.3 on Cline (24 of 27). GLM had the widest spread across harnesses (20 to 24). Most of these margins are one to four tasks, so treat each pairing as a starting point to confirm, not a settled ranking.
-5. **Grok 4.7 was the most expensive and slowest option in this test.** On Goose it cost 1.9× Opus medium and took 3.3× as long, with 26 vs 27 passes. Some of the slowness coincided with an overloaded test machine; the cost gap held after the reruns.
-6. **Some agents with internet access looked up the benchmark's answers.** In 13 runs (one of them under Droid), mostly on DeepSeek, the agent downloaded the benchmark's own answer key and used it; we count those as fails. Published scores for internet-connected agents may be inflated, and the same behaviour in production means fetching and running unvetted code, so internet access warrants a deliberate policy.
-7. **Droid's handling of the agent's background processes correlated with failures on tasks that ask the agent to leave a service running.** Droid (added 13 Nov) failed `kv-store-grpc` in all 9 model columns, while the other harnesses passed it 94% of the time. On exit, the Droid program stops the background processes the agent started through it, and its log records stopping the server the task asked for; 20 of Droid's 30 failed trials were on the three such tasks. On the other 24 tasks Droid passed as many as the reference harness, or more, in 8 of 9 model columns. If an agent is expected to leave a service running, check that the harness does not stop it on exit.
+1. **Model choice correlates more with task success; harness choice correlates more with cost.** On Claude models every harness except Droid passed 25–27 of 27 tasks, a spread too small to tell apart at this sample size; Droid passed 22–25, with most of its misses on the three server tasks (see insight 7). Cost varied widely: at Opus medium, Pi cost 31% less than Claude Code, Goose 21% less, and Cline 60% more.
+2. **Sonnet 5.5 stood out among the mid-tier models on these terminal-bench tasks.** Across the 8 harnesses that ran every model in the 3 Nov results, Sonnet passed 209 of 216 (97%), against 92–94% for Kimi K3, GPT-6.1 Terra, DeepSeek and Grok, and 80% for GLM. It was also the fastest (1.6 min, the median of the 8 harnesses' median trial times, against 2.1–5.6) and tied with Terra as the cheapest (2.6¢, measured the same way). The pass gap to the next models is a few tasks; the cost and speed gaps are larger. For scale, Opus medium passed 211 of 216 at about three times Sonnet's cost.
+3. **Claude Code was the fastest harness at Opus 5.5 medium, not the cheapest.** At Opus medium the other harnesses took 1.3–2.2× as long as Claude Code (agent run time, task by task); for Droid (1.40×) no difference is also possible. At Opus low and high and on Sonnet, Goose took 0.90–1.01× Claude Code's time and Pi 0.85–1.19×. Where people wait on the agent, that speed may justify its cost; for unattended batch work, Pi and Goose reached similar pass counts (within one task) for less.
+4. **DeepSeek and GLM cost less than Opus 5.5 medium on every harness (for GLM on Kilo, mini-swe-agent and Droid, no difference is also possible), and each open model tended to do best on a particular harness.** Kimi K3 cost more than Opus medium on 7 of the 10 harnesses that ran both (1.30–1.75×) and less on Goose, Cline and Terminus-2 (0.53–0.97×). The top harness differed by model: Kimi K3 on Pi (27 of 27, among the cheapest and fastest), DeepSeek V4.1 Flash on OpenCode (26 of 27 at the lowest median cost, 2.2¢; the next cheapest harnesses that also passed 26 were Claude Code through the gateway at 2.3¢ and Terminus-2 at 2.6¢), GLM 5.3 on Cline (24 of 27). GLM passed the fewest tasks of any model on every harness (20 to 24; on Droid it tied Sonnet and Grok at 22). Most of these margins are one to four tasks, so treat each pairing as a starting point to confirm, not a settled ranking.
+5. **Grok 4.7 was the most expensive option in this test, and the slowest on most harnesses.** On Goose it cost 1.9× Opus medium and took 3.3× as long, with 26 vs 27 passes; GLM took longer on mini-swe-agent, DeepSeek on Strands, and GLM, DeepSeek and Kimi K3 on Droid; on Terminus-2 GLM matched it (2.16× each). Some of the slowness coincided with an overloaded test machine; the cost gap held after the reruns.
+6. **Some agents with internet access looked up the benchmark's answers.** In 13 trials (one of them under Droid), 9 of them on DeepSeek, the agent downloaded the benchmark's own answer key and used it; we count those as fails. Published scores for internet-connected agents may be inflated, and the same behaviour in production means fetching and running unvetted code, so internet access warrants a deliberate policy.
+7. **Droid's handling of the agent's background processes correlated with failures on tasks that ask the agent to leave a service running.** Droid (added 13 Nov) failed `kv-store-grpc` in all 9 model columns, while the other harnesses passed it 94% of the time. On exit, the Droid program stopped the background processes the agent had started through it; 20 of Droid's 30 failed trials were on the three such tasks, and in 17 of those 20 its log records stopping the server the task needed. On the other 24 tasks Droid passed as many as the reference harness, or more, in 8 of 9 model columns. If an agent is expected to leave a service running, check that the harness does not stop it on exit.
 
 ## Tasks passed (of 27)
 
@@ -41,7 +41,7 @@ Final, 3 Nov 2026, reruns included. Droid added 13 Nov 2026.
 or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own answers), counted as fails. · not run.
 † Claude Code through the LiteLLM gateway, not a direct run (see the gateway section).
 
-## Median cost per task
+## Median cost per trial
 
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -57,7 +57,16 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 | Droid | 5.8¢ ★ | 8.9¢ | 9.1¢ | 3.1¢ | $0.11 | 3.4¢ | 2.7¢ | 7.3¢ | $0.13 |
 | DeepSeek Harness | · | · | · | · | · | · | 2.9¢ ★ | · | · |
 
-## Median minutes per task
+## Median minutes per trial
+
+Whole trial, median over trials: harness install, the agent's run and grading. Insights 3 and 5 use the
+"Time ÷ reference" ratios below instead (insight 2 uses these medians), which pair tasks and count only the
+agent's own run time, leaving out trials during which the test machine's CPU was busy (90% or more for at least a
+quarter of the agent's run). Install time differs by cell, so compare these minutes with care. On Opus 5.5 medium,
+Claude Code (14 of 27 trials), Pi (27 of 27), mini-swe-agent (18 of 27) and Strands (17 of 27) include trials from
+the first runs (29–30 Oct 2026), before pre-baked images, when installing the harness took a median of 5.1, 1.7, 1.7
+and 1.0 minutes per trial. Elsewhere, Cline's install took about 1–2 minutes even from a pre-baked image, the
+DeepSeek Harness's about 2.3 minutes and Droid's about 0.6–0.8 minutes (both installed fresh in every trial).
 
 | Harness | Opus 5.5 low | Opus 5.5 medium | Opus 5.5 high | Sonnet 5.5 | Kimi K3 | GPT-6.1 Terra | DeepSeek V4.1 Flash | GLM 5.3 | Grok 4.7 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -76,6 +85,7 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 ## Harnesses on the same model
 
 90% ranges over tasks in brackets. ⭐ on a harness: it beat the reference. ⭐ on the reference: nothing in the group beat it.
+– in a time column: fewer than 8 shared tasks had a trial on both sides that ran while the test machine's CPU was not busy, so no time ratio is given.
 
 **Opus 5.5 low**, reference Claude Code (25/27)
 
@@ -337,14 +347,14 @@ or faster. ⊘ marks answer lookups (the agent downloaded the benchmark's own an
 A second, smaller experiment ran Claude Code 2.1.312 through a self-hosted LiteLLM gateway on the same 27 tasks, one
 attempt per task. The gateway sits between the harness and the model provider, so these runs show what the route
 correlated with, not what the model did. Ratios divide by the reference in the fifth column (0.80× means 20% less),
-using only the tasks both arms ran; time ratios compare summed trial minutes, not the medians shown, and the
+using only the tasks both arms ran; cost and time ratios compare summed cost and summed trial minutes (so Terra's 2.13× here is 1.67× task by task in the comparison tables), not the medians shown, and the
 medians here are per task (each task's latest trial), where the tables above use per-trial medians. "Translated"
 means the gateway converts Claude Code's Anthropic-format requests into the provider's own API; "native" or
 "pass-through" means the provider accepts Anthropic-format requests directly. Rows compared with Goose change the
 harness as well as the route. The Claude Code cells marked † in the tables above come from the DeepSeek (native),
 Kimi and Terra rows here; the control and the translated DeepSeek route appear only here.
 
-| Arm (all Claude Code) | Passed | Cost, 27 tasks | Median minutes | Reference | Cost ÷ reference | Total time ÷ reference |
+| Arm (all Claude Code) | Passed | Cost, 27 tasks | Median minutes | Reference | Total cost ÷ reference | Total time ÷ reference |
 |---|---|---|---|---|---|---|
 | Opus 5.5 medium (control) | 26 of 27 | $5.86 | 2.3 | Claude Code direct, Opus 5.5 medium: 27 of 27 | 1.48× | 0.78× |
 | DeepSeek V4.1 Flash, native route | 26 of 27 | $1.09 | 2.0 | Goose, DeepSeek via Fireworks: 23 of 27 | 0.78× | 0.78× |
@@ -374,7 +384,7 @@ What the table showed:
 
 Notes: Harbor pointed every Claude Code model alias and its subagent model at each arm's own model; the Opus control put
 back Haiku, Sonnet and Claude Code's default subagent choice, as the direct arm uses them. DeepSeek and Kimi ran at
-high effort, Terra and Opus at medium. Costs are token counts at list prices. A trial that hit the agent time limit counts by its tests, as in the rest of this report: Kimi and Terra each
+high effort, Terra and Opus at medium. Costs are token counts at list prices, except Terra's, which come from the gateway's spend log. A trial that hit the agent time limit counts by its tests, as in the rest of this report: Kimi and Terra each
 had two timeouts (`kv-store-grpc`, `pypi-server`) whose tests passed afterwards, and the four translated DeepSeek timeouts
 failed their tests. Three Opus control trials failed
 at setup because the container could not resolve the package mirrors (`apt-get update` failed before the agent
@@ -397,7 +407,7 @@ Factory's Droid 1.0.0 ran headless (`droid exec --auto high`) on the same 27 tas
 | GLM 5.3 | 22 of 27 | 22 of 24 | Goose: 19 of 24 | 2.84× | 0.96× |
 | Grok 4.7 | 22 of 27 | 21 of 24 | Goose: 22 of 24 | 1.08× | – |
 
-- **In 17 of the 20 failed server-task trials, the Droid program's log shows it stopping the server the task needed.** 20 of Droid's 30 failed trials were on the three server tasks: `kv-store-grpc` 0 of 9, `hf-model-inference` 4 of 9, `pypi-server` 3 of 9. The other harnesses passed these tasks about 95% of the time. In each of the 20, the tests that need the running server failed and the checks on the agent's files passed (`pypi-server` has only the live-server test). In 17 trials the agent started the server through the Droid program's background-command option and declared the task finished. The Droid program then waited 5 minutes and added one reminder to the conversation, which listed a dev server as something to kill ("If you do not need it (for example a dev server …), kill it") and said "the session stops waiting for it and finishes"; it did not say the Droid program would stop the process itself. On exit, the Droid program sent SIGKILL to the background processes started through that option, the server included, as its log records. In the other 3 trials the agent started the server with a plain `nohup … &`, and the server was gone when the tests ran. In the 7 passing server-task trials the log shows no such stop; 6 of them started the server detached (`setsid nohup … &`), often after a first start that did not survive.
+- **In 17 of the 20 failed server-task trials, the Droid program's log shows it stopping the server the task needed.** 20 of Droid's 30 failed trials were on the three server tasks: `kv-store-grpc` 0 of 9, `hf-model-inference` 4 of 9, `pypi-server` 3 of 9. The other harnesses passed these tasks about 94% of the time. In each of the 20, the tests that need the running server failed and the checks on the agent's files passed (`pypi-server` has only the live-server test). In 17 trials the agent started the server through the Droid program's background-command option and declared the task finished. The Droid program then waited 5 minutes and added one reminder to the conversation, which listed a dev server as something to kill ("If you do not need it (for example a dev server …), kill it") and said "the session stops waiting for it and finishes"; it did not say the Droid program would stop the process itself. On exit, the Droid program sent SIGKILL to the background processes started through that option, the server included, as its log records. In the other 3 trials the agent started the server with a plain `nohup … &`, and the server was gone when the tests ran. In the 7 passing server-task trials the log shows no such stop; 6 of them started the server detached (`setsid nohup … &`), often after a first start that did not survive.
 - **Without the three server tasks, Droid passed as many as the reference harness, or more, in 8 of 9 model columns.** On the other 24 tasks Droid passed all 24 on Opus at every effort and on Kimi K3, and on GLM 5.3 it passed 22 of 24, more than any other harness on that model (16 to 21). The exception was Grok 4.7 (21 against Goose's 22). Most of these margins are one or two tasks.
 - **The other 10 failures were the agent's own.** Nine were wrong work the agent declared finished (`mteb-retrieve` 4, `sanitize-git-repo` 2, `openssl-selfsigned-cert`, `db-wal-recovery`, `sparql-university`). One was an answer lookup: the agent on DeepSeek used the Droid program's built-in web search and fetch tools to download the benchmark's solution for `mteb-retrieve`, which counts as a fail.
 - **Read Droid's time with the server tasks in mind.** Each server-task trial that used the background option includes the Droid program's 5-minute wait, and the time ratios in the table (all 27 tasks) include those waits. The Droid program also hides secret values in the agent's tool output; the two `sanitize-git-repo` failures happened with this in place, and Opus passed the task with it.
@@ -406,7 +416,7 @@ Droid's adapter supplies each model through a custom-model setting with the prov
 
 ## Method
 
-terminal-bench 2.0 on Harbor 0.25.0. 37 trials (2%) that may have failed for reasons on our side were rerun, with 10 passes from the same period rerun as a control (9 passed again); both attempts count. Open models (DeepSeek, GLM, Kimi) ran through Fireworks at high effort; Terra and
+terminal-bench 2.0 on Harbor 0.25.0. In the 3 Nov results, 37 trials (2%) that may have failed for reasons on our side were rerun (Droid's 38 reruns are in the Droid section), with 10 passes from the same period rerun as a control (9 passed again); both attempts count. Open models (DeepSeek, GLM, Kimi) ran through Fireworks at high effort; Terra and
 Grok at medium. Claude Code ran directly only on Claude models; its Kimi K3, Terra and DeepSeek results (†) came through a LiteLLM gateway (see the gateway section). On the other models Goose is the reference harness. Droid was added on 13 Nov 2026 with the same tasks and models (see the Droid section). DeepSeek
 Harness runs only on DeepSeek, so it has no model comparison. A pass is the task's own tests passing. Medians are per
 trial. Pass differences of one or two tasks are within noise at this sample size.

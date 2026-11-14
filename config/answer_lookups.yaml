@@ -12,7 +12,9 @@
 # The ledger applies an edit on its next open or rescan, without a re-parse.
 
 trials:
-  # Confirmed lookups (manual audit, 2026-11-02).
+  # Confirmed lookups (manual audits, 2-3 Nov 2026). Four further lookups (terminus-2-grok and pi-grok on
+  # db-wal-recovery, opencode-grok on headless-terminal, droid-deepseek on mteb-retrieve) are flagged by
+  # bench/lookups.py and count as fails without an entry here.
   "8556bd04-c4d8-4881-b806-ed8e57ddfb0b/mteb-retrieve__ZQm9Hu7":
     verdict: lookup
     note: "kilo-deepseek, run v3: curl of the reference solution and tests from GitHub, then ran it"

@@ -364,8 +364,8 @@ assistant:
 
 # Limits on run designs, checked before a design can be queued.
 designs:
-  max_budget_usd: 1000        # the largest budget one design may set (5-model race at full cost, user OK 2026-10-31)
-  max_arms: 64                # per-task race: 5 models x 8 harnesses + Opus low/high x 9 + baseline
+  max_budget_usd: 1000        # the largest budget one design may set (a full multi-model race)
+  max_arms: 64                # per-task race: 5 models x 8 harnesses + Opus low/high x 9 + baseline (59 arms)
   max_attempts: 5
   warn_containers: 8          # parallel_arms x n_concurrent above this: warning
   max_containers: 16          # above this: the design cannot run
