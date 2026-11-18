@@ -4,6 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.RectF
 import android.os.SystemClock
 import android.view.TextureView
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -64,10 +70,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -79,6 +87,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.engtestbench.hockeynano.core.model.ClipWindow30s
 import com.engtestbench.hockeynano.core.model.FrameMarkSample
+import com.engtestbench.hockeynano.core.model.PipelineTelemetry
 import com.engtestbench.hockeynano.core.model.RectNorm
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.model.TrackedPlayer
@@ -98,10 +107,13 @@ import com.engtestbench.hockeynano.ui.theme.teamColor
 import com.engtestbench.hockeynano.ui.theme.teamTag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+private val AmberHudColor = Color(0xFFFFB300)
 
 /**
  * Synchronized TextureView + Compose Canvas overlay player.
@@ -118,6 +130,8 @@ fun PlayerVideoOverlay(
     selectedTeamFilter: TeamId?,
     clipWindows: List<ClipWindow30s>,
     clipPlayRange: Pair<Double, Double>?,
+    telemetry: PipelineTelemetry = PipelineTelemetry(),
+    onIsPlayingChanged: (Boolean) -> Unit = {},
     onClearClipRange: () -> Unit,
     onVideoDimensionsKnown: (durationSec: Double, width: Int, height: Int) -> Unit,
     onVideoFrame: suspend (highResBitmap: Bitmap, timestampSec: Double) -> Unit,
@@ -129,7 +143,7 @@ fun PlayerVideoOverlay(
     var videoHeight by remember(videoSourceKey) { mutableIntStateOf(1080) }
     var durationSec by remember(videoSourceKey) { mutableDoubleStateOf(0.0) }
     var currentPosSec by remember(videoSourceKey) { mutableDoubleStateOf(0.0) }
-    var isPlaying by remember { mutableStateOf(false) }
+    var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
     var renderedFirstFrameForSource by remember(videoSourceKey) { mutableStateOf(false) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var tappedPlayer by remember { mutableStateOf<TrackedPlayer?>(null) }
@@ -141,6 +155,7 @@ fun PlayerVideoOverlay(
     val latestClipRange by rememberUpdatedState(clipPlayRange)
     val latestOnVideoFrame by rememberUpdatedState(onVideoFrame)
     val latestOnDimensions by rememberUpdatedState(onVideoDimensionsKnown)
+    val latestOnIsPlayingChanged by rememberUpdatedState(onIsPlayingChanged)
 
     // Listen to ExoPlayer metadata (dimensions & duration).
     DisposableEffect(player, videoSourceKey) {
@@ -176,9 +191,13 @@ fun PlayerVideoOverlay(
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+                latestOnIsPlayingChanged(playing)
             }
         }
         player.addListener(listener)
+        val initialPlaying = player.isPlaying
+        isPlaying = initialPlaying
+        latestOnIsPlayingChanged(initialPlaying)
         val initialSize = player.videoSize
         if (initialSize.width > 0 && initialSize.height > 0) {
             videoWidth = initialSize.width
@@ -197,7 +216,11 @@ fun PlayerVideoOverlay(
             val posMs = player.currentPosition
             val posSec = (posMs.coerceAtLeast(0L)) / 1000.0
             currentPosSec = posSec
-            isPlaying = player.isPlaying
+            val nowPlaying = player.isPlaying
+            if (nowPlaying != isPlaying) {
+                isPlaying = nowPlaying
+                latestOnIsPlayingChanged(nowPlaying)
+            }
             val durMs = player.duration
             if (durMs > 0 && durMs != Long.MIN_VALUE) {
                 durationSec = durMs / 1000.0
@@ -323,7 +346,14 @@ fun PlayerVideoOverlay(
                                 }
                                 tappedPlayer = hit
                             } else {
-                                if (player.isPlaying) player.pause() else player.play()
+                                if (player.isPlaying) {
+                                    player.pause()
+                                } else {
+                                    if (player.playbackState == Player.STATE_ENDED) {
+                                        player.seekTo(0L)
+                                    }
+                                    player.play()
+                                }
                             }
                         }
                     }
@@ -336,7 +366,7 @@ fun PlayerVideoOverlay(
                 )
             }
 
-            // Live overlay HUD corner pill
+            // Live overlay HUD corner pills
             if (clipPlayRange != null) {
                 Surface(
                     color = ObsidianBg.copy(alpha = 0.85f),
@@ -355,6 +385,14 @@ fun PlayerVideoOverlay(
                     )
                 }
             }
+
+            LiveAiHudCornerPill(
+                isPlaying = isPlaying,
+                telemetry = telemetry,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            )
         }
 
         // Timeline bar with 30s window highlights
@@ -410,7 +448,16 @@ fun PlayerVideoOverlay(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { if (player.isPlaying) player.pause() else player.play() },
+                    onClick = {
+                        if (player.isPlaying) {
+                            player.pause()
+                        } else {
+                            if (player.playbackState == Player.STATE_ENDED) {
+                                player.seekTo(0L)
+                            }
+                            player.play()
+                        }
+                    },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
@@ -478,6 +525,68 @@ fun PlayerVideoOverlay(
                 onSelectPlayer(num, team)
                 tappedPlayer = null
             }
+        )
+    }
+}
+
+@Composable
+private fun LiveAiHudCornerPill(
+    isPlaying: Boolean,
+    telemetry: PipelineTelemetry,
+    modifier: Modifier = Modifier
+) {
+    val showLive = isPlaying && !telemetry.analysisBudgetReached
+    val showPaused = !isPlaying && !telemetry.analysisBudgetReached && telemetry.framesAnalyzed > 0
+    val showDone = telemetry.analysisBudgetReached
+    if (!showLive && !showPaused && !showDone) return
+
+    val pulseTransition = rememberInfiniteTransition(label = "liveHudDot")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.32f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveHudDotAlpha"
+    )
+
+    val accentColor = when {
+        showDone -> BenchGreen
+        showLive -> BenchGreen
+        else -> AmberHudColor
+    }
+    val labelText = when {
+        showDone -> "AI DONE ✓ • #${telemetry.framesAnalyzed}"
+        showLive -> "LIVE AI • #${telemetry.framesAnalyzed} • ${String.format(Locale.US, "%.1f", telemetry.fps)} fps"
+        else -> "AI PAUSED • #${telemetry.framesAnalyzed}"
+    }
+
+    Row(
+        modifier = modifier
+            .background(ObsidianBg.copy(alpha = 0.78f), RoundedCornerShape(12.dp))
+            .border(1.dp, accentColor.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        if (!showDone) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .graphicsLayer { alpha = if (showLive) pulseAlpha else 1f }
+                    .clip(CircleShape)
+                    .background(accentColor)
+            )
+        }
+        Text(
+            text = labelText,
+            color = accentColor,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

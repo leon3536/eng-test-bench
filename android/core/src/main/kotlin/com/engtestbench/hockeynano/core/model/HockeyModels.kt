@@ -137,7 +137,8 @@ data class PipelineTelemetry(
     val analysisStartSec: Double = 0.0,
     val analyzedSpanSec: Double = 0.0,
     val analysisLimitSec: Double? = null,
-    val analysisBudgetReached: Boolean = false
+    val analysisBudgetReached: Boolean = false,
+    val framesAnalyzed: Int = 0
 )
 
 @Serializable

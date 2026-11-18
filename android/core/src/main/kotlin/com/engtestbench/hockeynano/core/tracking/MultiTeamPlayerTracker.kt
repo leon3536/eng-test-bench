@@ -15,7 +15,8 @@ import kotlin.math.roundToInt
 
 data class RawDetection(
     val box: RectNorm,
-    val chestRgb: List<Int>
+    val chestRgb: List<Int>,
+    val stripeScore: Float = 0f
 )
 
 /**
@@ -38,6 +39,8 @@ class TrackIdentityRegistry {
         var sumG: Double = 0.0,
         var sumB: Double = 0.0,
         var colorCount: Int = 0,
+        var emaStripeScore: Float = 0f,
+        var stripeObservations: Int = 0,
         var clusteredTeam: TeamId = TeamId.UNKNOWN,
         var teamOverride: TeamId? = null,
         var manualJerseyNumber: String? = null,
@@ -53,6 +56,16 @@ class TrackIdentityRegistry {
             sumG += g
             sumB += b
             colorCount++
+        }
+
+        fun addStripeScore(score: Float) {
+            val clean = if (score.isFinite()) score.coerceIn(0f, 1f) else 0f
+            emaStripeScore = if (stripeObservations == 0) {
+                clean
+            } else {
+                0.8f * emaStripeScore + 0.2f * clean
+            }
+            stripeObservations++
         }
 
         fun meanRgb(): FloatArray? {
@@ -84,7 +97,8 @@ class TrackIdentityRegistry {
         trackId: Int,
         timestampSec: Double,
         box: RectNorm,
-        chestRgb: List<Int>
+        chestRgb: List<Int>,
+        stripeScore: Float = 0f
     ): TrackRecord {
         cachedResolution = null
         val existing = records[trackId]
@@ -93,6 +107,7 @@ class TrackIdentityRegistry {
             existing.lastBox = box
             existing.hitCount++
             existing.addColor(chestRgb)
+            existing.addStripeScore(stripeScore)
             return existing
         }
         return TrackRecord(
@@ -103,6 +118,7 @@ class TrackIdentityRegistry {
             lastBox = box
         ).also {
             it.addColor(chestRgb)
+            it.addStripeScore(stripeScore)
             records[trackId] = it
         }
     }
@@ -470,6 +486,7 @@ class MultiTeamPlayerTracker {
         var box: RectNorm,
         var lastSeenSec: Double,
         var emaRgb: FloatArray,
+        var emaStripeScore: Float = 0f,
         var vx: Float = 0f,
         var vy: Float = 0f,
         var misses: Int = 0,
@@ -599,12 +616,14 @@ class MultiTeamPlayerTracker {
             for (c in 0..2) {
                 t.emaRgb[c] = 0.8f * t.emaRgb[c] + 0.2f * detRgb[c]
             }
+            val cleanStripe = sanitizeStripeScore(det.stripeScore)
+            t.emaStripeScore = 0.8f * t.emaStripeScore + 0.2f * cleanStripe
             t.trail.addLast(det.box.centerX to det.box.footY)
             while (t.trail.size > MAX_TRAIL_POINTS) {
                 t.trail.removeFirst()
             }
 
-            val rec = registry.getOrCreateRecord(t.id, safeTime, det.box, det.chestRgb)
+            val rec = registry.getOrCreateRecord(t.id, safeTime, det.box, det.chestRgb, cleanStripe)
             rec.lastVx = t.vx
             rec.lastVy = t.vy
             detToTrackId[di] = t.id
@@ -627,14 +646,16 @@ class MultiTeamPlayerTracker {
             if (detToTrackId[di] >= 0) continue
             val det = detections[di]
             val newId = nextTrackId++
+            val cleanStripe = sanitizeStripeScore(det.stripeScore)
             val t = ActiveTrack(
                 id = newId,
                 box = det.box,
                 lastSeenSec = safeTime,
-                emaRgb = toFloatRgb(det.chestRgb)
+                emaRgb = toFloatRgb(det.chestRgb),
+                emaStripeScore = cleanStripe
             )
             activeTracks.add(t)
-            registry.getOrCreateRecord(newId, safeTime, det.box, det.chestRgb)
+            registry.getOrCreateRecord(newId, safeTime, det.box, det.chestRgb, cleanStripe)
             detToTrackId[di] = newId
         }
 
@@ -848,30 +869,76 @@ class MultiTeamPlayerTracker {
         val withColor = all.mapNotNull { rec -> rec.meanRgb()?.let { rec to it } }
         if (withColor.isEmpty()) return
 
-        if (withColor.size == 1) {
-            val (rec, rgb) = withColor.first()
-            rec.clusteredTeam = if (luminance(rgb) < 128f) TeamId.TEAM_A else TeamId.TEAM_B
-            clusteredTeamRgb[rec.clusteredTeam] = rgb.map { it.roundToInt().coerceIn(0, 255) }
+        var refSumR = 0.0
+        var refSumG = 0.0
+        var refSumB = 0.0
+        var refWeight = 0.0
+        val skaterWithColor = ArrayList<Pair<TrackIdentityRegistry.TrackRecord, FloatArray>>(withColor.size)
+
+        // Pre-classify striped low-saturation officials at any skater count and exclude them
+        // from Team A/B weighted 2-means so officials never skew team kit centroids.
+        for (pair in withColor) {
+            val (rec, rgb) = pair
+            if (rec.emaStripeScore >= STRIPE_REFEREE_MIN_SCORE &&
+                hsvSaturation(rgb) < STRIPE_REFEREE_MAX_HSV_SAT
+            ) {
+                rec.clusteredTeam = TeamId.REFEREE
+                val w = rec.colorCount.toDouble()
+                refSumR += rgb[0] * w
+                refSumG += rgb[1] * w
+                refSumB += rgb[2] * w
+                refWeight += w
+            } else {
+                skaterWithColor.add(pair)
+            }
+        }
+
+        if (skaterWithColor.isEmpty()) {
+            clusteredTeamRgb.remove(TeamId.TEAM_A)
+            clusteredTeamRgb.remove(TeamId.TEAM_B)
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
             registry.invalidateCache()
             return
         }
 
-        // Prefer tracks with >=2 hits as cluster anchors when enough exist, else all tracks.
-        val anchors = withColor.filter { it.first.colorCount >= 2 }.ifEmpty { withColor }
-        var centroidA = anchors.minBy { luminance(it.second) }.second.copyOf()
-        var centroidB = anchors.maxBy { luminance(it.second) }.second.copyOf()
+        if (skaterWithColor.size == 1) {
+            val (rec, rgb) = skaterWithColor.first()
+            val singleTeam = if (luminance(rgb) < 128f) TeamId.TEAM_A else TeamId.TEAM_B
+            rec.clusteredTeam = singleTeam
+            clusteredTeamRgb.remove(if (singleTeam == TeamId.TEAM_A) TeamId.TEAM_B else TeamId.TEAM_A)
+            clusteredTeamRgb[singleTeam] = rgb.map { it.roundToInt().coerceIn(0, 255) }
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+            registry.invalidateCache()
+            return
+        }
 
-        // Run weighted 2-means (RGB + luminance) for 12 iterations.
+        // Prefer tracks with >=3 hits (fallback >=2, then all) and seed p15/p85 to resist glare outliers.
+        val anchors = skaterWithColor.filter { it.first.colorCount >= 3 }
+            .ifEmpty { skaterWithColor.filter { it.first.colorCount >= 2 } }
+            .ifEmpty { skaterWithColor }
+        val sortedAnchors = anchors.sortedBy { luminance(it.second) }
+        var centroidA = if (sortedAnchors.size >= 4) {
+            sortedAnchors[(sortedAnchors.size * 15) / 100].second.copyOf()
+        } else {
+            sortedAnchors.first().second.copyOf()
+        }
+        var centroidB = if (sortedAnchors.size >= 4) {
+            sortedAnchors[(sortedAnchors.size * 85) / 100].second.copyOf()
+        } else {
+            sortedAnchors.last().second.copyOf()
+        }
+
+        // Run weighted 2-means (RGB + luminance) for 12 iterations with capped per-track weight.
         repeat(12) {
             var sumAR = 0.0; var sumAG = 0.0; var sumAB = 0.0; var weightA = 0.0
             var sumBR = 0.0; var sumBG = 0.0; var sumBB = 0.0; var weightB = 0.0
 
-            for ((rec, rgb) in withColor) {
+            for ((rec, rgb) in skaterWithColor) {
                 val dA = colorLumDistance(rgb, centroidA)
                 val dB = colorLumDistance(rgb, centroidB)
                 val team = if (dA <= dB) TeamId.TEAM_A else TeamId.TEAM_B
 
-                val w = rec.colorCount.toDouble()
+                val w = min(rec.colorCount, 15).toDouble()
                 if (team == TeamId.TEAM_A) {
                     sumAR += rgb[0] * w; sumAG += rgb[1] * w; sumAB += rgb[2] * w; weightA += w
                 } else {
@@ -898,19 +965,19 @@ class MultiTeamPlayerTracker {
             // Only one distinct kit color visible so far; assign uniformly by dark/light luminance.
             val singleTeam = if (luminance(centroidA) < 128f) TeamId.TEAM_A else TeamId.TEAM_B
             val meanRgb = centroidA.map { it.roundToInt().coerceIn(0, 255) }
-            for ((rec, _) in withColor) {
+            for ((rec, _) in skaterWithColor) {
                 rec.clusteredTeam = singleTeam
             }
             clusteredTeamRgb.remove(TeamId.TEAM_A)
             clusteredTeamRgb.remove(TeamId.TEAM_B)
             clusteredTeamRgb[singleTeam] = meanRgb
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
             registry.invalidateCache()
             return
         }
         val allowRefereeOutlier = currentSkaterCount > 10 || activeTracks.size > 10
 
-        var refSumR = 0.0; var refSumG = 0.0; var refSumB = 0.0; var refWeight = 0.0
-        for ((rec, rgb) in withColor) {
+        for ((rec, rgb) in skaterWithColor) {
             val dA = colorLumDistance(rgb, centroidA)
             val dB = colorLumDistance(rgb, centroidB)
             var assigned = if (dA <= dB) TeamId.TEAM_A else TeamId.TEAM_B
@@ -932,16 +999,20 @@ class MultiTeamPlayerTracker {
 
         clusteredTeamRgb[TeamId.TEAM_A] = centroidA.map { it.roundToInt().coerceIn(0, 255) }
         clusteredTeamRgb[TeamId.TEAM_B] = centroidB.map { it.roundToInt().coerceIn(0, 255) }
-        if (refWeight > 0.0) {
+        updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+        registry.invalidateCache()
+    }
+
+    private fun updateRefereeCentroid(sumR: Double, sumG: Double, sumB: Double, weight: Double) {
+        if (weight > 0.0) {
             clusteredTeamRgb[TeamId.REFEREE] = listOf(
-                (refSumR / refWeight).roundToInt().coerceIn(0, 255),
-                (refSumG / refWeight).roundToInt().coerceIn(0, 255),
-                (refSumB / refWeight).roundToInt().coerceIn(0, 255)
+                (sumR / weight).roundToInt().coerceIn(0, 255),
+                (sumG / weight).roundToInt().coerceIn(0, 255),
+                (sumB / weight).roundToInt().coerceIn(0, 255)
             )
         } else {
             clusteredTeamRgb.remove(TeamId.REFEREE)
         }
-        registry.invalidateCache()
     }
 
     private fun isCrossKitIncompatible(
@@ -969,6 +1040,11 @@ class MultiTeamPlayerTracker {
         private const val MAX_ACTIVE_MISSES = 4
         private const val MAX_ACTIVE_GAP_SEC = 1.0
         private const val MAX_TRAIL_POINTS = 16
+        private const val STRIPE_REFEREE_MIN_SCORE = 0.58f
+        private const val STRIPE_REFEREE_MAX_HSV_SAT = 0.22f
+
+        private fun sanitizeStripeScore(score: Float): Float =
+            if (score.isFinite()) score.coerceIn(0f, 1f) else 0f
 
         private fun areCloseOrOverlapping(a: RectNorm, b: RectNorm): Boolean {
             if (computeIou(a, b) >= CONTACT_IOU_MIN) return true
@@ -1011,6 +1087,12 @@ class MultiTeamPlayerTracker {
 
         private fun saturationSpread(rgb: FloatArray): Float =
             maxOf(rgb[0], rgb[1], rgb[2]) - minOf(rgb[0], rgb[1], rgb[2])
+
+        private fun hsvSaturation(rgb: FloatArray): Float {
+            val maxC = maxOf(rgb[0], rgb[1], rgb[2])
+            val minC = minOf(rgb[0], rgb[1], rgb[2])
+            return if (maxC <= 1e-4f) 0f else (maxC - minC) / maxC
+        }
 
         private fun colorLumDistance(a: FloatArray, b: FloatArray): Float {
             val dr = a[0] - b[0]

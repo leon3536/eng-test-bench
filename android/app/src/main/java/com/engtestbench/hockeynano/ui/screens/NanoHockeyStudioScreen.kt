@@ -6,6 +6,12 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,10 +43,12 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.SportsHockey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +75,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -84,6 +93,7 @@ import com.engtestbench.hockeynano.core.model.PipelineState
 import com.engtestbench.hockeynano.core.model.PipelineTelemetry
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.model.TeamProfile
+import com.engtestbench.hockeynano.ui.components.CoachBoxWebDialog
 import com.engtestbench.hockeynano.ui.components.PlayerVideoOverlay
 import com.engtestbench.hockeynano.ui.theme.BenchGreen
 import com.engtestbench.hockeynano.ui.theme.BorderSubtle
@@ -108,6 +118,7 @@ import kotlin.math.roundToInt
 
 private const val PRESET_BULLS_JR_REIGN_URL = "https://www.youtube.com/watch?v=1W1ZfGruhP4"
 private val YouTubeAccentRed = Color(0xFFFF3B30)
+private val AmberStatusColor = Color(0xFFFFB300)
 
 data class StudioExportUiState(
     val exportingClipId: String? = null,
@@ -132,6 +143,8 @@ fun NanoHockeyStudioScreen(
     isResolvingYouTube: Boolean,
     youtubeError: String?,
     resolvedYoutube: ResolvedYouTubeVideo?,
+    isPlaying: Boolean,
+    isBuffering: Boolean,
     onRequestMediaPermission: () -> Unit,
     onRefreshVideos: () -> Unit,
     onSelectVideo: (title: String, source: String) -> Unit,
@@ -139,6 +152,10 @@ fun NanoHockeyStudioScreen(
     onSetAnalysisDurationLimit: (limitSec: Double?) -> Unit,
     onToggleSpeed: (Float) -> Unit,
     onTogglePanoramic: (Boolean) -> Unit,
+    onIsPlayingChanged: (Boolean) -> Unit,
+    onPausePlayback: () -> Unit,
+    onResumePlayback: () -> Unit,
+    onAnalyzeAll: () -> Unit,
     onVideoDimensionsKnown: (durationSec: Double, width: Int, height: Int) -> Unit,
     onVideoFrame: suspend (Bitmap, Double) -> Unit,
     onSelectPlayer: (jerseyNumber: String?, teamFilter: TeamId?) -> Unit,
@@ -158,11 +175,19 @@ fun NanoHockeyStudioScreen(
     var youtubePanelExpanded by remember { mutableStateOf(false) }
     var youtubeUrlInput by remember { mutableStateOf("") }
     var showCustomDurationDialog by remember { mutableStateOf(false) }
+    var showCoachBoxDialog by remember { mutableStateOf(false) }
+    var wasResolvingYouTube by remember { mutableStateOf(isResolvingYouTube) }
 
     LaunchedEffect(youtubeError) {
         if (!youtubeError.isNullOrBlank()) {
             youtubePanelExpanded = true
         }
+    }
+    LaunchedEffect(isResolvingYouTube, youtubeError, resolvedYoutube) {
+        if (wasResolvingYouTube && !isResolvingYouTube && youtubeError.isNullOrBlank() && resolvedYoutube != null) {
+            youtubePanelExpanded = false
+        }
+        wasResolvingYouTube = isResolvingYouTube
     }
     LaunchedEffect(selectedVideoSource) {
         if (YouTubeHockeyResolver.isYouTubeUrl(selectedVideoSource)) {
@@ -206,7 +231,7 @@ fun NanoHockeyStudioScreen(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // 1. Video selector + YouTube toggle + speed + panoramic tiling controls
+        // 1. Video selector + YouTube + CoachBox + speed + panoramic tiling controls
         VideoSelectorRow(
             discoveredVideos = discoveredVideos,
             selectedVideoSource = selectedVideoSource,
@@ -215,9 +240,11 @@ fun NanoHockeyStudioScreen(
             youtubePanelExpanded = youtubePanelExpanded,
             isResolvingYouTube = isResolvingYouTube,
             hasYoutubeError = !youtubeError.isNullOrBlank(),
+            showCoachBoxDialog = showCoachBoxDialog,
             onRefreshVideos = onRefreshVideos,
             onPickVideo = { openDocLauncher.launch(arrayOf("video/*")) },
             onToggleYoutubePanel = { youtubePanelExpanded = !youtubePanelExpanded },
+            onOpenCoachBox = { showCoachBoxDialog = true },
             onSelectVideo = onSelectVideo,
             onToggleSpeed = onToggleSpeed,
             onTogglePanoramic = onTogglePanoramic
@@ -233,6 +260,8 @@ fun NanoHockeyStudioScreen(
                 errorMessage = youtubeError,
                 resolvedYoutube = resolvedYoutube,
                 selectedVideoSource = selectedVideoSource,
+                telemetry = pipelineState.telemetry,
+                isPlaying = isPlaying,
                 onUrlChange = { youtubeUrlInput = it },
                 onPaste = {
                     val clip = clipboardManager.getText()?.text?.trim()
@@ -283,6 +312,20 @@ fun NanoHockeyStudioScreen(
             }
         }
 
+        // 1d. Persistent live AI analysis status banner
+        LiveAnalysisStatusBanner(
+            telemetry = pipelineState.telemetry,
+            analysisLimitSec = analysisLimitSec,
+            skaterCount = pipelineState.currentFrame?.players?.size ?: 0,
+            discoveredPlayerCount = pipelineState.discoveredPlayers.size,
+            isResolving = isResolvingYouTube,
+            isBuffering = isBuffering,
+            isPlaying = isPlaying,
+            onPause = onPausePlayback,
+            onResume = onResumePlayback,
+            onAnalyzeAll = onAnalyzeAll
+        )
+
         // 2. Synchronized TextureView + Canvas overlay player
         PlayerVideoOverlay(
             player = player,
@@ -293,6 +336,8 @@ fun NanoHockeyStudioScreen(
             selectedTeamFilter = pipelineState.selectedTeamFilter,
             clipWindows = pipelineState.selectedPlayerClips,
             clipPlayRange = clipPlayRange,
+            telemetry = pipelineState.telemetry,
+            onIsPlayingChanged = onIsPlayingChanged,
             onClearClipRange = onClearClipRange,
             onVideoDimensionsKnown = onVideoDimensionsKnown,
             onVideoFrame = onVideoFrame,
@@ -393,6 +438,16 @@ fun NanoHockeyStudioScreen(
             }
         )
     }
+
+    if (showCoachBoxDialog) {
+        CoachBoxWebDialog(
+            onVideoSelected = { title, streamUrl ->
+                showCoachBoxDialog = false
+                onSelectVideo(title, streamUrl)
+            },
+            onDismiss = { showCoachBoxDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -404,9 +459,11 @@ private fun VideoSelectorRow(
     youtubePanelExpanded: Boolean,
     isResolvingYouTube: Boolean,
     hasYoutubeError: Boolean,
+    showCoachBoxDialog: Boolean,
     onRefreshVideos: () -> Unit,
     onPickVideo: () -> Unit,
     onToggleYoutubePanel: () -> Unit,
+    onOpenCoachBox: () -> Unit,
     onSelectVideo: (String, String) -> Unit,
     onToggleSpeed: (Float) -> Unit,
     onTogglePanoramic: (Boolean) -> Unit
@@ -461,6 +518,40 @@ private fun VideoSelectorRow(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+
+        Surface(
+            onClick = onOpenCoachBox,
+            shape = RoundedCornerShape(8.dp),
+            color = BenchGreen,
+            modifier = Modifier
+                .height(32.dp)
+                .border(
+                    width = if (showCoachBoxDialog) 1.5.dp else 1.dp,
+                    color = if (showCoachBoxDialog) Color.White else BenchGreen,
+                    shape = RoundedCornerShape(8.dp)
+                )
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SportsHockey,
+                    contentDescription = "CoachBox",
+                    tint = ObsidianBg,
+                    modifier = Modifier.size(15.dp)
+                )
+                Text(
+                    text = "CoachBox",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ObsidianBg,
                     maxLines = 1,
                     softWrap = false
                 )
@@ -542,12 +633,18 @@ private fun YouTubeLinkPanel(
     errorMessage: String?,
     resolvedYoutube: ResolvedYouTubeVideo?,
     selectedVideoSource: String,
+    telemetry: PipelineTelemetry,
+    isPlaying: Boolean,
     onUrlChange: (String) -> Unit,
     onPaste: () -> Unit,
     onSelectPreset: () -> Unit,
     onAnalyze: () -> Unit
 ) {
     val borderColor = if (!errorMessage.isNullOrBlank()) DangerRed.copy(alpha = 0.85f) else BorderSubtle
+    val isSameSource = urlInput.trim().isNotEmpty() && urlInput.trim() == selectedVideoSource.trim()
+    val isAnalyzingLive = isSameSource && !telemetry.analysisBudgetReached && telemetry.framesAnalyzed > 0 && isPlaying
+    val isReAnalyzeReady = isSameSource && ((!isPlaying && telemetry.framesAnalyzed > 0) || telemetry.analysisBudgetReached)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -647,18 +744,35 @@ private fun YouTubeLinkPanel(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.height(32.dp)
             ) {
-                if (isResolving) {
-                    CircularProgressIndicator(
-                        color = ObsidianBg,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("Resolving…", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                } else {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Analyze", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                when {
+                    isResolving -> {
+                        CircularProgressIndicator(
+                            color = ObsidianBg,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Resolving…", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    }
+                    isAnalyzingLive -> {
+                        Text(
+                            text = "● Analyzing Live (#${telemetry.framesAnalyzed})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                    isReAnalyzeReady -> {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Re-Analyze", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    }
+                    else -> {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Analyze", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    }
                 }
             }
         }
@@ -683,6 +797,262 @@ private fun YouTubeLinkPanel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+private fun LiveAnalysisStatusBanner(
+    telemetry: PipelineTelemetry,
+    analysisLimitSec: Double?,
+    skaterCount: Int,
+    discoveredPlayerCount: Int,
+    isResolving: Boolean,
+    isBuffering: Boolean,
+    isPlaying: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onAnalyzeAll: () -> Unit
+) {
+    val showResolving = isResolving || (isBuffering && !telemetry.analysisBudgetReached)
+    val showDone = !showResolving && telemetry.analysisBudgetReached
+    val showLive = !showResolving && !showDone && isPlaying
+    val showPaused = !showResolving && !showDone && !isPlaying && telemetry.framesAnalyzed > 0
+
+    val pulseTransition = rememberInfiniteTransition(label = "liveBannerDot")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveBannerDotAlpha"
+    )
+
+    val borderColor = when {
+        showDone -> BenchGreen.copy(alpha = 0.80f)
+        showLive -> BenchGreen.copy(alpha = 0.70f)
+        showPaused -> AmberStatusColor.copy(alpha = 0.75f)
+        showResolving -> TeamACyan.copy(alpha = 0.65f)
+        else -> BorderSubtle
+    }
+    val bgColor = when {
+        showDone -> BenchGreen.copy(alpha = 0.12f)
+        showLive -> PanelBgElevated
+        showPaused -> AmberStatusColor.copy(alpha = 0.10f)
+        else -> PanelBg
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bgColor, RoundedCornerShape(8.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            when {
+                showResolving -> {
+                    val resolvingLabel = if (!isResolving && telemetry.framesAnalyzed > 0) {
+                        "Buffering stream • #${telemetry.framesAnalyzed} frames…"
+                    } else {
+                        "Resolving stream & starting Gemini Nano…"
+                    }
+                    Text(
+                        text = resolvingLabel,
+                        color = TeamACyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                showDone -> {
+                    Text(
+                        text = "✓ ANALYSIS COMPLETE • #${telemetry.framesAnalyzed} frames • $discoveredPlayerCount players",
+                        color = BenchGreen,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        lineHeight = 14.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onAnalyzeAll,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BenchGreen,
+                            contentColor = ObsidianBg
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(
+                            text = "Analyze All",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                showLive -> {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .graphicsLayer { alpha = pulseAlpha }
+                                .clip(CircleShape)
+                                .background(BenchGreen)
+                        )
+                        val spanLabel = formatBudgetClock(telemetry.analyzedSpanSec)
+                        val limitLabel = formatBudgetLimit(analysisLimitSec)
+                        Text(
+                            text = "LIVE ANALYZING • #${telemetry.framesAnalyzed} frames • $spanLabel / $limitLabel • $skaterCount skaters • Nano ${telemetry.nanoCallsTotal}",
+                            color = TextPrimary,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            lineHeight = 13.5.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onPause,
+                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Pause,
+                            contentDescription = "Pause",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = "Pause",
+                            fontSize = 11.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                showPaused -> {
+                    Text(
+                        text = "⏸ PAUSED AT #${telemetry.framesAnalyzed} FRAMES (${formatBudgetClock(telemetry.analyzedSpanSec)}) — Tap ▶ Resume",
+                        color = AmberStatusColor,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        lineHeight = 13.5.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onResume,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BenchGreen,
+                            contentColor = ObsidianBg
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(
+                            text = "▶ Resume",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                else -> {
+                    Text(
+                        text = "READY FOR LIVE AI • Tap ▶ Resume or pick YouTube / CoachBox",
+                        color = TextMuted,
+                        fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onResume,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BenchGreen,
+                            contentColor = ObsidianBg
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(7.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(
+                            text = "▶ Resume",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showResolving) {
+            LinearProgressIndicator(
+                color = BenchGreen,
+                trackColor = BorderSubtle,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+            )
+        } else if (showLive) {
+            if (analysisLimitSec != null && analysisLimitSec > 0.0) {
+                val targetFrac = (telemetry.analyzedSpanSec / analysisLimitSec).toFloat().coerceIn(0f, 1f)
+                val animatedFrac by animateFloatAsState(
+                    targetValue = targetFrac,
+                    animationSpec = tween(durationMillis = 250),
+                    label = "liveAnalysisProgress"
+                )
+                LinearProgressIndicator(
+                    progress = { animatedFrac },
+                    color = BenchGreen,
+                    trackColor = BorderSubtle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            } else {
+                LinearProgressIndicator(
+                    color = BenchGreen,
+                    trackColor = BorderSubtle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            }
         }
     }
 }

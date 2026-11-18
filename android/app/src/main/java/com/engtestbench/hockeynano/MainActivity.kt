@@ -160,6 +160,10 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
         private set
     var resolvedYoutube by mutableStateOf<ResolvedYouTubeVideo?>(null)
         private set
+    var isPlayerPlaying by mutableStateOf(false)
+        private set
+    var isPlayerBuffering by mutableStateOf(false)
+        private set
 
     private val _exportState = MutableStateFlow(StudioExportUiState())
     val exportState: StateFlow<StudioExportUiState> = _exportState.asStateFlow()
@@ -175,6 +179,21 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
     private var lastBudgetReached: Boolean = false
 
     private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            isPlayerPlaying = isPlaying
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            isPlayerBuffering = playbackState == Player.STATE_BUFFERING && player.playWhenReady
+            if (playbackState != Player.STATE_BUFFERING) {
+                isPlayerPlaying = player.isPlaying
+            }
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            isPlayerBuffering = player.playbackState == Player.STATE_BUFFERING && playWhenReady
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             val yt = resolvedYoutube
             val fallbackUrl = activeYouTubeFallbackUrl
@@ -195,11 +214,16 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
                 player.prepare()
                 player.playWhenReady = resumeAutoPlay
+                isPlayerBuffering = resumeAutoPlay && player.playbackState == Player.STATE_BUFFERING
             } else if (yt != null) {
+                isPlayerBuffering = false
+                isPlayerPlaying = false
                 val msg = error.cause?.message ?: error.message ?: error.errorCodeName
                 youtubeError = "Stream playback error: $msg"
                 Log.e(TAG, "YOUTUBE_PLAYBACK_ERROR id=${yt.videoId} err=$msg", error)
             } else {
+                isPlayerBuffering = false
+                isPlayerPlaying = false
                 Log.e(TAG, "PLAYER_ERROR source='$selectedVideoSource' err=${error.errorCodeName}", error)
             }
         }
@@ -302,6 +326,8 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
 
             player.stop()
             player.clearMediaItems()
+            isPlayerPlaying = false
+            isPlayerBuffering = autoPlay
 
             if (YouTubeHockeyResolver.isYouTubeUrl(cleanSource)) {
                 isResolvingYouTube = true
@@ -314,6 +340,8 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                     throw ce
                 } catch (err: Throwable) {
                     isResolvingYouTube = false
+                    isPlayerPlaying = false
+                    isPlayerBuffering = false
                     val msg = err.message?.takeIf { it.isNotBlank() } ?: "Unable to resolve YouTube stream"
                     youtubeError = msg
                     Log.e(TAG, "YOUTUBE_RESOLVE_ERROR url='$cleanSource' err=$msg", err)
@@ -364,6 +392,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
                 player.prepare()
                 player.playWhenReady = autoPlay
+                isPlayerBuffering = autoPlay && player.playbackState == Player.STATE_BUFFERING
 
                 Log.i(
                     TAG,
@@ -409,6 +438,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
             player.playbackParameters = PlaybackParameters(playbackSpeed)
             player.prepare()
             player.playWhenReady = autoPlay
+            isPlayerBuffering = autoPlay && player.playbackState == Player.STATE_BUFFERING
 
             Log.i(
                 TAG,
@@ -445,6 +475,34 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
 
     fun setPanoramic(enabled: Boolean) {
         processor.setPanoramicTiling(enabled)
+    }
+
+    fun syncPlayerPlaying(playing: Boolean) {
+        if (isPlayerPlaying != playing) {
+            isPlayerPlaying = playing
+        }
+        if (playing && isPlayerBuffering) {
+            isPlayerBuffering = false
+        }
+    }
+
+    fun pausePlayback() {
+        player.pause()
+    }
+
+    fun resumePlayback() {
+        if (player.playbackState == Player.STATE_ENDED) {
+            player.seekTo(0L)
+        }
+        player.play()
+    }
+
+    fun analyzeAllFromCurrent() {
+        setAnalysisDurationLimit(null)
+        if (player.playbackState == Player.STATE_ENDED) {
+            player.seekTo(0L)
+        }
+        player.play()
     }
 
     suspend fun onVideoFrame(bitmap: Bitmap, timestampSec: Double) {
@@ -1059,6 +1117,8 @@ private fun HockeyNanoBenchApp(
                 isResolvingYouTube = vm.isResolvingYouTube,
                 youtubeError = vm.youtubeError,
                 resolvedYoutube = vm.resolvedYoutube,
+                isPlaying = vm.isPlayerPlaying,
+                isBuffering = vm.isPlayerBuffering,
                 onRequestMediaPermission = { permissionLauncher.launch(permissionName) },
                 onRefreshVideos = { vm.refreshDiscoveredVideos(autoSelectFirst = false) },
                 onSelectVideo = { title, src -> vm.loadVideo(title, src, autoPlay = true) },
@@ -1066,6 +1126,10 @@ private fun HockeyNanoBenchApp(
                 onSetAnalysisDurationLimit = { limitSec -> vm.setAnalysisDurationLimit(limitSec) },
                 onToggleSpeed = { vm.setSpeed(it) },
                 onTogglePanoramic = { vm.setPanoramic(it) },
+                onIsPlayingChanged = { vm.syncPlayerPlaying(it) },
+                onPausePlayback = { vm.pausePlayback() },
+                onResumePlayback = { vm.resumePlayback() },
+                onAnalyzeAll = { vm.analyzeAllFromCurrent() },
                 onVideoDimensionsKnown = { dur, w, h -> vm.onVideoDimensionsKnown(dur, w, h) },
                 onVideoFrame = { bmp, ts -> vm.onVideoFrame(bmp, ts) },
                 onSelectPlayer = { num, team -> vm.selectPlayer(num, team) },

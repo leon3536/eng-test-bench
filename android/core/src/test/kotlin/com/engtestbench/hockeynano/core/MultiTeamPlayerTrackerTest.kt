@@ -263,4 +263,93 @@ class MultiTeamPlayerTrackerTest {
         assertEquals("97", ann2.first().players.first { it.trackId == idA }.jerseyNumber)
         assertEquals("19", ann2.last().players.first { it.trackId == idB }.jerseyNumber)
     }
+
+    @Test
+    fun `striped low-saturation officials classify as REFEREE below 10 skaters without skewing team centroids`() {
+        val tracker = MultiTeamPlayerTracker()
+        val darkNavy = listOf(22, 38, 78)
+        val brightWhite = listOf(232, 234, 236)
+        val officialGray = listOf(124, 126, 128) // HSV saturation = 0.031 < 0.22
+
+        val history = ArrayList<FrameMarkSample>()
+        for (frameIdx in 0..3) {
+            val detections = listOf(
+                RawDetection(boxAt(0.16f, 0.50f), darkNavy, stripeScore = 0.08f),
+                RawDetection(boxAt(0.28f, 0.54f), darkNavy, stripeScore = 0.12f),
+                RawDetection(boxAt(0.40f, 0.48f), darkNavy, stripeScore = 0.10f),
+                RawDetection(boxAt(0.54f, 0.52f), brightWhite, stripeScore = 0.15f),
+                RawDetection(boxAt(0.66f, 0.50f), brightWhite, stripeScore = 0.11f),
+                RawDetection(boxAt(0.78f, 0.56f), brightWhite, stripeScore = 0.09f),
+                RawDetection(boxAt(0.47f, 0.40f), officialGray, stripeScore = 0.78f)
+            )
+            history.add(tracker.updateFrame(frameIdx * 0.25, detections, 0.92f))
+        }
+
+        val latest = history.last()
+        assertEquals(7, latest.players.size, "Test must exercise <10 total skaters path")
+        assertEquals(3, latest.players.count { it.team == TeamId.TEAM_A })
+        assertEquals(3, latest.players.count { it.team == TeamId.TEAM_B })
+        assertEquals(1, latest.players.count { it.team == TeamId.REFEREE })
+
+        val ref = latest.players.last()
+        assertEquals(TeamId.REFEREE, ref.team)
+        assertEquals("Referee", ref.roleHint)
+
+        val profiles = tracker.getTeamProfiles()
+        assertTrue(profiles.containsKey(TeamId.TEAM_A))
+        assertTrue(profiles.containsKey(TeamId.TEAM_B))
+        assertTrue(profiles.containsKey(TeamId.REFEREE))
+        assertEquals(darkNavy, profiles[TeamId.TEAM_A]?.meanRgb, "Official must not skew Team A centroid")
+        assertEquals(brightWhite, profiles[TeamId.TEAM_B]?.meanRgb, "Official must not skew Team B centroid")
+
+        // High-saturation striped jersey must NOT be misclassified as REFEREE.
+        tracker.reset()
+        val coloredStripe = listOf(205, 42, 42) // HSV saturation ~ 0.795 >= 0.22
+        val fColored = tracker.updateFrame(
+            0.0,
+            listOf(
+                RawDetection(boxAt(0.20f, 0.50f), darkNavy, stripeScore = 0.08f),
+                RawDetection(boxAt(0.40f, 0.50f), darkNavy, stripeScore = 0.08f),
+                RawDetection(boxAt(0.60f, 0.50f), brightWhite, stripeScore = 0.10f),
+                RawDetection(boxAt(0.80f, 0.50f), coloredStripe, stripeScore = 0.82f)
+            ),
+            0.90f
+        )
+        assertFalse(
+            fColored.players.any { it.team == TeamId.REFEREE },
+            "Colorful striped player with HSV saturation >= 0.22 must not classify as REFEREE"
+        )
+    }
+
+    @Test
+    fun `p15 p85 seeding and weight cap prevent glare outlier from collapsing white team into dark team`() {
+        val tracker = MultiTeamPlayerTracker()
+        val navyA = listOf(48, 70, 58)
+        val navyB = listOf(55, 74, 62)
+        val whiteA = listOf(88, 102, 100)
+        val whiteB = listOf(108, 122, 120)
+        val brightGlare = listOf(182, 186, 184)
+
+        var latest: FrameMarkSample? = null
+        // Run 20 frames (exceeding the weight cap of 15) with 4 Navy, 5 White, and 1 bright board/glare outlier.
+        for (i in 0 until 20) {
+            val dets = listOf(
+                RawDetection(boxAt(0.15f, 0.50f), navyA),
+                RawDetection(boxAt(0.25f, 0.52f), navyB),
+                RawDetection(boxAt(0.35f, 0.48f), navyA),
+                RawDetection(boxAt(0.45f, 0.56f), navyB),
+                RawDetection(boxAt(0.55f, 0.50f), whiteA),
+                RawDetection(boxAt(0.63f, 0.54f), whiteB),
+                RawDetection(boxAt(0.71f, 0.48f), whiteA),
+                RawDetection(boxAt(0.79f, 0.52f), whiteB),
+                RawDetection(boxAt(0.87f, 0.56f), whiteB),
+                RawDetection(boxAt(0.93f, 0.42f), brightGlare)
+            )
+            latest = tracker.updateFrame(i * 0.25, dets, 0.9f)
+        }
+
+        val frame = latest!!
+        assertEquals(4, frame.players.count { it.team == TeamId.TEAM_A }, "All 4 Navy skaters must remain TEAM_A")
+        assertEquals(6, frame.players.count { it.team == TeamId.TEAM_B }, "All 5 White skaters (+glare) must stay TEAM_B without collapsing")
+    }
 }

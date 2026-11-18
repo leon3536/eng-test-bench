@@ -91,6 +91,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
     private val ocrReadsTotal = AtomicInteger(0)
     private val nanoCallsTotal = AtomicInteger(0)
+    private val framesAnalyzedCount = AtomicInteger(0)
 
     private var fpsEma: Float = 0f
     private var lastFrameWallMs: Long = 0L
@@ -180,6 +181,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
             ocrReadsTotal.set(0)
             nanoCallsTotal.set(0)
+            framesAnalyzedCount.set(0)
             fpsEma = 0f
             lastFrameWallMs = 0L
             lastDetectorMs = 0f
@@ -251,7 +253,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 val aspectRatio = highResBitmap.width.toFloat() / highResBitmap.height.coerceAtLeast(1).toFloat()
                 val rawDetections = yoloResult.detections
                     .filter { OnIceFilter.isOnIce(it.box, aspectRatio, useTiling) }
-                    .map { RawDetection(it.box, it.chestRgb) }
+                    .map { RawDetection(it.box, it.chestRgb, it.stripeScore) }
 
                 val nowMs = SystemClock.elapsedRealtime()
                 val frameResult: Pair<FrameMarkSample, Boolean>? = synchronized(stateLock) {
@@ -321,6 +323,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                         lastFullRecomputeWallMs == 0L ||
                         (nowMs - lastFullRecomputeWallMs >= FULL_RECOMPUTE_CADENCE_MS)
 
+                    framesAnalyzedCount.incrementAndGet()
                     emitStateLocked(forceFullRecompute = shouldFullRecompute)
                     sampleForOverlay to reachedNow
                 }
@@ -333,7 +336,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
                 Log.i(
                     TAG,
-                    "FRAME_STEP t=${"%.2f".format(Locale.US, timestampSec)}s detMs=${"%.1f".format(Locale.US, yoloResult.detectorMs)} " +
+                    "FRAME_STEP frame=#${framesAnalyzedCount.get()} t=${"%.2f".format(Locale.US, timestampSec)}s detMs=${"%.1f".format(Locale.US, yoloResult.detectorMs)} " +
                         "tiled=${yoloResult.tiledPassUsed} det=${yoloResult.detections.size} onIce=${rawDetections.size} " +
                         "live=${"%.2f".format(Locale.US, yoloResult.livePlayProb)} ocr=${ocrReadsTotal.get()} nano=${nanoEngine.status.value}",
                 )
@@ -409,7 +412,11 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         if (nowMs - lastOcrWallMs < OCR_CADENCE_MS || ocrJob?.isActive == true) return
 
         val priorityPlayers = sample.players
-            .filter { it.box.height >= MIN_OCR_BOX_HEIGHT && it.box.width >= 0.015f }
+            .filter {
+                it.team != TeamId.REFEREE &&
+                    it.box.height >= MIN_OCR_BOX_HEIGHT &&
+                    it.box.width >= 0.015f
+            }
             .sortedWith(
                 compareBy<TrackedPlayer>(
                     {
@@ -472,7 +479,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
     private fun captureNanoCrops(highResBitmap: Bitmap, sample: FrameMarkSample, nowMs: Long) {
         val teamProfiles = synchronized(stateLock) { tracker.getTeamProfiles() }
-        val needsTeamCrops = synchronized(stateLock) { shouldRefreshTeamLabelsLocked(nowMs) }
+        val needsTeamCrops = synchronized(stateLock) { shouldCollectTeamCropsLocked() }
         synchronized(cropLock) {
             if (needsTeamCrops) {
                 collectTeamCropsLocked(highResBitmap, sample, TeamId.TEAM_A, teamProfiles, pendingTeamACrops)
@@ -482,7 +489,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             // Refresh 4 largest unconfirmed skater crops for the 2x2 Nano jersey grid.
             val gridCandidates = sample.players
                 .filter {
-                    it.box.height >= MIN_OCR_BOX_HEIGHT &&
+                    it.team != TeamId.REFEREE &&
+                        it.box.height >= MIN_OCR_BOX_HEIGHT &&
                         it.box.width >= 0.015f &&
                         (it.jerseyNumber == null || !it.nanoVerified)
                 }
@@ -622,16 +630,25 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                                 lastNanoTeamWallMs = SystemClock.elapsedRealtime()
                                 teamLabelAttempts++
                                 if (labels.nanoVerified) {
-                                    val validNonStriped = !isStripedOrRefereeLabel(labels.teamALabel) &&
+                                    nanoCallsTotal.incrementAndGet()
+                                    val distinctLabels = !labels.teamALabel.trim().equals(
+                                        labels.teamBLabel.trim(),
+                                        ignoreCase = true,
+                                    )
+                                    val validNonStriped = distinctLabels &&
+                                        !isStripedOrRefereeLabel(labels.teamALabel) &&
                                         !isStripedOrRefereeLabel(labels.teamBLabel)
                                     val hadValidLabels = teamsNanoVerified &&
+                                        !lastVerifiedTeamALabel.trim().equals(
+                                            lastVerifiedTeamBLabel.trim(),
+                                            ignoreCase = true,
+                                        ) &&
                                         !isStripedOrRefereeLabel(lastVerifiedTeamALabel) &&
                                         !isStripedOrRefereeLabel(lastVerifiedTeamBLabel)
-                                    if (!hadValidLabels || validNonStriped) {
+                                    if (distinctLabels && (!hadValidLabels || validNonStriped)) {
                                         teamsNanoVerified = true
                                         lastVerifiedTeamALabel = labels.teamALabel
                                         lastVerifiedTeamBLabel = labels.teamBLabel
-                                        nanoCallsTotal.incrementAndGet()
                                         tracker.updateTeamProfile(TeamId.TEAM_A, labels.teamALabel, labels.teamALabel, true)
                                         tracker.updateTeamProfile(TeamId.TEAM_B, labels.teamBLabel, labels.teamBLabel, true)
                                     }
@@ -796,6 +813,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             analyzedSpanSec = analyzedSpanSec,
             analysisLimitSec = analysisLimitSec,
             analysisBudgetReached = analysisBudgetReached,
+            framesAnalyzed = framesAnalyzedCount.get(),
         )
         _state.value = PipelineState(
             videoTitle = videoTitle,
@@ -821,11 +839,17 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         return scaled
     }
 
-    private fun shouldRefreshTeamLabelsLocked(nowMs: Long): Boolean {
+    private fun shouldCollectTeamCropsLocked(): Boolean {
+        if (teamLabelAttempts >= MAX_TEAM_LABEL_ATTEMPTS) return false
         if (!teamsNanoVerified) return true
-        val existingInvalid = isStripedOrRefereeLabel(lastVerifiedTeamALabel) ||
+        return lastVerifiedTeamALabel.trim().equals(lastVerifiedTeamBLabel.trim(), ignoreCase = true) ||
+            isStripedOrRefereeLabel(lastVerifiedTeamALabel) ||
             isStripedOrRefereeLabel(lastVerifiedTeamBLabel)
-        return existingInvalid && teamLabelAttempts < 3 && nowMs - lastNanoTeamWallMs >= 8_000L
+    }
+
+    private fun shouldRefreshTeamLabelsLocked(nowMs: Long): Boolean {
+        if (!shouldCollectTeamCropsLocked()) return false
+        return teamLabelAttempts == 0 || (nowMs - lastNanoTeamWallMs >= TEAM_LABEL_RETRY_MS)
     }
 
     private fun isStripedOrRefereeLabel(label: String): Boolean {
@@ -954,6 +978,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         private const val NANO_GRID_CADENCE_MS = 2000L
         private const val MIN_OCR_BOX_HEIGHT = 0.045f
         private const val FULL_RECOMPUTE_CADENCE_MS = 1_200L
+        private const val MAX_TEAM_LABEL_ATTEMPTS = 4
+        private const val TEAM_LABEL_RETRY_MS = 5_000L
         private const val COMPACT_HISTORY_THRESHOLD = 18_000
         private const val COMPACT_MIN_SPACING_SEC = 1.0
     }
