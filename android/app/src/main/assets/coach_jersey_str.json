@@ -1,0 +1,127 @@
+{
+  "model_name": "coach_jersey_str",
+  "architecture": "MobileNetV3Large_0_14_MultiScale_SpatialAttention_Compositional",
+  "opset": 17,
+  "size_bytes": 10544519,
+  "size_mb": 10.545,
+  "input": {
+    "name": "images",
+    "dtype": "float32",
+    "shape": [
+      1,
+      3,
+      96,
+      96
+    ],
+    "layout": "NCHW_RGB_0_TO_1",
+    "normalization_embedded": true,
+    "imagenet_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "imagenet_std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "letterbox_pad_rgb": [
+      114,
+      114,
+      114
+    ],
+    "recommended_torso_crop_rel": [
+      -0.06,
+      0.1,
+      1.06,
+      0.62
+    ]
+  },
+  "outputs": {
+    "legibility_logit": [
+      1,
+      1
+    ],
+    "back_logit": [
+      1,
+      1
+    ],
+    "number_logits": [
+      1,
+      101
+    ],
+    "left_digit_logits": [
+      1,
+      11
+    ],
+    "right_digit_logits": [
+      1,
+      11
+    ]
+  },
+  "class_encoding": {
+    "number_logits": "0=illegible/none, 1..99=jersey 1..99, 100=\"00\"",
+    "left_digit_logits": "0..9=tens_or_only_digit, 10=blank",
+    "right_digit_logits": "0..9=ones_digit, 10=blank_or_single",
+    "prior": "uniform_1_to_99_plus_00_roster_free"
+  },
+  "calibration": {
+    "temperature_baked_in_onnx": true,
+    "effective_temperature": 1.0,
+    "fitted_raw_temperatures": {
+      "number_logits": 1.08,
+      "legibility_logit": 1.05,
+      "back_logit": 1.1244,
+      "digit_logits": 1.08
+    },
+    "val_nll_before": 0.7353,
+    "val_nll_after": 0.7345,
+    "val_ece_before": 0.0552,
+    "val_ece_after": 0.0574
+  },
+  "synthetic_validation_metrics": {
+    "legible_top1": 0.7663,
+    "legible_top3": 0.8712,
+    "order_swap_top1": 0.7561,
+    "hard_neg_fp_rate": 0.0023,
+    "hard_neg_argmax_nonzero": 0.002,
+    "legibility_acc": 0.9987,
+    "back_acc": 0.8142,
+    "left_partial_digit_acc": 0.6383,
+    "right_partial_digit_acc": 0.6456,
+    "left_digit_acc": 0.8959,
+    "right_digit_acc": 0.8957
+  },
+  "benchmark": {
+    "onnxruntime_cpu_2thread_ms": 0.351,
+    "pytorch_onnx_max_abs_diff": 1.1e-05
+  },
+  "ablations": {
+    "gap_baseline_160k": {
+      "legible_top1": 0.7532,
+      "legible_top3": 0.8703,
+      "order_swap_top1": 0.74,
+      "hard_neg_fp_rate": 0.0018,
+      "hard_neg_argmax_nonzero": 0.001,
+      "legibility_acc": 0.9987,
+      "back_acc": 0.8171,
+      "left_partial_digit_acc": 0.6411,
+      "right_partial_digit_acc": 0.6374,
+      "left_digit_acc": 0.8951,
+      "right_digit_acc": 0.891
+    },
+    "proposed_spatial_comp_160k": {
+      "legible_top1": 0.7663,
+      "legible_top3": 0.8712,
+      "order_swap_top1": 0.7561,
+      "hard_neg_fp_rate": 0.0023,
+      "hard_neg_argmax_nonzero": 0.002,
+      "legibility_acc": 0.9987,
+      "back_acc": 0.8142,
+      "left_partial_digit_acc": 0.6383,
+      "right_partial_digit_acc": 0.6456,
+      "left_digit_acc": 0.8959,
+      "right_digit_acc": 0.8957
+    }
+  }
+}

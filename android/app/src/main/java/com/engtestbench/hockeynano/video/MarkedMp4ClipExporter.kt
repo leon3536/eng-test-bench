@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.coroutines.coroutineContext
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -1398,6 +1399,7 @@ object MarkedMp4ClipExporter {
                         val prevMap = prev.players.associateBy { it.trackId }
                         val nextMap = next.players.associateBy { it.trackId }
                         val merged = ArrayList<TrackedPlayer>(max(prev.players.size, next.players.size))
+                        val allowUnmatchedCarryover = abs(prev.players.size - next.players.size) <= 3
 
                         for (p in prev.players) {
                             val q = nextMap[p.trackId]
@@ -1429,13 +1431,13 @@ object MarkedMp4ClipExporter {
                                         trail = if (alpha >= 0.5f && q.trail.isNotEmpty()) q.trail else p.trail
                                     )
                                 )
-                            } else if (timestampSec - prev.timestampSec <= min(0.5, gap * 0.5)) {
+                            } else if (allowUnmatchedCarryover && (timestampSec - prev.timestampSec) <= min(0.12, gap * 0.5)) {
                                 merged.add(p)
                             }
                         }
 
                         for (q in next.players) {
-                            if (q.trackId !in prevMap && (next.timestampSec - timestampSec) <= min(0.5, gap * 0.5)) {
+                            if (q.trackId !in prevMap && allowUnmatchedCarryover && (next.timestampSec - timestampSec) <= min(0.12, gap * 0.5)) {
                                 merged.add(q)
                             }
                         }

@@ -13,6 +13,9 @@ import com.engtestbench.hockeynano.core.model.PipelineTelemetry
 import com.engtestbench.hockeynano.core.model.RectNorm
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.model.TrackedPlayer
+import com.engtestbench.hockeynano.core.tracking.JerseyReadKind
+import com.engtestbench.hockeynano.core.tracking.JerseyReadSource
+import com.engtestbench.hockeynano.core.tracking.KitLabFeatures
 import com.engtestbench.hockeynano.core.tracking.MultiTeamPlayerTracker
 import com.engtestbench.hockeynano.core.tracking.OnIceFilter
 import com.engtestbench.hockeynano.core.tracking.RawDetection
@@ -21,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,16 +40,20 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
- * Coordinates real-time on-device hockey tracking, dual-pass ML Kit jersey OCR (~400ms cadence),
- * and single-flight Pixel 11 Pro Gemini Nano multimodal VLM tasks (team kit labeling, 2x2 jersey grids,
- * 30s shift summaries, and eng-test-bench assistant) while publishing [PipelineState].
+ * Coordinates real-time on-device hockey tracking, ONNX STR (~220ms cadence),
+ * dual-pass ML Kit jersey OCR (~400ms cadence), and single-flight Pixel 11 Pro
+ * Gemini Nano multimodal VLM tasks (white-balanced team kit labeling, multi-view
+ * 2x2 jersey sheets, 30s shift summaries, and eng-test-bench assistant) while
+ * publishing [PipelineState].
  */
 class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val detector: YoloOnnxDetector? = YoloOnnxDetector.load(context, threads = 4)
+    private val strRecognizer = JerseyStrOnnxRecognizer(context)
     private val jerseyRecognizer = JerseyNumberRecognizer()
     private val nanoEngine = GeminiNanoHockeyEngine(context)
     private val tracker = MultiTeamPlayerTracker()
@@ -85,9 +93,31 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private val clipSummariesById = ConcurrentHashMap<String, String>()
     private val exportedFastPaths = ConcurrentHashMap<String, String>()
     private val exportedMarkedPaths = ConcurrentHashMap<String, String>()
+    private val strAttempts = ConcurrentHashMap<Int, Int>()
     private val ocrAttempts = ConcurrentHashMap<Int, Int>()
     private val nanoGridAttempts = ConcurrentHashMap<Int, Int>()
     private val trackHitCounts = ConcurrentHashMap<Int, Int>()
+    private val lastStrByTrack = ConcurrentHashMap<Int, TrackStrScore>()
+    private val strongStrTwoDigitByTrack = ConcurrentHashMap<Int, Pair<String, Float>>()
+    private val trackOfficialHints = ConcurrentHashMap<Int, OfficialCueEma>()
+
+    private data class OfficialCueEma(
+        val emaPants: Float,
+        val emaChroma: Float,
+    )
+
+    private data class TrackStrScore(
+        val legibilityProb: Float,
+        val backProb: Float,
+        val sharpness: Float,
+        val timestampSec: Double,
+    )
+
+    private data class TrackViewSnapshot(
+        val timestampSec: Double,
+        val score: Float,
+        val bitmap: Bitmap,
+    )
 
     private val ocrReadsTotal = AtomicInteger(0)
     private val nanoCallsTotal = AtomicInteger(0)
@@ -98,9 +128,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private var lastDetectorMs: Float = 0f
     private var lastNanoLatencyMs: Long = 0L
     private var lastNanoMessage: String = ""
+    private var lastLoggedDiscoveredSummary: String = ""
 
+    private var strJob: Job? = null
     private var ocrJob: Job? = null
     private var nanoJob: Job? = null
+    private var lastStrWallMs: Long = 0L
     private var lastOcrWallMs: Long = 0L
     private var lastNanoGridWallMs: Long = 0L
     private var lastNanoTeamWallMs: Long = 0L
@@ -112,7 +145,9 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
     private val pendingTeamACrops = ArrayList<Pair<Int, Bitmap>>(3)
     private val pendingTeamBCrops = ArrayList<Pair<Int, Bitmap>>(3)
-    private val pendingNanoGridItems = ArrayList<GridCropItem>(4)
+    private val trackViewPool = LinkedHashMap<Int, MutableList<TrackViewSnapshot>>()
+    private val trackLastSeenSec = HashMap<Int, Double>()
+    private val pendingGridTrackQueue = ArrayList<Pair<Int, TeamId>>(4)
     private var latestPreviewBitmap: Bitmap? = null
 
     private val statusWatcherJob: Job
@@ -140,6 +175,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     ) {
         if (closed.get()) return
         val gen = sessionGen.incrementAndGet()
+        strJob?.cancel()
         ocrJob?.cancel()
         nanoJob?.cancel()
 
@@ -166,6 +202,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             this.nextCompactionThreshold = COMPACT_HISTORY_THRESHOLD + 1
             this.cachedDiscoveredPlayers = emptyList()
             this.cachedRawClips = emptyList()
+            this.lastLoggedDiscoveredSummary = ""
 
             historySamples.clear()
             currentSample = null
@@ -175,9 +212,13 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             clipSummariesById.clear()
             exportedFastPaths.clear()
             exportedMarkedPaths.clear()
+            strAttempts.clear()
             ocrAttempts.clear()
             nanoGridAttempts.clear()
             trackHitCounts.clear()
+            lastStrByTrack.clear()
+            strongStrTwoDigitByTrack.clear()
+            trackOfficialHints.clear()
 
             ocrReadsTotal.set(0)
             nanoCallsTotal.set(0)
@@ -187,6 +228,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             lastDetectorMs = 0f
             lastNanoLatencyMs = 0L
             lastNanoMessage = ""
+            lastStrWallMs = 0L
             lastOcrWallMs = 0L
             lastNanoGridWallMs = 0L
             lastNanoTeamWallMs = 0L
@@ -249,11 +291,22 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
                 val yoloResult = detEngine.detect(highResBitmap, timestampSec, useTiling)
                 if (sessionGen.get() != gen) return@withContext
+                val iceWb = detEngine.currentIceWhiteBalance()
 
                 val aspectRatio = highResBitmap.width.toFloat() / highResBitmap.height.coerceAtLeast(1).toFloat()
                 val rawDetections = yoloResult.detections
                     .filter { OnIceFilter.isOnIce(it.box, aspectRatio, useTiling) }
-                    .map { RawDetection(it.box, it.chestRgb, it.stripeScore) }
+                    .map {
+                        RawDetection(
+                            box = it.box,
+                            chestRgb = it.chestRgb,
+                            stripeScore = it.stripeScore,
+                            kitSummaryLab7 = it.kitSummaryLab7,
+                            lowerBellyLuma = it.lowerBellyLuma,
+                            pantsDarkness = it.pantsDarkness,
+                            armbandScore = it.armbandScore,
+                        )
+                    }
 
                 val nowMs = SystemClock.elapsedRealtime()
                 val frameResult: Pair<FrameMarkSample, Boolean>? = synchronized(stateLock) {
@@ -330,8 +383,23 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
                 if (frameResult == null || sessionGen.get() != gen) return@withContext
                 val (frameSample, budgetReachedNow) = frameResult
+                val detByBox = rawDetections.associateBy { it.box }
                 frameSample.players.forEach { p ->
                     trackHitCounts[p.trackId] = (trackHitCounts[p.trackId] ?: 0) + 1
+                    val matchedDet = detByBox[p.box]
+                    if (matchedDet != null && matchedDet.pantsDarkness.isFinite()) {
+                        val lab = KitLabFeatures.rgbToLab(matchedDet.chestRgb)
+                        val chroma = KitLabFeatures.labChroma(lab[1], lab[2])
+                        val prev = trackOfficialHints[p.trackId]
+                        trackOfficialHints[p.trackId] = if (prev == null) {
+                            OfficialCueEma(matchedDet.pantsDarkness, chroma)
+                        } else {
+                            OfficialCueEma(
+                                emaPants = 0.8f * prev.emaPants + 0.2f * matchedDet.pantsDarkness,
+                                emaChroma = 0.8f * prev.emaChroma + 0.2f * chroma,
+                            )
+                        }
+                    }
                 }
 
                 Log.i(
@@ -342,8 +410,9 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 )
 
                 if (!budgetReachedNow) {
-                    scheduleAsyncOcrIfDue(highResBitmap, frameSample, nowMs, gen)
-                    captureNanoCrops(highResBitmap, frameSample, nowMs)
+                    scheduleAsyncStrIfDue(highResBitmap, frameSample, iceWb, timestampSec, nowMs, gen)
+                    scheduleAsyncOcrIfDue(highResBitmap, frameSample, iceWb, timestampSec, nowMs, gen)
+                    captureNanoCrops(highResBitmap, frameSample, iceWb, timestampSec, nowMs)
                     maybeLaunchNanoWorker(gen)
                 }
             }
@@ -403,35 +472,177 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         return response.text
     }
 
+    fun recomputeStateNow() {
+        synchronized(stateLock) {
+            emitStateLocked(forceFullRecompute = true)
+        }
+    }
+
+    suspend fun awaitProcessingDrain(maxWaitMs: Long = 1_800L) {
+        val deadline = SystemClock.elapsedRealtime() + maxWaitMs.coerceAtLeast(100L)
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val busy = yoloBusy.get() ||
+                strJob?.isActive == true ||
+                ocrJob?.isActive == true ||
+                nanoJob?.isActive == true
+            if (!busy) break
+            delay(50L)
+        }
+        recomputeStateNow()
+    }
+
+    private fun isLikelyOfficialTrack(player: TrackedPlayer): Boolean =
+        player.team == TeamId.REFEREE || isLikelyOfficialTrackId(player.trackId)
+
+    private fun isLikelyOfficialTrackId(trackId: Int): Boolean {
+        val hint = trackOfficialHints[trackId]
+        if (hint != null && hint.emaPants >= 0.60f && hint.emaChroma < 15f) return true
+        val curTeam = synchronized(stateLock) {
+            currentSample?.players?.firstOrNull { it.trackId == trackId }?.team
+        }
+        return curTeam == TeamId.REFEREE
+    }
+
+    private fun selectPrioritySkaters(
+        sample: FrameMarkSample,
+        limit: Int,
+        attempts: Map<Int, Int>,
+        unconfirmedOnly: Boolean,
+        minHeight: Float = MIN_OCR_BOX_HEIGHT,
+    ): List<TrackedPlayer> = sample.players
+        .filter {
+            !isLikelyOfficialTrack(it) &&
+                it.box.height >= minHeight &&
+                it.box.width >= 0.015f &&
+                (!unconfirmedOnly || it.jerseyNumber == null || !it.nanoVerified)
+        }
+        .sortedWith(
+            compareBy<TrackedPlayer>(
+                { if (it.nanoVerified) 1 else 0 },
+                { p ->
+                    val area = p.box.width * p.box.height
+                    val str = lastStrByTrack[p.trackId]
+                    val sharpness = str?.sharpness ?: 100f
+                    val backProb = str?.backProb ?: 0.5f
+                    val legProb = str?.legibilityProb ?: 0.5f
+                    val att = attempts[p.trackId] ?: 0
+                    val viewScore = (0.3f + 0.7f * legProb) * (0.4f + 0.6f * backProb) * sharpness * p.box.height
+                    -((viewScore * area) / (1f + 0.5f * att))
+                },
+            ),
+        )
+        .take(limit)
+
+    private fun scheduleAsyncStrIfDue(
+        highResBitmap: Bitmap,
+        sample: FrameMarkSample,
+        iceWb: FloatArray,
+        timestampSec: Double,
+        nowMs: Long,
+        gen: Long,
+    ) {
+        if (!strRecognizer.isAvailable || nowMs - lastStrWallMs < STR_CADENCE_MS || strJob?.isActive == true) return
+        val priorityPlayers = selectPrioritySkaters(sample, MAX_STR_TRACKS_PER_STEP, strAttempts, unconfirmedOnly = false)
+        if (priorityPlayers.isEmpty()) return
+
+        val tasks = ArrayList<Pair<Int, Bitmap>>(priorityPlayers.size)
+        for (player in priorityPlayers) {
+            val crop = strRecognizer.cropUpperTorso(highResBitmap, player.box) ?: continue
+            strAttempts[player.trackId] = (strAttempts[player.trackId] ?: 0) + 1
+            tasks.add(player.trackId to crop)
+        }
+        if (tasks.isEmpty()) return
+
+        val wbCopy = iceWb.copyOf()
+        lastStrWallMs = nowMs
+        strJob = scope.launch(Dispatchers.Default) {
+            try {
+                var anyStrongRead = false
+                val strLogParts = ArrayList<String>(tasks.size)
+                for ((trackId, crop) in tasks) {
+                    try {
+                        if (!isActive || sessionGen.get() != gen || isLikelyOfficialTrackId(trackId)) continue
+                        val res = strRecognizer.recognizeFromTorsoCrop(crop, wbCopy) ?: continue
+                        lastStrByTrack[trackId] = TrackStrScore(
+                            legibilityProb = res.legibilityProb,
+                            backProb = res.backProb,
+                            sharpness = res.sharpness,
+                            timestampSec = timestampSec,
+                        )
+                        val candidates = if (res.legibilityProb >= 0.55f) res.topCandidates else emptyList()
+                        if (candidates.isNotEmpty() || res.partialLeftDigit != null || res.partialRightDigit != null) {
+                            candidates.firstOrNull()?.let { (num, p) ->
+                                if (num.length == 2 && p >= 0.60f && res.legibilityProb >= 0.55f) {
+                                    val prev = strongStrTwoDigitByTrack[trackId]
+                                    if (prev == null || p > prev.second) {
+                                        strongStrTwoDigitByTrack[trackId] = num to p
+                                    }
+                                }
+                            }
+                            val qualityWeight = if (candidates.isNotEmpty()) {
+                                ((0.35f + 0.65f * res.legibilityProb) * (0.50f + 0.50f * res.backProb)).coerceIn(0.05f, 1.25f)
+                            } else {
+                                (0.40f + 0.60f * res.backProb).coerceIn(0.10f, 1.0f)
+                            }
+                            val topProb = candidates.firstOrNull()?.second ?: 0f
+                            if (topProb >= 0.30f) {
+                                ocrReadsTotal.incrementAndGet()
+                                anyStrongRead = true
+                            }
+                            val topTag = candidates.firstOrNull()?.let { (num, p) ->
+                                "#$num:${"%.2f".format(Locale.US, p)}"
+                            } ?: listOfNotNull(
+                                res.partialLeftDigit?.let { "${it.first}?:${"%.2f".format(Locale.US, it.second)}" },
+                                res.partialRightDigit?.let { "?${it.first}:${"%.2f".format(Locale.US, it.second)}" },
+                            ).joinToString("+")
+                            strLogParts.add(
+                                "T$trackId:$topTag(leg=${"%.2f".format(Locale.US, res.legibilityProb)},bk=${"%.2f".format(Locale.US, res.backProb)})",
+                            )
+                            synchronized(stateLock) {
+                                if (sessionGen.get() == gen) {
+                                    tracker.recordJerseyDistribution(
+                                        trackId = trackId,
+                                        timestampSec = timestampSec,
+                                        candidates = candidates,
+                                        qualityWeight = qualityWeight,
+                                        source = JerseyReadSource.ONNX_STR,
+                                        partialLeftDigit = res.partialLeftDigit,
+                                        partialRightDigit = res.partialRightDigit,
+                                    )
+                                }
+                            }
+                        }
+                    } finally {
+                        if (!crop.isRecycled) crop.recycle()
+                    }
+                }
+                if (strLogParts.isNotEmpty() && sessionGen.get() == gen) {
+                    Log.i(TAG, "ONNX_STR t=${"%.2f".format(Locale.US, timestampSec)}s reads=\"${strLogParts.joinToString(",")}\"")
+                }
+                if (sessionGen.get() == gen && anyStrongRead) {
+                    synchronized(stateLock) {
+                        if (sessionGen.get() == gen) {
+                            emitStateLocked(forceFullRecompute = true)
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                tasks.forEach { (_, c) -> if (!c.isRecycled) c.recycle() }
+                Log.w(TAG, "Async STR step failed: ${t.message}")
+            }
+        }
+    }
+
     private fun scheduleAsyncOcrIfDue(
         highResBitmap: Bitmap,
         sample: FrameMarkSample,
+        iceWb: FloatArray,
+        timestampSec: Double,
         nowMs: Long,
         gen: Long,
     ) {
         if (nowMs - lastOcrWallMs < OCR_CADENCE_MS || ocrJob?.isActive == true) return
-
-        val priorityPlayers = sample.players
-            .filter {
-                it.team != TeamId.REFEREE &&
-                    it.box.height >= MIN_OCR_BOX_HEIGHT &&
-                    it.box.width >= 0.015f
-            }
-            .sortedWith(
-                compareBy<TrackedPlayer>(
-                    {
-                        when {
-                            it.jerseyNumber == null -> 0
-                            !it.nanoVerified -> 1
-                            else -> 2
-                        }
-                    },
-                    { ocrAttempts[it.trackId] ?: 0 },
-                    { -(it.box.width * it.box.height) },
-                ),
-            )
-            .take(MAX_OCR_TRACKS_PER_STEP)
-
+        val priorityPlayers = selectPrioritySkaters(sample, MAX_OCR_TRACKS_PER_STEP, ocrAttempts, unconfirmedOnly = false)
         if (priorityPlayers.isEmpty()) return
 
         val tasks = ArrayList<Pair<Int, Bitmap>>(priorityPlayers.size)
@@ -442,26 +653,48 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         }
         if (tasks.isEmpty()) return
 
+        val wbCopy = iceWb.copyOf()
         lastOcrWallMs = nowMs
         ocrJob = scope.launch(Dispatchers.Default) {
             try {
                 var anyRead = false
+                val ocrLogParts = ArrayList<String>(tasks.size)
                 for ((trackId, crop) in tasks) {
                     try {
-                        if (!isActive || sessionGen.get() != gen) continue
-                        val res = jerseyRecognizer.recognizeFromTorsoCrop(crop)
+                        if (!isActive || sessionGen.get() != gen || isLikelyOfficialTrackId(trackId)) continue
+                        val res = jerseyRecognizer.recognizeFromTorsoCrop(crop, wbCopy)
                         if (res != null && sessionGen.get() == gen) {
                             ocrReadsTotal.incrementAndGet()
                             anyRead = true
+                            val kind = when {
+                                res.jerseyNumber.length >= 2 -> JerseyReadKind.FULL
+                                res.xRel < -0.10f -> JerseyReadKind.LEFT_PARTIAL
+                                res.xRel > 0.10f -> JerseyReadKind.RIGHT_PARTIAL
+                                else -> JerseyReadKind.SINGLE
+                            }
+                            ocrLogParts.add(
+                                "T$trackId:#${res.jerseyNumber}(${"%.2f".format(Locale.US, res.confidence)},${kind.name},x=${"%.2f".format(Locale.US, res.xRel)})",
+                            )
                             synchronized(stateLock) {
                                 if (sessionGen.get() == gen) {
-                                    tracker.recordJerseyRead(trackId, res.jerseyNumber, res.confidence, false)
+                                    tracker.recordJerseyRead(
+                                        trackId = trackId,
+                                        jerseyNumber = res.jerseyNumber,
+                                        confidence = res.confidence,
+                                        timestampSec = timestampSec,
+                                        kind = kind,
+                                        qualityWeight = 1f,
+                                        source = JerseyReadSource.MLKIT_OCR,
+                                    )
                                 }
                             }
                         }
                     } finally {
                         if (!crop.isRecycled) crop.recycle()
                     }
+                }
+                if (ocrLogParts.isNotEmpty() && sessionGen.get() == gen) {
+                    Log.i(TAG, "MLKIT_OCR t=${"%.2f".format(Locale.US, timestampSec)}s reads=\"${ocrLogParts.joinToString(",")}\"")
                 }
                 if (sessionGen.get() == gen) {
                     synchronized(stateLock) {
@@ -477,38 +710,112 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         }
     }
 
-    private fun captureNanoCrops(highResBitmap: Bitmap, sample: FrameMarkSample, nowMs: Long) {
+    private fun captureNanoCrops(
+        highResBitmap: Bitmap,
+        sample: FrameMarkSample,
+        iceWb: FloatArray,
+        timestampSec: Double,
+        nowMs: Long,
+    ) {
         val teamProfiles = synchronized(stateLock) { tracker.getTeamProfiles() }
         val needsTeamCrops = synchronized(stateLock) { shouldCollectTeamCropsLocked() }
+        val confirmedIds = sample.players.filter { it.nanoVerified }.map { it.trackId }.toSet()
+
+        // Accumulate full upper-skater hockey figure crops (x: -14%..114%, y: -6%..86%) outside cropLock first.
+        val unconfirmed = selectPrioritySkaters(
+            sample = sample,
+            limit = MAX_VIEW_CANDIDATES_PER_FRAME,
+            attempts = nanoGridAttempts,
+            unconfirmedOnly = true,
+            minHeight = MIN_NANO_BOX_HEIGHT,
+        )
+        val capturedViews = ArrayList<Triple<TrackedPlayer, Float, Bitmap>>(unconfirmed.size)
+        for (p in unconfirmed) {
+            val crop = cropWhiteBalancedRegion(
+                highResBitmap = highResBitmap,
+                box = p.box,
+                iceWb = iceWb,
+                xStartFrac = -0.14f,
+                xEndFrac = 1.14f,
+                yStartFrac = -0.06f,
+                yEndFrac = 0.86f,
+                maxHeight = 260,
+                contrastAlpha = 1.15f,
+            ) ?: continue
+            val str = lastStrByTrack[p.trackId]?.takeIf { abs(timestampSec - it.timestampSec) <= 0.6 }
+            val strLeg = str?.legibilityProb ?: 0.5f
+            val strBack = str?.backProb ?: 0.5f
+            val sharpness = str?.sharpness ?: JerseyStrOnnxRecognizer.computeLaplacianSharpness(crop)
+            val score = (0.3f + 0.7f * strLeg) * (0.5f + 0.5f * strBack) * sharpness * p.box.height
+            capturedViews.add(Triple(p, score, crop))
+        }
+
         synchronized(cropLock) {
             if (needsTeamCrops) {
-                collectTeamCropsLocked(highResBitmap, sample, TeamId.TEAM_A, teamProfiles, pendingTeamACrops)
-                collectTeamCropsLocked(highResBitmap, sample, TeamId.TEAM_B, teamProfiles, pendingTeamBCrops)
+                collectTeamCropsLocked(highResBitmap, sample, iceWb, TeamId.TEAM_A, teamProfiles, pendingTeamACrops)
+                collectTeamCropsLocked(highResBitmap, sample, iceWb, TeamId.TEAM_B, teamProfiles, pendingTeamBCrops)
             }
 
-            // Refresh 4 largest unconfirmed skater crops for the 2x2 Nano jersey grid.
-            val gridCandidates = sample.players
-                .filter {
-                    it.team != TeamId.REFEREE &&
-                        it.box.height >= MIN_OCR_BOX_HEIGHT &&
-                        it.box.width >= 0.015f &&
-                        (it.jerseyNumber == null || !it.nanoVerified)
+            // Prune stale or already-confirmed tracks from the multi-view pool.
+            val poolIter = trackViewPool.entries.iterator()
+            while (poolIter.hasNext()) {
+                val (tid, snaps) = poolIter.next()
+                val lastSeen = trackLastSeenSec[tid] ?: timestampSec
+                if (tid in confirmedIds || abs(timestampSec - lastSeen) > VIEW_POOL_TTL_SEC) {
+                    snaps.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+                    poolIter.remove()
+                    trackLastSeenSec.remove(tid)
                 }
-                .sortedWith(
-                    compareBy<TrackedPlayer>(
-                        { if (it.jerseyNumber == null) 0 else 1 },
-                        { nanoGridAttempts[it.trackId] ?: 0 },
-                        { -(it.box.width * it.box.height) },
-                    ),
-                )
-                .take(4)
+            }
 
-            if (gridCandidates.isNotEmpty()) {
-                recycleGridItemsLocked(pendingNanoGridItems)
-                for (p in gridCandidates) {
-                    val crop = cropScaledTorso(highResBitmap, p.box, maxHeight = 256) ?: continue
-                    pendingNanoGridItems.add(GridCropItem(p.trackId, p.team, crop))
+            for ((p, score, crop) in capturedViews) {
+                trackLastSeenSec[p.trackId] = timestampSec
+                val list = trackViewPool.getOrPut(p.trackId) { ArrayList(MAX_VIEWS_PER_TRACK) }
+                val nearbyIdx = list.indexOfFirst { abs(it.timestampSec - timestampSec) < 0.22 }
+                if (nearbyIdx >= 0) {
+                    if (score > list[nearbyIdx].score) {
+                        val old = list[nearbyIdx].bitmap
+                        if (!old.isRecycled) old.recycle()
+                        list[nearbyIdx] = TrackViewSnapshot(timestampSec, score, crop)
+                    } else {
+                        if (!crop.isRecycled) crop.recycle()
+                    }
+                } else {
+                    list.add(TrackViewSnapshot(timestampSec, score, crop))
+                    if (list.size > MAX_VIEWS_PER_TRACK) {
+                        var minIdx = 0
+                        for (i in 1 until list.size) {
+                            if (list[i].score < list[minIdx].score) minIdx = i
+                        }
+                        val dropped = list.removeAt(minIdx).bitmap
+                        if (!dropped.isRecycled) dropped.recycle()
+                    }
                 }
+            }
+
+            while (trackViewPool.size > MAX_VIEW_POOL_TRACKS) {
+                val oldestKey = trackLastSeenSec.minByOrNull { it.value }?.key ?: break
+                trackViewPool.remove(oldestKey)?.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+                trackLastSeenSec.remove(oldestKey)
+            }
+
+            // Refresh top 4 unconfirmed priority tracks ranked strictly by bestViewScore * boxArea
+            // (moderated lightly by attempt count) without demoting tentative ONNX_STR reads.
+            pendingGridTrackQueue.clear()
+            val rankedQueue = unconfirmed
+                .mapNotNull { p ->
+                    val bestViewScore = trackViewPool[p.trackId]
+                        ?.filter { !it.bitmap.isRecycled }
+                        ?.maxOfOrNull { it.score } ?: return@mapNotNull null
+                    val boxArea = p.box.width * p.box.height
+                    val att = nanoGridAttempts[p.trackId] ?: 0
+                    val priority = (bestViewScore * boxArea) / (1f + 0.5f * att)
+                    Triple(p.trackId, p.team, priority)
+                }
+                .sortedByDescending { it.third }
+                .take(4)
+            for ((tid, team, _) in rankedQueue) {
+                pendingGridTrackQueue.add(tid to team)
             }
 
             // Capture a periodic downscaled frame preview for grounded Nano clip summaries.
@@ -666,9 +973,9 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 }
             }
 
-            // 3. Multimodal 2x2 jersey number grid every ~2.8s on priority unconfirmed crops.
+            // 3. Multimodal 2x2 multi-view jersey number grid every 1600ms while unconfirmed tracks exist.
             if (nowMs - lastNanoGridWallMs >= NANO_GRID_CADENCE_MS) {
-                val gridSnapshot = snapshotNanoGridItems()
+                val (gridSnapshot, trackTimestamps) = snapshotNanoGridItems()
                 if (gridSnapshot.isNotEmpty()) {
                     didWork = true
                     lastNanoGridWallMs = nowMs
@@ -676,9 +983,11 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                         nanoGridAttempts[it.trackId] = (nanoGridAttempts[it.trackId] ?: 0) + 1
                     }
                     val (reads, latencyMs) = try {
-                        nanoEngine.readJerseyGridMultimodal(gridSnapshot)
+                        nanoEngine.readMultiViewJerseyGridMultimodal(gridSnapshot)
                     } finally {
-                        gridSnapshot.forEach { if (!it.crop.isRecycled) it.crop.recycle() }
+                        gridSnapshot.forEach { item ->
+                            item.views.forEach { if (!it.isRecycled) it.recycle() }
+                        }
                     }
                     if (sessionGen.get() == gen) {
                         synchronized(stateLock) {
@@ -687,7 +996,34 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                                 if (latencyMs > 0L) lastNanoLatencyMs = latencyMs
                                 if (reads.isNotEmpty()) {
                                     reads.forEach { r ->
-                                        tracker.recordJerseyRead(r.trackId, r.jerseyNumber, r.confidence, true)
+                                        if (isLikelyOfficialTrackId(r.trackId)) return@forEach
+                                        val strong2 = strongStrTwoDigitByTrack[r.trackId]?.first
+                                        val cleanNumRaw = r.jerseyNumber.trim('?')
+                                        val (cleanNum, kind) = when {
+                                            r.isPartialRight -> cleanNumRaw to JerseyReadKind.RIGHT_PARTIAL
+                                            r.isPartialLeft -> cleanNumRaw to JerseyReadKind.LEFT_PARTIAL
+                                            cleanNumRaw.length == 1 && strong2 != null && strong2.length == 2 && cleanNumRaw[0] in strong2 -> {
+                                                // Convert partial single-digit Nano occlusion onto strong 2-digit STR partner.
+                                                val k = if (strong2[1] == cleanNumRaw[0]) {
+                                                    JerseyReadKind.RIGHT_PARTIAL
+                                                } else {
+                                                    JerseyReadKind.LEFT_PARTIAL
+                                                }
+                                                cleanNumRaw to k
+                                            }
+                                            cleanNumRaw.length == 1 -> cleanNumRaw to JerseyReadKind.SINGLE
+                                            else -> cleanNumRaw to JerseyReadKind.FULL
+                                        }
+                                        val readTs = trackTimestamps[r.trackId] ?: maxHistoryTimeSec
+                                        tracker.recordJerseyRead(
+                                            trackId = r.trackId,
+                                            jerseyNumber = cleanNum,
+                                            confidence = r.confidence,
+                                            timestampSec = readTs,
+                                            kind = kind,
+                                            qualityWeight = 1f,
+                                            source = JerseyReadSource.GEMINI_NANO,
+                                        )
                                     }
                                     lastNanoMessage = "Nano read ${reads.joinToString { "#${it.jerseyNumber}" }}"
                                     emitStateLocked(forceFullRecompute = true)
@@ -776,6 +1112,19 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             currentSample = currentSample?.let { tracker.annotateHistory(listOf(it)).firstOrNull() }
             val snapshotForCompute = historySamples.toList()
             cachedDiscoveredPlayers = tracker.getDiscoveredPlayers(snapshotForCompute, effectiveDuration)
+            val discoveredSummary = cachedDiscoveredPlayers.joinToString(",") {
+                val teamTag = when (it.team) {
+                    TeamId.TEAM_A -> "A"
+                    TeamId.TEAM_B -> "B"
+                    TeamId.REFEREE -> "R"
+                    TeamId.UNKNOWN -> "?"
+                }
+                "$teamTag:#${it.jerseyNumber}(${"%.1f".format(Locale.US, it.totalSeenSec)}s${if (it.nanoVerified) "*" else ""})"
+            }
+            if (discoveredSummary != lastLoggedDiscoveredSummary) {
+                lastLoggedDiscoveredSummary = discoveredSummary
+                Log.i(TAG, "DISCOVERED_PLAYERS count=${cachedDiscoveredPlayers.size} players=\"$discoveredSummary\"")
+            }
             cachedRawClips = if (!selNum.isNullOrBlank()) {
                 PlayerClipSegmenter.compute30sWindows(
                     snapshotForCompute,
@@ -829,14 +1178,63 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         )
     }
 
-    private fun cropScaledTorso(highResBitmap: Bitmap, box: RectNorm, maxHeight: Int): Bitmap? {
-        val raw = jerseyRecognizer.cropUpperTorso(highResBitmap, box) ?: return null
-        if (raw.height <= maxHeight) return raw
-        val scale = maxHeight.toFloat() / raw.height.toFloat()
-        val tw = max(12, (raw.width * scale).toInt())
-        val scaled = Bitmap.createScaledBitmap(raw, tw, maxHeight, true)
-        if (scaled !== raw && !raw.isRecycled) raw.recycle()
-        return scaled
+    private fun cropWhiteBalancedRegion(
+        highResBitmap: Bitmap,
+        box: RectNorm,
+        iceWb: FloatArray,
+        xStartFrac: Float,
+        xEndFrac: Float,
+        yStartFrac: Float,
+        yEndFrac: Float,
+        maxHeight: Int,
+        contrastAlpha: Float,
+    ): Bitmap? {
+        if (highResBitmap.isRecycled) return null
+        val w = highResBitmap.width
+        val h = highResBitmap.height
+        if (w <= 1 || h <= 1) return null
+
+        val bw = box.width
+        val bh = box.height
+        val x0 = ((box.x1 + xStartFrac * bw) * w).toInt().coerceIn(0, w - 1)
+        val x1 = ((box.x1 + xEndFrac * bw) * w).toInt().coerceIn(x0 + 1, w)
+        val y0 = ((box.y1 + yStartFrac * bh) * h).toInt().coerceIn(0, h - 1)
+        val y1 = ((box.y1 + yEndFrac * bh) * h).toInt().coerceIn(y0 + 1, h)
+        val cw = x1 - x0
+        val ch = y1 - y0
+        if (cw < 10 || ch < 14) return null
+
+        val rawCrop = Bitmap.createBitmap(highResBitmap, x0, y0, cw, ch)
+        val scaled = if (ch > maxHeight) {
+            val scale = maxHeight.toFloat() / ch.toFloat()
+            val tw = max(12, (cw * scale).roundToInt())
+            val s = Bitmap.createScaledBitmap(rawCrop, tw, maxHeight, true)
+            if (s !== rawCrop && !rawCrop.isRecycled) rawCrop.recycle()
+            s
+        } else {
+            rawCrop
+        }
+
+        val wbR = iceWb.getOrElse(0) { 1f }.coerceIn(0.6f, 1.6f)
+        val wbG = iceWb.getOrElse(1) { 1f }.coerceIn(0.6f, 1.6f)
+        val wbB = iceWb.getOrElse(2) { 1f }.coerceIn(0.6f, 1.6f)
+        val sw = scaled.width
+        val sh = scaled.height
+        val px = IntArray(sw * sh)
+        scaled.getPixels(px, 0, sw, 0, 0, sw, sh)
+        if (!scaled.isRecycled) scaled.recycle()
+
+        for (i in px.indices) {
+            val p = px[i]
+            val rWb = ((p ushr 16) and 0xFF) * wbR
+            val gWb = ((p ushr 8) and 0xFF) * wbG
+            val bWb = (p and 0xFF) * wbB
+            val r = ((rWb - 128f) * contrastAlpha + 128f).roundToInt().coerceIn(0, 255)
+            val g = ((gWb - 128f) * contrastAlpha + 128f).roundToInt().coerceIn(0, 255)
+            val b = ((bWb - 128f) * contrastAlpha + 128f).roundToInt().coerceIn(0, 255)
+            px[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        return Bitmap.createBitmap(px, sw, sh, Bitmap.Config.ARGB_8888)
     }
 
     private fun shouldCollectTeamCropsLocked(): Boolean {
@@ -861,6 +1259,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private fun collectTeamCropsLocked(
         highResBitmap: Bitmap,
         sample: FrameMarkSample,
+        iceWb: FloatArray,
         team: TeamId,
         teamProfiles: Map<TeamId, com.engtestbench.hockeynano.core.model.TeamProfile>,
         targetBuffer: MutableList<Pair<Int, Bitmap>>,
@@ -898,7 +1297,18 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             .take(2)
 
         for (p in candidates) {
-            val crop = cropScaledTorso(highResBitmap, p.box, maxHeight = 192) ?: continue
+            // White-balanced full upper-skater context (y: -4%..80%) prevents ice-tint kit misnaming & policy blocks.
+            val crop = cropWhiteBalancedRegion(
+                highResBitmap = highResBitmap,
+                box = p.box,
+                iceWb = iceWb,
+                xStartFrac = -0.10f,
+                xEndFrac = 1.10f,
+                yStartFrac = -0.04f,
+                yEndFrac = 0.80f,
+                maxHeight = 200,
+                contrastAlpha = 1.12f,
+            ) ?: continue
             val existingIdx = targetBuffer.indexOfFirst { it.first == p.trackId }
             if (existingIdx >= 0) {
                 val old = targetBuffer.removeAt(existingIdx).second
@@ -932,20 +1342,27 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         a to b
     }
 
-    private fun snapshotNanoGridItems(): List<GridCropItem> = synchronized(cropLock) {
-        val copy = pendingNanoGridItems.mapNotNull { item ->
-            if (item.crop.isRecycled) null
-            else runCatching {
-                GridCropItem(item.trackId, item.team, item.crop.copy(Bitmap.Config.ARGB_8888, false))
-            }.getOrNull()
+    private fun snapshotNanoGridItems(): Pair<List<MultiViewGridCropItem>, Map<Int, Double>> = synchronized(cropLock) {
+        val items = ArrayList<MultiViewGridCropItem>(4)
+        val timestamps = HashMap<Int, Double>(4)
+        for ((trackId, team) in pendingGridTrackQueue) {
+            val snaps = trackViewPool[trackId]?.filter { !it.bitmap.isRecycled }.orEmpty()
+            if (snaps.isEmpty()) continue
+            val best1 = snaps.maxByOrNull { it.score } ?: continue
+            val best2 = snaps
+                .filter { abs(it.timestampSec - best1.timestampSec) >= 0.45 }
+                .maxByOrNull { it.score }
+            val chosen = listOfNotNull(best1, best2).sortedBy { it.timestampSec }
+            val copies = chosen.mapNotNull { snap ->
+                runCatching { snap.bitmap.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull()
+            }
+            if (copies.isNotEmpty()) {
+                items.add(MultiViewGridCropItem(trackId, team, copies))
+                timestamps[trackId] = chosen.last().timestampSec
+            }
         }
-        recycleGridItemsLocked(pendingNanoGridItems)
-        copy
-    }
-
-    private fun recycleGridItemsLocked(list: MutableList<GridCropItem>) {
-        list.forEach { if (!it.crop.isRecycled) it.crop.recycle() }
-        list.clear()
+        pendingGridTrackQueue.clear()
+        items to timestamps
     }
 
     private fun clearAllCropBuffers() = synchronized(cropLock) {
@@ -953,7 +1370,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         pendingTeamACrops.clear()
         pendingTeamBCrops.forEach { (_, bmp) -> if (!bmp.isRecycled) bmp.recycle() }
         pendingTeamBCrops.clear()
-        recycleGridItemsLocked(pendingNanoGridItems)
+        trackViewPool.values.forEach { list ->
+            list.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+        }
+        trackViewPool.clear()
+        trackLastSeenSec.clear()
+        pendingGridTrackQueue.clear()
         latestPreviewBitmap?.let { if (!it.isRecycled) it.recycle() }
         latestPreviewBitmap = null
     }
@@ -962,21 +1384,30 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         if (!closed.compareAndSet(false, true)) return
         sessionGen.incrementAndGet()
         statusWatcherJob.cancel()
+        strJob?.cancel()
         ocrJob?.cancel()
         nanoJob?.cancel()
         scope.cancel()
         clearAllCropBuffers()
         runCatching { detector?.close() }
+        runCatching { strRecognizer.close() }
         runCatching { jerseyRecognizer.close() }
         runCatching { nanoEngine.close() }
     }
 
     companion object {
         private const val TAG = "HockeyNanoBench"
+        private const val STR_CADENCE_MS = 220L
+        private const val MAX_STR_TRACKS_PER_STEP = 6
         private const val OCR_CADENCE_MS = 400L
         private const val MAX_OCR_TRACKS_PER_STEP = 4
-        private const val NANO_GRID_CADENCE_MS = 2000L
+        private const val NANO_GRID_CADENCE_MS = 1600L
         private const val MIN_OCR_BOX_HEIGHT = 0.045f
+        private const val MIN_NANO_BOX_HEIGHT = 0.052f
+        private const val MAX_VIEW_CANDIDATES_PER_FRAME = 10
+        private const val MAX_VIEWS_PER_TRACK = 5
+        private const val MAX_VIEW_POOL_TRACKS = 20
+        private const val VIEW_POOL_TTL_SEC = 8.0
         private const val FULL_RECOMPUTE_CADENCE_MS = 1_200L
         private const val MAX_TEAM_LABEL_ATTEMPTS = 4
         private const val TEAM_LABEL_RETRY_MS = 5_000L

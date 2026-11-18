@@ -17,13 +17,18 @@ import java.io.Closeable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cbrt
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 @Serializable
@@ -50,7 +55,36 @@ data class YoloDetection(
     val confidence: Float,
     val chestRgb: List<Int>,
     val stripeScore: Float = 0f,
-)
+    val kitSummaryLab7: FloatArray = FloatArray(7),
+    val lowerBellyLuma: Float = Float.NaN,
+    val pantsDarkness: Float = Float.NaN,
+    val armbandScore: Float = 0f,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is YoloDetection) return false
+        return box == other.box &&
+            confidence == other.confidence &&
+            chestRgb == other.chestRgb &&
+            stripeScore == other.stripeScore &&
+            kitSummaryLab7.contentEquals(other.kitSummaryLab7) &&
+            lowerBellyLuma.toBits() == other.lowerBellyLuma.toBits() &&
+            pantsDarkness.toBits() == other.pantsDarkness.toBits() &&
+            armbandScore == other.armbandScore
+    }
+
+    override fun hashCode(): Int {
+        var result = box.hashCode()
+        result = 31 * result + confidence.hashCode()
+        result = 31 * result + chestRgb.hashCode()
+        result = 31 * result + stripeScore.hashCode()
+        result = 31 * result + kitSummaryLab7.contentHashCode()
+        result = 31 * result + lowerBellyLuma.toBits()
+        result = 31 * result + pantsDarkness.toBits()
+        result = 31 * result + armbandScore.hashCode()
+        return result
+    }
+}
 
 data class YoloFrameResult(
     val detections: List<YoloDetection>,
@@ -121,15 +155,29 @@ class YoloOnnxDetector private constructor(
         .allocateDirect(4 * 3 * imgW * imgH)
         .order(ByteOrder.nativeOrder())
         .asFloatBuffer()
-    private var chestPixelBuf = IntArray(4096)
+    private val wbLock = Any()
+    private var boxPixelBuf = IntArray(8192)
     private var chestR = IntArray(4096)
     private var chestG = IntArray(4096)
     private var chestB = IntArray(4096)
-    private var chestLuma = FloatArray(4096)
-    private var chestLumaSorted = FloatArray(4096)
-    private var colLumaBuf = FloatArray(256)
-    private val stripeBins = FloatArray(STRIPE_BINS)
-    private val bandScoreBuf = FloatArray(3)
+    private var borderL = FloatArray(2048)
+    private var borderA = FloatArray(2048)
+    private var borderB = FloatArray(2048)
+    private var torsoL = FloatArray(4096)
+    private var torsoA = FloatArray(4096)
+    private var torsoB = FloatArray(4096)
+    private var torsoKeep = BooleanArray(4096)
+    private var torsoAssign = IntArray(4096)
+    private var bellyLumaBuf = FloatArray(2048)
+    private val dftLuma = FloatArray(DFT_W * DFT_H)
+    private val dftLumaSorted = FloatArray(DFT_W * DFT_H)
+    private val dftWinRow = FloatArray(DFT_W)
+    private val dftBandPower = FloatArray(DFT_H)
+    private val dftLowPower = FloatArray(DFT_H)
+    private val dftAcEnergy = FloatArray(DFT_H)
+    private val dftRowAmp = FloatArray(DFT_H)
+    private val dftRowAmpSorted = FloatArray(DFT_H)
+    private val dftGroupScores = FloatArray(STRIPE_ROW_GROUPS)
     private val iceR = IntArray(ICE_WB_COLS * ICE_WB_ROWS)
     private val iceG = IntArray(ICE_WB_COLS * ICE_WB_ROWS)
     private val iceB = IntArray(ICE_WB_COLS * ICE_WB_ROWS)
@@ -138,7 +186,15 @@ class YoloOnnxDetector private constructor(
     private data class TorsoFeatures(
         val chestRgb: List<Int>,
         val stripeScore: Float,
+        val kitSummaryLab7: FloatArray,
+        val lowerBellyLuma: Float,
+        val pantsDarkness: Float,
+        val armbandScore: Float,
     )
+
+    fun currentIceWhiteBalance(): FloatArray = synchronized(wbLock) {
+        iceWb.copyOf()
+    }
 
     private val motionExtractor = MotionFeatureExtractor(config)
     private val featureRing = CausalFeatureRing(config.window, MotionFeatureExtractor.N_FEATURES)
@@ -208,16 +264,21 @@ class YoloOnnxDetector private constructor(
         // 4. Class-agnostic NMS (IoU > 0.42 or containment > 0.60), preferring unclipped boxes on tile seams.
         val kept = nmsMerge(allCandidates, iouThreshold = 0.42f)
 
-        // 5. Estimate lower-ice white-balance gains, then extract chest (x: 36%..64%, y: 30%..54%) RGB & stripe score.
+        // 5. Estimate lower-ice white-balance gains, then extract multi-zone CIELAB + stripe + pants + armband cues.
         updateIceWhiteBalance(highResBitmap)
+        val wb = currentIceWhiteBalance()
         val detections = kept.map { cand ->
             val rect = RectNorm(cand.x1, cand.y1, cand.x2, cand.y2)
-            val torso = extractTorsoFeatures(highResBitmap, rect)
+            val torso = extractTorsoFeatures(highResBitmap, rect, wb[0], wb[1], wb[2])
             YoloDetection(
                 box = rect,
                 confidence = cand.confidence,
                 chestRgb = torso.chestRgb,
                 stripeScore = torso.stripeScore,
+                kitSummaryLab7 = torso.kitSummaryLab7,
+                lowerBellyLuma = torso.lowerBellyLuma,
+                pantsDarkness = torso.pantsDarkness,
+                armbandScore = torso.armbandScore,
             )
         }
 
@@ -386,9 +447,11 @@ class YoloOnnxDetector private constructor(
         val w = bitmap.width
         val h = bitmap.height
         if (w < 8 || h < 8) {
-            iceWb[0] = 1f
-            iceWb[1] = 1f
-            iceWb[2] = 1f
+            synchronized(wbLock) {
+                iceWb[0] = 1f
+                iceWb[1] = 1f
+                iceWb[2] = 1f
+            }
             return
         }
         var idx = 0
@@ -414,60 +477,155 @@ class YoloOnnxDetector private constructor(
         val medB = iceB[mid].toFloat()
         val iceLuma = 0.299f * medR + 0.587f * medG + 0.114f * medB
         if (iceLuma < 100f) {
-            iceWb[0] = 1f
-            iceWb[1] = 1f
-            iceWb[2] = 1f
+            synchronized(wbLock) {
+                iceWb[0] = 1f
+                iceWb[1] = 1f
+                iceWb[2] = 1f
+            }
             return
         }
         val meanIce = (medR + medG + medB) / 3f
-        iceWb[0] = (meanIce / max(1f, medR)).coerceIn(0.70f, 1.45f)
-        iceWb[1] = (meanIce / max(1f, medG)).coerceIn(0.70f, 1.45f)
-        iceWb[2] = (meanIce / max(1f, medB)).coerceIn(0.70f, 1.45f)
+        val gR = (meanIce / max(1f, medR)).coerceIn(0.70f, 1.45f)
+        val gG = (meanIce / max(1f, medG)).coerceIn(0.70f, 1.45f)
+        val gB = (meanIce / max(1f, medB)).coerceIn(0.70f, 1.45f)
+        synchronized(wbLock) {
+            iceWb[0] = gR
+            iceWb[1] = gG
+            iceWb[2] = gB
+        }
     }
 
-    private fun extractTorsoFeatures(bitmap: Bitmap, box: RectNorm): TorsoFeatures {
+    private fun extractTorsoFeatures(
+        bitmap: Bitmap,
+        box: RectNorm,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): TorsoFeatures {
         val w = bitmap.width
         val h = bitmap.height
-        // Core chest (36%..64% width, 30%..54% height) avoids shoulder yokes and ice/glare edges.
-        val x0 = ((box.x1 + box.width * 0.36f) * w).toInt().coerceIn(0, w - 1)
-        val x1 = ((box.x1 + box.width * 0.64f) * w).toInt().coerceIn(x0 + 1, w)
-        val y0 = ((box.y1 + box.height * 0.30f) * h).toInt().coerceIn(0, h - 1)
-        val y1 = ((box.y1 + box.height * 0.54f) * h).toInt().coerceIn(y0 + 1, h)
-        val cw = x1 - x0
-        val ch = y1 - y0
-        val count = cw * ch
-        if (count <= 0) return TorsoFeatures(listOf(128, 128, 128), 0f)
-        if (chestPixelBuf.size < count) {
-            chestPixelBuf = IntArray(count)
+        val bx0 = (box.x1 * w).toInt().coerceIn(0, w - 1)
+        val by0 = (box.y1 * h).toInt().coerceIn(0, h - 1)
+        val bx1 = (box.x2 * w).toInt().coerceIn(bx0 + 1, w)
+        val by1 = (box.y2 * h).toInt().coerceIn(by0 + 1, h)
+        val bwPx = bx1 - bx0
+        val bhPx = by1 - by0
+        val boxCount = bwPx * bhPx
+        if (bwPx < 3 || bhPx < 6 || boxCount <= 0) {
+            return TorsoFeatures(
+                chestRgb = listOf(128, 128, 128),
+                stripeScore = 0f,
+                kitSummaryLab7 = floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f),
+                lowerBellyLuma = Float.NaN,
+                pantsDarkness = Float.NaN,
+                armbandScore = 0f,
+            )
+        }
+        if (boxPixelBuf.size < boxCount) {
+            boxPixelBuf = IntArray(boxCount)
+        }
+        bitmap.getPixels(boxPixelBuf, 0, bwPx, bx0, by0, bwPx, bhPx)
+
+        val torsoCenterFrac = findTorsoCenterFrac(bwPx, bhPx, wbR, wbG, wbB)
+        val chestRgb = extractCoreChestRgb(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
+        val kitSummaryLab7 = extractKitSummaryLab7(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
+        val lowerBellyLuma = extractLowerBellyLuma(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
+        val pantsDarkness = extractPantsDarkness(bwPx, bhPx, wbR, wbG, wbB)
+        val armbandScore = extractArmbandScore(bwPx, bhPx, wbR, wbG, wbB)
+        val stripeScore = computeDftStripeScore(bwPx, bhPx, wbR, wbG, wbB)
+
+        return TorsoFeatures(
+            chestRgb = chestRgb,
+            stripeScore = stripeScore,
+            kitSummaryLab7 = kitSummaryLab7,
+            lowerBellyLuma = lowerBellyLuma,
+            pantsDarkness = pantsDarkness,
+            armbandScore = armbandScore,
+        )
+    }
+
+    private fun findTorsoCenterFrac(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): Float {
+        // Wide stick-extension / crouched boxes (e.g., 82x70) shift the skater off-center;
+        // locate the darkest 42%-wide torso strip across y: 20%..56% so blank ice is avoided.
+        if (bwPx <= 0.65f * bhPx || bwPx < 10) return 0.50f
+        val y0 = (0.20f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val y1 = (0.56f * bhPx).toInt().coerceIn(y0 + 1, bhPx)
+        val rows = max(1, y1 - y0)
+        val winW = (0.42f * bwPx).roundToInt().coerceIn(3, bwPx)
+        val minX = (0.04f * bwPx).toInt().coerceIn(0, max(0, bwPx - winW))
+        val maxX = (bwPx - winW - (0.04f * bwPx).toInt()).coerceIn(minX, bwPx - winW)
+        if (maxX <= minX) return 0.50f
+
+        val colLuma = FloatArray(bwPx)
+        for (x in 0 until bwPx) {
+            var sum = 0f
+            for (y in y0 until y1) {
+                val p = boxPixelBuf[y * bwPx + x]
+                val r = (((p ushr 16) and 0xFF) * wbR).coerceIn(0f, 255f)
+                val g = (((p ushr 8) and 0xFF) * wbG).coerceIn(0f, 255f)
+                val b = ((p and 0xFF) * wbB).coerceIn(0f, 255f)
+                sum += 0.299f * r + 0.587f * g + 0.114f * b
+            }
+            colLuma[x] = sum / rows
+        }
+
+        var bestScore = Float.MAX_VALUE
+        var bestCenter = 0.50f
+        for (sx0 in minX..maxX) {
+            var winSum = 0f
+            for (x in sx0 until sx0 + winW) winSum += colLuma[x]
+            val meanLum = winSum / winW
+            val centerFrac = (sx0 + winW * 0.5f) / bwPx.toFloat()
+            val score = meanLum + 20f * abs(centerFrac - 0.50f)
+            if (score < bestScore) {
+                bestScore = score
+                bestCenter = centerFrac
+            }
+        }
+        return bestCenter.coerceIn(0.24f, 0.76f)
+    }
+
+    private fun extractCoreChestRgb(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+        torsoCenterFrac: Float,
+    ): List<Int> {
+        val x0 = ((torsoCenterFrac - 0.14f) * bwPx).toInt().coerceIn(0, bwPx - 1)
+        val x1 = ((torsoCenterFrac + 0.14f) * bwPx).toInt().coerceIn(x0 + 1, bwPx)
+        val y0 = (0.30f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val y1 = (0.54f * bhPx).toInt().coerceIn(y0 + 1, bhPx)
+        val count = (x1 - x0) * (y1 - y0)
+        if (count <= 0) return listOf(128, 128, 128)
+        if (chestR.size < count) {
             chestR = IntArray(count)
             chestG = IntArray(count)
             chestB = IntArray(count)
-            chestLuma = FloatArray(count)
-            chestLumaSorted = FloatArray(count)
         }
-        bitmap.getPixels(chestPixelBuf, 0, cw, x0, y0, cw, ch)
-        val wbR = iceWb[0]
-        val wbG = iceWb[1]
-        val wbB = iceWb[2]
-        for (i in 0 until count) {
-            val p = chestPixelBuf[i]
-            val r = (((p ushr 16) and 0xFF) * wbR).roundToInt().coerceIn(0, 255)
-            val g = (((p ushr 8) and 0xFF) * wbG).roundToInt().coerceIn(0, 255)
-            val b = ((p and 0xFF) * wbB).roundToInt().coerceIn(0, 255)
-            chestR[i] = r
-            chestG[i] = g
-            chestB[i] = b
-            val lum = 0.299f * r + 0.587f * g + 0.114f * b
-            chestLuma[i] = lum
-            chestLumaSorted[i] = lum
+        var idx = 0
+        for (y in y0 until y1) {
+            val rowOff = y * bwPx
+            for (x in x0 until x1) {
+                val p = boxPixelBuf[rowOff + x]
+                chestR[idx] = (((p ushr 16) and 0xFF) * wbR).roundToInt().coerceIn(0, 255)
+                chestG[idx] = (((p ushr 8) and 0xFF) * wbG).roundToInt().coerceIn(0, 255)
+                chestB[idx] = ((p and 0xFF) * wbB).roundToInt().coerceIn(0, 255)
+                idx++
+            }
         }
-        chestR.sort(0, count)
-        chestG.sort(0, count)
-        chestB.sort(0, count)
-        chestLumaSorted.sort(0, count)
-
-        val lo = if (count >= 5) (count * 2) / 5 else 0
-        val hi = if (count >= 5) max(lo + 1, (count * 4) / 5) else count
+        chestR.sort(0, idx)
+        chestG.sort(0, idx)
+        chestB.sort(0, idx)
+        val lo = if (idx >= 5) (idx * 2) / 5 else 0
+        val hi = if (idx >= 5) max(lo + 1, (idx * 4) / 5) else idx
         val span = max(1, hi - lo)
         var sumR = 0L
         var sumG = 0L
@@ -477,126 +635,504 @@ class YoloOnnxDetector private constructor(
             sumG += chestG[i]
             sumB += chestB[i]
         }
-        val meanR = (sumR / span).toInt().coerceIn(0, 255)
-        val meanG = (sumG / span).toInt().coerceIn(0, 255)
-        val meanB = (sumB / span).toInt().coerceIn(0, 255)
-        val maxC = maxOf(meanR, meanG, meanB)
-        val minC = minOf(meanR, meanG, meanB)
-        val hsvSat = if (maxC <= 0) 0f else (maxC - minC).toFloat() / maxC.toFloat()
-
-        val p10Luma = chestLumaSorted[(count * 0.10f).toInt().coerceIn(0, count - 1)]
-        val p90Luma = chestLumaSorted[(count * 0.90f).toInt().coerceIn(0, count - 1)]
-        val stripeScore = computeStripeScore(cw, ch, count, hsvSat, p10Luma, p90Luma)
-
-        return TorsoFeatures(
-            chestRgb = listOf(meanR, meanG, meanB),
-            stripeScore = stripeScore,
+        return listOf(
+            (sumR / span).toInt().coerceIn(0, 255),
+            (sumG / span).toInt().coerceIn(0, 255),
+            (sumB / span).toInt().coerceIn(0, 255),
         )
     }
 
-    private fun computeStripeScore(
-        cw: Int,
-        ch: Int,
-        count: Int,
-        hsvSat: Float,
-        p10Luma: Float,
-        p90Luma: Float,
-    ): Float {
-        if (cw < 4 || ch < 2 || count <= 0) return 0f
-        val lumaRange = p90Luma - p10Luma
-        if (p90Luma < 125f || (p10Luma + p90Luma) * 0.5f < 82f || lumaRange < 24f) return 0f
-        val satWeight = ((0.40f - hsvSat) / 0.18f).coerceIn(0f, 1f)
-        if (satWeight <= 0f) return 0f
-
-        val nBands = min(3, ch)
-        for (bi in 0 until nBands) {
-            val y0 = (bi * ch) / nBands
-            val y1 = max(y0 + 1, ((bi + 1) * ch) / nBands)
-            bandScoreBuf[bi] = bandStripeScore(cw, y0, y1)
+    private fun extractKitSummaryLab7(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+        torsoCenterFrac: Float,
+    ): FloatArray {
+        // 1. Border ice background estimation on x: 0..10% & 90..100%, y: 15..55%.
+        val by0 = (0.15f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val by1 = (0.55f * bhPx).toInt().coerceIn(by0 + 1, bhPx)
+        val leftX1 = (0.10f * bwPx).toInt().coerceIn(1, max(1, bwPx / 3))
+        val rightX0 = (0.90f * bwPx).toInt().coerceIn(leftX1, bwPx - 1)
+        val maxBorder = (by1 - by0) * (leftX1 + (bwPx - rightX0))
+        if (borderL.size < maxBorder) {
+            borderL = FloatArray(maxBorder)
+            borderA = FloatArray(maxBorder)
+            borderB = FloatArray(maxBorder)
         }
-        bandScoreBuf.sort(0, nBands)
-        val bandCombined = 0.55f * bandScoreBuf[0] + 0.45f * bandScoreBuf[nBands / 2]
-
-        val midLuma = 0.5f * (p10Luma + p90Luma)
-        var darkPx = 0
-        for (i in 0 until count) {
-            if (chestLuma[i] < midLuma) darkPx++
+        var totalBorder = 0
+        var iceBorderCount = 0
+        val labTmp = FloatArray(3)
+        for (y in by0 until by1) {
+            val rowOff = y * bwPx
+            for (x in 0 until leftX1) {
+                totalBorder++
+                pixelToLab(boxPixelBuf[rowOff + x], wbR, wbG, wbB, labTmp)
+                if (labTmp[0] >= 48f && hypot(labTmp[1], labTmp[2]) < 22f) {
+                    borderL[iceBorderCount] = labTmp[0]
+                    borderA[iceBorderCount] = labTmp[1]
+                    borderB[iceBorderCount] = labTmp[2]
+                    iceBorderCount++
+                }
+            }
+            for (x in rightX0 until bwPx) {
+                totalBorder++
+                pixelToLab(boxPixelBuf[rowOff + x], wbR, wbG, wbB, labTmp)
+                if (labTmp[0] >= 48f && hypot(labTmp[1], labTmp[2]) < 22f) {
+                    borderL[iceBorderCount] = labTmp[0]
+                    borderA[iceBorderCount] = labTmp[1]
+                    borderB[iceBorderCount] = labTmp[2]
+                    iceBorderCount++
+                }
+            }
         }
-        val darkFrac = darkPx.toFloat() / count.toFloat()
-        val pxBalance = (min(darkFrac, 1f - darkFrac) / 0.30f).coerceIn(0f, 1f)
+        val hasIceRef = iceBorderCount >= max(4, totalBorder / 4)
+        var iceBgL = 85f
+        var iceBgA = 0f
+        var iceBgB = 0f
+        if (hasIceRef) {
+            borderL.sort(0, iceBorderCount)
+            borderA.sort(0, iceBorderCount)
+            borderB.sort(0, iceBorderCount)
+            val mid = iceBorderCount / 2
+            iceBgL = borderL[mid]
+            iceBgA = borderA[mid]
+            iceBgB = borderB[mid]
+        }
 
-        return (bandCombined * satWeight * pxBalance).coerceIn(0f, 1f)
+        // 2. Torso pixels (centered on torsoCenterFrac; x: 26%..74% for normal boxes, slid for wide stick boxes).
+        val halfW = if (bwPx > 0.65f * bhPx) 0.21f else 0.24f
+        val tx0 = ((torsoCenterFrac - halfW) * bwPx).toInt().coerceIn(0, bwPx - 1)
+        val tx1 = ((torsoCenterFrac + halfW) * bwPx).toInt().coerceIn(tx0 + 1, bwPx)
+        val ty0 = (0.22f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val ty1 = (0.56f * bhPx).toInt().coerceIn(ty0 + 1, bhPx)
+        val torsoCount = (tx1 - tx0) * (ty1 - ty0)
+        if (torsoCount <= 0) return floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f)
+        if (torsoL.size < torsoCount) {
+            torsoL = FloatArray(torsoCount)
+            torsoA = FloatArray(torsoCount)
+            torsoB = FloatArray(torsoCount)
+            torsoKeep = BooleanArray(torsoCount)
+            torsoAssign = IntArray(torsoCount)
+        }
+
+        var idx = 0
+        var iceLikeCount = 0
+        for (y in ty0 until ty1) {
+            val rowOff = y * bwPx
+            for (x in tx0 until tx1) {
+                pixelToLab(boxPixelBuf[rowOff + x], wbR, wbG, wbB, labTmp)
+                val l = labTmp[0]
+                val a = labTmp[1]
+                val b = labTmp[2]
+                torsoL[idx] = l
+                torsoA[idx] = a
+                torsoB[idx] = b
+                var isIceLike = false
+                if (hasIceRef) {
+                    val dl = l - iceBgL
+                    val da = a - iceBgA
+                    val db = b - iceBgB
+                    if (dl * dl + da * da + db * db < ICE_DELTA_E_SQ_THRESHOLD) {
+                        isIceLike = true
+                        iceLikeCount++
+                    }
+                }
+                torsoKeep[idx] = !isIceLike
+                idx++
+            }
+        }
+
+        // Discount pixels within deltaE < 11 of surrounding ice unless >40% ice-like (white jersey),
+        // or up to 75% on wide stick-boxes when >= 10 dark non-ice pixels remain.
+        val wideStickBox = bwPx > 0.65f * bhPx
+        val maxDropFrac = if (wideStickBox) 0.75f else 0.40f
+        var nonIceDarkCount = 0
+        var nonIceSumL = 0f
+        if (wideStickBox && hasIceRef && iceLikeCount > torsoCount * 0.40f && iceLikeCount <= torsoCount * 0.75f) {
+            for (i in 0 until torsoCount) {
+                if (torsoKeep[i]) {
+                    nonIceDarkCount++
+                    nonIceSumL += torsoL[i]
+                }
+            }
+        }
+        val allowWideDarkDrop = !wideStickBox ||
+            iceLikeCount <= torsoCount * 0.40f ||
+            (nonIceDarkCount >= 10 && (nonIceSumL / max(1, nonIceDarkCount)) < 45f)
+        val dropIce = hasIceRef &&
+            allowWideDarkDrop &&
+            iceLikeCount > 0 &&
+            iceLikeCount <= (torsoCount * maxDropFrac) &&
+            (torsoCount - iceLikeCount) >= if (wideStickBox) 10 else 6
+        if (!dropIce) {
+            for (i in 0 until torsoCount) torsoKeep[i] = true
+        }
+
+        // Deterministic 2-means CIELAB seeded at min-L and max-L pixels.
+        var minIdx = -1
+        var maxIdx = -1
+        var minL = Float.MAX_VALUE
+        var maxL = -Float.MAX_VALUE
+        var keptCount = 0
+        var sumAllL = 0.0
+        var sumAllA = 0.0
+        var sumAllB = 0.0
+        for (i in 0 until torsoCount) {
+            if (!torsoKeep[i]) continue
+            keptCount++
+            val l = torsoL[i]
+            sumAllL += l
+            sumAllA += torsoA[i]
+            sumAllB += torsoB[i]
+            if (l < minL) {
+                minL = l
+                minIdx = i
+            }
+            if (l > maxL) {
+                maxL = l
+                maxIdx = i
+            }
+        }
+        if (keptCount <= 0 || minIdx < 0 || maxIdx < 0) {
+            return floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f)
+        }
+        if (maxL - minL < 2.0f || keptCount < 4) {
+            val mL = (sumAllL / keptCount).toFloat()
+            val mA = (sumAllA / keptCount).toFloat()
+            val mB = (sumAllB / keptCount).toFloat()
+            val share = if (mL >= 62f) 100f else 0f
+            return floatArrayOf(mL, mA, mB, mL, mA, mB, share)
+        }
+
+        var c0L = torsoL[minIdx]
+        var c0A = torsoA[minIdx]
+        var c0B = torsoB[minIdx]
+        var c1L = torsoL[maxIdx]
+        var c1A = torsoA[maxIdx]
+        var c1B = torsoB[maxIdx]
+
+        var n0 = 0
+        var n1 = 0
+        repeat(6) {
+            var s0L = 0.0; var s0A = 0.0; var s0B = 0.0; var c0N = 0
+            var s1L = 0.0; var s1A = 0.0; var s1B = 0.0; var c1N = 0
+            for (i in 0 until torsoCount) {
+                if (!torsoKeep[i]) continue
+                val l = torsoL[i]; val a = torsoA[i]; val b = torsoB[i]
+                val d0 = (l - c0L) * (l - c0L) + (a - c0A) * (a - c0A) + (b - c0B) * (b - c0B)
+                val d1 = (l - c1L) * (l - c1L) + (a - c1A) * (a - c1A) + (b - c1B) * (b - c1B)
+                if (d0 <= d1) {
+                    torsoAssign[i] = 0
+                    s0L += l; s0A += a; s0B += b; c0N++
+                } else {
+                    torsoAssign[i] = 1
+                    s1L += l; s1A += a; s1B += b; c1N++
+                }
+            }
+            n0 = c0N
+            n1 = c1N
+            if (n0 == 0 || n1 == 0) return@repeat
+            val n0L = (s0L / n0).toFloat(); val n0A = (s0A / n0).toFloat(); val n0B = (s0B / n0).toFloat()
+            val n1L = (s1L / n1).toFloat(); val n1A = (s1A / n1).toFloat(); val n1B = (s1B / n1).toFloat()
+            val maxShift = maxOf(
+                abs(n0L - c0L), abs(n0A - c0A), abs(n0B - c0B),
+                abs(n1L - c1L), abs(n1A - c1A), abs(n1B - c1B),
+            )
+            c0L = n0L; c0A = n0A; c0B = n0B
+            c1L = n1L; c1A = n1A; c1B = n1B
+            if (maxShift < 0.05f) return@repeat
+        }
+
+        if (n0 == 0 || n1 == 0) {
+            val mL = (sumAllL / keptCount).toFloat()
+            val mA = (sumAllA / keptCount).toFloat()
+            val mB = (sumAllB / keptCount).toFloat()
+            val share = if (mL >= 62f) 100f else 0f
+            return floatArrayOf(mL, mA, mB, mL, mA, mB, share)
+        }
+
+        return if (c0L <= c1L) {
+            val lightShare = (n1.toFloat() / keptCount.toFloat()) * 100f
+            floatArrayOf(c0L, c0A, c0B, c1L, c1A, c1B, lightShare)
+        } else {
+            val lightShare = (n0.toFloat() / keptCount.toFloat()) * 100f
+            floatArrayOf(c1L, c1A, c1B, c0L, c0A, c0B, lightShare)
+        }
     }
 
-    private fun bandStripeScore(cw: Int, y0: Int, y1: Int): Float {
-        val rows = y1 - y0
-        if (rows <= 0 || cw < 4) return 0f
-        if (colLumaBuf.size < cw) {
-            colLumaBuf = FloatArray(cw)
-        }
-        for (x in 0 until cw) {
-            var sum = 0f
-            for (y in y0 until y1) {
-                sum += chestLuma[y * cw + x]
+    private fun extractLowerBellyLuma(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+        torsoCenterFrac: Float,
+    ): Float {
+        // x: 32%..68% (slid to torsoCenterFrac on wide stick-boxes), y: 42%..56%.
+        val x0 = ((torsoCenterFrac - 0.18f) * bwPx).toInt().coerceIn(0, bwPx - 1)
+        val x1 = ((torsoCenterFrac + 0.18f) * bwPx).toInt().coerceIn(x0 + 1, bwPx)
+        val y0 = (0.42f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val y1 = (0.56f * bhPx).toInt().coerceIn(y0 + 1, bhPx)
+        val count = (x1 - x0) * (y1 - y0)
+        if (count < 4) return Float.NaN
+        if (bellyLumaBuf.size < count) bellyLumaBuf = FloatArray(count)
+        var idx = 0
+        for (y in y0 until y1) {
+            val rowOff = y * bwPx
+            for (x in x0 until x1) {
+                val p = boxPixelBuf[rowOff + x]
+                val r = (((p ushr 16) and 0xFF) * wbR).coerceIn(0f, 255f)
+                val g = (((p ushr 8) and 0xFF) * wbG).coerceIn(0f, 255f)
+                val b = ((p and 0xFF) * wbB).coerceIn(0f, 255f)
+                bellyLumaBuf[idx++] = 0.299f * r + 0.587f * g + 0.114f * b
             }
-            colLumaBuf[x] = sum / rows
+        }
+        bellyLumaBuf.sort(0, idx)
+        val lo = if (idx >= 5) (idx * 2) / 5 else 0
+        val hi = if (idx >= 5) max(lo + 1, (idx * 4) / 5) else idx
+        var sum = 0.0
+        for (i in lo until hi) sum += bellyLumaBuf[i]
+        return (sum / max(1, hi - lo)).toFloat()
+    }
+
+    private fun extractPantsDarkness(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): Float {
+        // Fraction of achromatic dark pixels (luma < 72 && chromaSpread < 24) across x: 28%..72%, y: 56%..84%.
+        val x0 = (0.28f * bwPx).toInt().coerceIn(0, bwPx - 1)
+        val x1 = (0.72f * bwPx).toInt().coerceIn(x0 + 1, bwPx)
+        val y0 = (0.56f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val y1 = (0.84f * bhPx).toInt().coerceIn(y0 + 1, bhPx)
+        val count = (x1 - x0) * (y1 - y0)
+        if (count < 4) return Float.NaN
+        var darkCount = 0
+        for (y in y0 until y1) {
+            val rowOff = y * bwPx
+            for (x in x0 until x1) {
+                val p = boxPixelBuf[rowOff + x]
+                val r = (((p ushr 16) and 0xFF) * wbR).coerceIn(0f, 255f)
+                val g = (((p ushr 8) and 0xFF) * wbG).coerceIn(0f, 255f)
+                val b = ((p and 0xFF) * wbB).coerceIn(0f, 255f)
+                val lum = 0.299f * r + 0.587f * g + 0.114f * b
+                val spread = maxOf(r, g, b) - minOf(r, g, b)
+                if (lum < 72f && spread < 24f) darkCount++
+            }
+        }
+        return darkCount.toFloat() / count.toFloat()
+    }
+
+    private fun extractArmbandScore(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): Float {
+        // HSV orange fraction (H 4..26 deg, S >= 0.45, V >= 0.40) on sleeves x: 0..25% & 75..100%, y: 15%..45%.
+        val y0 = (0.15f * bhPx).toInt().coerceIn(0, bhPx - 1)
+        val y1 = (0.45f * bhPx).toInt().coerceIn(y0 + 1, bhPx)
+        val leftX1 = (0.25f * bwPx).toInt().coerceIn(1, max(1, bwPx / 2))
+        val rightX0 = (0.75f * bwPx).toInt().coerceIn(leftX1, bwPx - 1)
+        var total = 0
+        var orange = 0
+        for (y in y0 until y1) {
+            val rowOff = y * bwPx
+            for (x in 0 until leftX1) {
+                total++
+                if (isOrangeArmbandPixel(boxPixelBuf[rowOff + x], wbR, wbG, wbB)) orange++
+            }
+            for (x in rightX0 until bwPx) {
+                total++
+                if (isOrangeArmbandPixel(boxPixelBuf[rowOff + x], wbR, wbG, wbB)) orange++
+            }
+        }
+        return if (total < 4) 0f else orange.toFloat() / total.toFloat()
+    }
+
+    private fun computeDftStripeScore(
+        bwPx: Int,
+        bhPx: Int,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): Float {
+        // Full-torso bilinear 64x36 1D Hann-DFT on x: 14%..86%, y: 16%..55%.
+        val sx0 = 0.14f * bwPx
+        val sx1 = 0.86f * bwPx
+        val sy0 = 0.16f * bhPx
+        val sy1 = 0.55f * bhPx
+        val spanW = sx1 - sx0
+        val spanH = sy1 - sy0
+        if (spanW < 4f || spanH < 4f) return 0f
+
+        val maxX = (bwPx - 1).toFloat()
+        val maxY = (bhPx - 1).toFloat()
+        var achromaticCount = 0
+        var sumSat = 0f
+
+        for (row in 0 until DFT_H) {
+            val fy = (sy0 + ((row + 0.5f) / DFT_H) * spanH - 0.5f).coerceIn(0f, maxY)
+            val y0 = fy.toInt().coerceIn(0, bhPx - 1)
+            val y1 = min(y0 + 1, bhPx - 1)
+            val ty = fy - y0
+            val ity = 1f - ty
+            val rowOff0 = y0 * bwPx
+            val rowOff1 = y1 * bwPx
+            val dstRowOff = row * DFT_W
+
+            for (col in 0 until DFT_W) {
+                val fx = (sx0 + ((col + 0.5f) / DFT_W) * spanW - 0.5f).coerceIn(0f, maxX)
+                val x0 = fx.toInt().coerceIn(0, bwPx - 1)
+                val x1 = min(x0 + 1, bwPx - 1)
+                val tx = fx - x0
+                val itx = 1f - tx
+
+                val p00 = boxPixelBuf[rowOff0 + x0]
+                val p10 = boxPixelBuf[rowOff0 + x1]
+                val p01 = boxPixelBuf[rowOff1 + x0]
+                val p11 = boxPixelBuf[rowOff1 + x1]
+
+                val w00 = itx * ity
+                val w10 = tx * ity
+                val w01 = itx * ty
+                val w11 = tx * ty
+
+                val rRaw = w00 * ((p00 ushr 16) and 0xFF) +
+                    w10 * ((p10 ushr 16) and 0xFF) +
+                    w01 * ((p01 ushr 16) and 0xFF) +
+                    w11 * ((p11 ushr 16) and 0xFF)
+                val gRaw = w00 * ((p00 ushr 8) and 0xFF) +
+                    w10 * ((p10 ushr 8) and 0xFF) +
+                    w01 * ((p01 ushr 8) and 0xFF) +
+                    w11 * ((p11 ushr 8) and 0xFF)
+                val bRaw = w00 * (p00 and 0xFF) +
+                    w10 * (p10 and 0xFF) +
+                    w01 * (p01 and 0xFF) +
+                    w11 * (p11 and 0xFF)
+
+                val r = (rRaw * wbR).coerceIn(0f, 255f)
+                val g = (gRaw * wbG).coerceIn(0f, 255f)
+                val b = (bRaw * wbB).coerceIn(0f, 255f)
+
+                val lum = 0.299f * r + 0.587f * g + 0.114f * b
+                val maxC = maxOf(r, g, b)
+                val minC = minOf(r, g, b)
+                val spread = maxC - minC
+                val sat = if (maxC <= 1f) 0f else spread / maxC
+                if (spread < 36f || sat < 0.24f) achromaticCount++
+                sumSat += sat
+
+                val dIdx = dstRowOff + col
+                dftLuma[dIdx] = lum
+                dftLumaSorted[dIdx] = lum
+            }
         }
 
-        val bins = min(cw, STRIPE_BINS)
-        if (cw > bins) {
-            for (i in 0 until bins) {
-                val sx0 = (i * cw) / bins
-                val sx1 = max(sx0 + 1, ((i + 1) * cw) / bins)
-                var bSum = 0f
-                for (x in sx0 until sx1) {
-                    bSum += colLumaBuf[x]
+        val totalPx = DFT_W * DFT_H
+        dftLumaSorted.sort(0, totalPx)
+        val p10 = dftLumaSorted[(totalPx * 0.10f).toInt()]
+        val p90 = dftLumaSorted[(totalPx * 0.90f).toInt()]
+        // White-stripe p90 luma guard >= 122f prevents solid dark navy (#14) false positives.
+        if (p90 < 122f || (p10 + p90) * 0.5f < 78f || (p90 - p10) < 22f) return 0f
+
+        val achromaticFrac = achromaticCount.toFloat() / totalPx.toFloat()
+        val meanSat = sumSat / totalPx.toFloat()
+        val chromaGate = ((achromaticFrac - 0.45f) / 0.35f).coerceIn(0f, 1f) *
+            ((0.40f - meanSat) / 0.18f).coerceIn(0f, 1f)
+        if (chromaGate <= 0f) return 0f
+
+        val midLuma = 0.5f * (p10 + p90)
+        var darkPx = 0
+        for (i in 0 until totalPx) {
+            if (dftLuma[i] < midLuma) darkPx++
+        }
+        val darkFrac = darkPx.toFloat() / totalPx.toFloat()
+        val pxBalance = (min(darkFrac, 1f - darkFrac) / 0.25f).coerceIn(0f, 1f)
+        if (pxBalance <= 0f) return 0f
+
+        // Per-row 1D Hann-DFT across 64 columns in frequency bins k = 3..15 vs low bins k = 1..2.
+        for (row in 0 until DFT_H) {
+            val rowOff = row * DFT_W
+            var mean = 0f
+            for (c in 0 until DFT_W) mean += dftLuma[rowOff + c]
+            mean /= DFT_W.toFloat()
+
+            var acSumSq = 0f
+            for (c in 0 until DFT_W) {
+                val v = (dftLuma[rowOff + c] - mean) * HANN_WINDOW[c]
+                dftWinRow[c] = v
+                acSumSq += v * v
+            }
+            dftAcEnergy[row] = acSumSq / HANN_SUM_SQ
+
+            var lowPow = 0f
+            var bandPow = 0f
+            for (k in 1..DFT_K_MAX) {
+                val cosRow = DFT_COS[k]
+                val sinRow = DFT_SIN[k]
+                var re = 0f
+                var im = 0f
+                for (c in 0 until DFT_W) {
+                    val v = dftWinRow[c]
+                    re += v * cosRow[c]
+                    im -= v * sinRow[c]
                 }
-                stripeBins[i] = bSum / (sx1 - sx0)
+                val p = 2f * (re * re + im * im) / (DFT_W.toFloat() * HANN_SUM_SQ)
+                if (k <= 2) lowPow += p else bandPow += p
             }
-        } else {
-            for (i in 0 until bins) {
-                stripeBins[i] = colLumaBuf[i]
-            }
+            dftLowPower[row] = lowPow
+            dftBandPower[row] = bandPow
+            dftRowAmp[row] = sqrt(bandPow)
+            dftRowAmpSorted[row] = dftRowAmp[row]
         }
 
-        var bMin = stripeBins[0]
-        var bMax = stripeBins[0]
-        for (i in 1 until bins) {
-            val v = stripeBins[i]
-            if (v < bMin) bMin = v
-            if (v > bMax) bMax = v
-        }
-        val lumaRange = bMax - bMin
-        if (lumaRange < 16f) return 0f
-
-        val diffThresh = max(7f, 0.12f * lumaRange)
-        var lastSign = 0
-        var flips = 0
-        for (i in 0 until bins - 1) {
-            val d = stripeBins[i + 1] - stripeBins[i]
-            if (abs(d) >= diffThresh) {
-                val sign = if (d > 0f) 1 else -1
-                if (lastSign != 0 && sign != lastSign) {
-                    flips++
-                }
-                lastSign = sign
+        // 6-row-band consistency (6 bands of 6 rows each).
+        val rowsPerBand = DFT_H / STRIPE_ROW_GROUPS
+        for (g in 0 until STRIPE_ROW_GROUPS) {
+            val rStart = g * rowsPerBand
+            val rEnd = rStart + rowsPerBand
+            var eb = 0f
+            var el = 0f
+            var etot = 0f
+            for (r in rStart until rEnd) {
+                eb += dftBandPower[r]
+                el += dftLowPower[r]
+                etot += dftAcEnergy[r]
             }
+            eb /= rowsPerBand
+            el /= rowsPerBand
+            etot = max(1e-6f, etot / rowsPerBand)
+            val ratioBand = eb / max(1e-6f, eb + el)
+            val ratioTotal = eb / etot
+            val amp = sqrt(eb)
+            dftGroupScores[g] = ((ratioBand - 0.22f) / 0.36f).coerceIn(0f, 1f) *
+                ((ratioTotal - 0.20f) / 0.35f).coerceIn(0f, 1f) *
+                (amp / 6.5f).coerceIn(0f, 1f)
         }
-        val freqScore = when {
-            flips >= 3 -> 1.0f
-            flips == 2 -> 0.35f
-            flips == 1 -> 0.10f
-            else -> 0f
+        dftGroupScores.sort()
+        val bandConsistency = 0.55f * dftGroupScores[1] + 0.45f * dftGroupScores[2]
+        if (bandConsistency <= 0f) return 0f
+
+        // Vertical row extent: referee stripes span almost every torso row; jersey numbers do not.
+        dftRowAmpSorted.sort()
+        val refAmp = dftRowAmpSorted[(DFT_H * 0.90f).toInt().coerceIn(0, DFT_H - 1)]
+        if (refAmp <= 1e-4f) return 0f
+        var activeRows = 0
+        val rowThresh = 0.40f * refAmp
+        for (r in 0 until DFT_H) {
+            if (dftRowAmp[r] >= rowThresh) activeRows++
         }
-        val contrastScore = ((lumaRange - 16f) / 56f).coerceIn(0f, 1f)
-        val midLuma = 0.5f * (bMin + bMax)
-        var darkCols = 0
-        for (i in 0 until bins) {
-            if (stripeBins[i] < midLuma) darkCols++
-        }
-        val darkFrac = darkCols.toFloat() / bins.toFloat()
-        val colBalance = (min(darkFrac, 1f - darkFrac) / 0.25f).coerceIn(0f, 1f)
-        return freqScore * contrastScore * colBalance
+        val extent = activeRows.toFloat() / DFT_H.toFloat()
+        val extentScore = ((extent - 0.50f) / 0.30f).coerceIn(0f, 1f)
+        if (extentScore <= 0f) return 0f
+
+        return (sqrt(bandConsistency * extentScore * pxBalance) * chromaGate).coerceIn(0f, 1f)
     }
 
     override fun close() {
@@ -870,10 +1406,84 @@ class YoloOnnxDetector private constructor(
     }
 
     companion object {
-        private const val STRIPE_BINS = 20
         private const val ICE_WB_COLS = 16
         private const val ICE_WB_ROWS = 12
+        private const val ICE_DELTA_E_SQ_THRESHOLD = 121f // deltaE < 11
+        private const val DFT_W = 64
+        private const val DFT_H = 36
+        private const val DFT_K_MAX = 15
+        private const val STRIPE_ROW_GROUPS = 6
         private val configJson = Json { ignoreUnknownKeys = true }
+
+        private val SRGB_TO_LINEAR = FloatArray(256) { idx ->
+            val c = idx / 255f
+            if (c <= 0.04045f) c / 12.92f else ((c + 0.055f) / 1.055f).pow(2.4f)
+        }
+
+        private val HANN_WINDOW = FloatArray(DFT_W) { c ->
+            (0.5 - 0.5 * cos((2.0 * PI * c) / (DFT_W - 1))).toFloat()
+        }
+
+        private val HANN_SUM_SQ: Float = run {
+            var sum = 0f
+            for (v in HANN_WINDOW) sum += v * v
+            max(1e-6f, sum)
+        }
+
+        private val DFT_COS = Array(DFT_K_MAX + 1) { k ->
+            FloatArray(DFT_W) { c -> cos((2.0 * PI * k * c) / DFT_W).toFloat() }
+        }
+
+        private val DFT_SIN = Array(DFT_K_MAX + 1) { k ->
+            FloatArray(DFT_W) { c -> sin((2.0 * PI * k * c) / DFT_W).toFloat() }
+        }
+
+        private fun labF(t: Float): Float =
+            if (t > 0.0088564516f) cbrt(t) else 7.787037f * t + 16f / 116f
+
+        private fun pixelToLab(
+            argb: Int,
+            wbR: Float,
+            wbG: Float,
+            wbB: Float,
+            outLab: FloatArray,
+        ) {
+            val r = (((argb ushr 16) and 0xFF) * wbR).roundToInt().coerceIn(0, 255)
+            val g = (((argb ushr 8) and 0xFF) * wbG).roundToInt().coerceIn(0, 255)
+            val b = ((argb and 0xFF) * wbB).roundToInt().coerceIn(0, 255)
+            val rl = SRGB_TO_LINEAR[r]
+            val gl = SRGB_TO_LINEAR[g]
+            val bl = SRGB_TO_LINEAR[b]
+            val x = (0.4124564f * rl + 0.3575761f * gl + 0.1804375f * bl) / 0.95047f
+            val y = 0.2126729f * rl + 0.7151522f * gl + 0.0721750f * bl
+            val z = (0.0193339f * rl + 0.1191920f * gl + 0.9503041f * bl) / 1.08883f
+            val fx = labF(x)
+            val fy = labF(y)
+            val fz = labF(z)
+            outLab[0] = 116f * fy - 16f
+            outLab[1] = 500f * (fx - fy)
+            outLab[2] = 200f * (fy - fz)
+        }
+
+        private fun isOrangeArmbandPixel(argb: Int, wbR: Float, wbG: Float, wbB: Float): Boolean {
+            val r = (((argb ushr 16) and 0xFF) * wbR).coerceIn(0f, 255f) / 255f
+            val g = (((argb ushr 8) and 0xFF) * wbG).coerceIn(0f, 255f) / 255f
+            val b = ((argb and 0xFF) * wbB).coerceIn(0f, 255f) / 255f
+            val maxC = maxOf(r, g, b)
+            if (maxC < 0.40f) return false
+            val minC = minOf(r, g, b)
+            val delta = maxC - minC
+            if (delta <= 1e-5f) return false
+            val sat = delta / maxC
+            if (sat < 0.45f) return false
+            var hue = when (maxC) {
+                r -> 60f * (((g - b) / delta) % 6f)
+                g -> 60f * (((b - r) / delta) + 2f)
+                else -> 60f * (((r - g) / delta) + 4f)
+            }
+            if (hue < 0f) hue += 360f
+            return hue in 4f..26f
+        }
 
         private fun boxIou(a: CandidateBox, b: CandidateBox): Float {
             val iw = min(a.x2, b.x2) - max(a.x1, b.x1)

@@ -47,9 +47,13 @@ class OnIceFilterTest {
     }
 
     @Test
-    fun `degenerate or NaN boxes are rejected`() {
+    fun `degenerate, tiny board-letter FP, or NaN boxes are rejected`() {
         assertFalse(OnIceFilter.isOnIce(RectNorm(Float.NaN, 0.4f, 0.5f, 0.5f), 2.25f, true))
         assertFalse(OnIceFilter.isOnIce(RectNorm(0.5f, 0.5f, 0.5f, 0.502f), 2.25f, true))
         assertFalse(OnIceFilter.isOnIce(RectNorm(0.0f, 0.0f, 0.9f, 0.9f), 1.77f, false))
+        // 20x22px false-positive board letter 'A' on 1920x1080 (h ~ 0.0204 < 0.026) must be rejected,
+        // while a far-board 0.038f skater on the ice passes.
+        assertFalse(OnIceFilter.isOnIce(skaterAt(0.48f, 0.32f, w = 0.011f, h = 0.021f), 1920f / 1080f, panoramicEnabled = false))
+        assertTrue(OnIceFilter.isOnIce(skaterAt(0.48f, 0.36f, w = 0.016f, h = 0.038f), 1920f / 1080f, panoramicEnabled = false))
     }
 }

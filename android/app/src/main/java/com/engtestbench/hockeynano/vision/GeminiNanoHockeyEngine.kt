@@ -12,6 +12,7 @@ import android.util.Log
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.ImagePart
@@ -47,10 +48,18 @@ data class GridCropItem(
     val crop: Bitmap,
 )
 
+data class MultiViewGridCropItem(
+    val trackId: Int,
+    val team: TeamId,
+    val views: List<Bitmap>,
+)
+
 data class NanoJerseyRead(
     val trackId: Int,
     val jerseyNumber: String,
     val confidence: Float,
+    val isPartialLeft: Boolean = false,
+    val isPartialRight: Boolean = false,
 )
 
 data class NanoTextResponse(
@@ -140,9 +149,10 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         val composite = buildTeamComparisonComposite(teamACrops.take(3), teamBCrops.take(3))
         val prompt =
             "This 768x384 image shows ice hockey players split into two sides: left half labeled A " +
-                "(Team A crops) and right half labeled B (Team B crops). Focus on the players' jersey " +
-                "fabric (ignore the white ice background) and name each side's primary jersey color/kit " +
-                "in 1-3 words (for example: Navy Blue, White/Red, Black/Gold). " +
+                "(Team A crops) and right half labeled B (Team B crops). " +
+                "Left half TEAM A wears the DARK base jersey and right half TEAM B wears the WHITE/LIGHT base jersey " +
+                "— ignore the white ice background and name each side's base + trim jersey color in 1-3 words " +
+                "(for example: Dark Navy/Red | White/Blue). " +
                 "Reply ONLY in this exact format:\nTEAM_A: <kit> | TEAM_B: <kit>"
 
         val startMs = System.currentTimeMillis()
@@ -181,47 +191,97 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         }
     }
 
-    suspend fun readJerseyGridMultimodal(items: List<GridCropItem>): Pair<List<NanoJerseyRead>, Long> =
-        withContext(Dispatchers.IO) {
-            val batch = items.take(4)
-            if (batch.isEmpty() || multimodalBroken) return@withContext emptyList<NanoJerseyRead>() to 0L
-            if (refreshStatus() != "ready") return@withContext emptyList<NanoJerseyRead>() to 0L
+    suspend fun readJerseyGridMultimodal(items: List<GridCropItem>): Pair<List<NanoJerseyRead>, Long> {
+        val multi = items.map { MultiViewGridCropItem(it.trackId, it.team, listOf(it.crop)) }
+        return readMultiViewJerseyGridMultimodal(multi)
+    }
 
-            val grid = buildJerseyGridComposite(batch)
-            val prompt =
-                "This 768x768 2x2 grid shows ${batch.size} ice hockey player jersey crops labeled [1] to [${batch.size}]. " +
-                    "Read any clearly visible 1 or 2 digit jersey number (1-99) in each numbered cell. " +
-                    "If a number is blurry, tiny, or unreadable, output NONE. " +
-                    "Reply ONLY in one line:\n1:#<num or NONE> 2:#<num or NONE> 3:#<num or NONE> 4:#<num or NONE>"
+    suspend fun readMultiViewJerseyGridMultimodal(
+        items: List<MultiViewGridCropItem>,
+    ): Pair<List<NanoJerseyRead>, Long> = withContext(Dispatchers.IO) {
+        val batch = items.take(4)
+        if (batch.isEmpty() || multimodalBroken) return@withContext emptyList<NanoJerseyRead>() to 0L
+        if (refreshStatus() != "ready") return@withContext emptyList<NanoJerseyRead>() to 0L
+        runJerseyGridBatch(batch)
+    }
 
-            val startMs = System.currentTimeMillis()
-            try {
-                val raw = inferenceMutex.withLock {
-                    val m = model ?: Generation.getClient().also { model = it }
-                    val req = generateContentRequest(ImagePart(grid), TextPart(prompt)) {
-                        temperature = 0.0f
-                        topK = 1
-                        maxOutputTokens = 48
-                    }
-                    m.generateContent(req).candidates.firstOrNull()?.text?.trim().orEmpty()
-                }
-                val latencyMs = max(1L, System.currentTimeMillis() - startMs)
-                val parsed = parseJerseyGridResponse(raw, batch)
-                val summary = parsed.joinToString(",") { "T${it.trackId}:#${it.jerseyNumber}" }.ifEmpty { "none" }
-                Log.i(
-                    TAG,
-                    "NANO_JERSEY_READ latencyMs=${latencyMs}ms count=${parsed.size} reads=\"$summary\" raw=\"${raw.replace('\n', ' ').take(120)}\"",
-                )
-                parsed to latencyMs
-            } catch (e: Throwable) {
-                val latencyMs = max(1L, System.currentTimeMillis() - startMs)
-                if (isMultimodalUnsupported(e)) multimodalBroken = true
-                Log.w(TAG, "NANO_JERSEY_READ error latencyMs=${latencyMs}ms err=${e.javaClass.simpleName}:${e.message}")
-                emptyList<NanoJerseyRead>() to latencyMs
-            } finally {
-                if (!grid.isRecycled) grid.recycle()
-            }
+    private suspend fun runJerseyGridBatch(
+        batch: List<MultiViewGridCropItem>,
+        allowEchoRetry: Boolean = true,
+    ): Pair<List<NanoJerseyRead>, Long> {
+        if (batch.isEmpty() || multimodalBroken) return emptyList<NanoJerseyRead>() to 0L
+        val grid = buildJerseyGridComposite(batch)
+        val gridDesc = when (batch.size) {
+            1 -> "384x384 1x1"
+            2 -> "768x384 1x2"
+            else -> "768x768 2x2"
         }
+        val slotLetters = SLOT_LETTERS.take(batch.size)
+        val slotList = slotLetters.joinToString(", ") { "[$it]" }
+        val slotTemplate = slotLetters.joinToString(" ") { "$it:#<num or NONE>" }
+        val prompt =
+            "This $gridDesc ice hockey analytics sheet shows ${batch.size} skater track cells labeled $slotList. " +
+                "Each cell shows 1 or 2 views of the same ice hockey player. " +
+                "Read any clearly visible 1 or 2 digit jersey number (1-99) printed on the jersey in each cell. " +
+                "If only one digit of a two-digit number is legible, use ? for the hidden digit (for example #9? or #?7). " +
+                "If a number is blurry, tiny, or unreadable, output NONE. " +
+                "Reply ONLY in one line:\n$slotTemplate"
+
+        val startMs = System.currentTimeMillis()
+        try {
+            val raw = inferenceMutex.withLock {
+                val m = model ?: Generation.getClient().also { model = it }
+                val req = generateContentRequest(ImagePart(grid), TextPart(prompt)) {
+                    temperature = 0.0f
+                    topK = 1
+                    maxOutputTokens = 48
+                }
+                m.generateContent(req).candidates.firstOrNull()?.text?.trim().orEmpty()
+            }
+            val latencyMs = max(1L, System.currentTimeMillis() - startMs)
+            val parsed = parseJerseyGridResponse(raw, batch)
+            if (isCrossSlotEcho(parsed, batch)) {
+                Log.w(
+                    TAG,
+                    "NANO_JERSEY_READ echo_rejected latencyMs=${latencyMs}ms n=${batch.size} raw=\"${raw.replace('\n', ' ').take(120)}\"",
+                )
+                if (!grid.isRecycled) grid.recycle()
+                if (allowEchoRetry && batch.isNotEmpty()) {
+                    val (retryReads, retryMs) = runJerseyGridBatch(listOf(batch.first()), allowEchoRetry = false)
+                    return retryReads to (latencyMs + retryMs)
+                }
+                return emptyList<NanoJerseyRead>() to latencyMs
+            }
+            val summary = parsed.joinToString(",") { "T${it.trackId}:#${it.jerseyNumber}" }.ifEmpty { "none" }
+            Log.i(
+                TAG,
+                "NANO_JERSEY_READ latencyMs=${latencyMs}ms n=${batch.size} count=${parsed.size} reads=\"$summary\" raw=\"${raw.replace('\n', ' ').take(120)}\"",
+            )
+            return parsed to latencyMs
+        } catch (e: Throwable) {
+            val latencyMs = max(1L, System.currentTimeMillis() - startMs)
+            if (isPolicyCheckBlocked(e)) {
+                Log.w(TAG, "NANO_JERSEY_READ policy_blocked batch=${batch.size} latencyMs=${latencyMs}ms err=${e.message}")
+                if (!grid.isRecycled) grid.recycle()
+                if (batch.size > 2) {
+                    val (leftReads, leftMs) = runJerseyGridBatch(batch.take(2), allowEchoRetry)
+                    val (rightReads, rightMs) = runJerseyGridBatch(batch.drop(2), allowEchoRetry)
+                    return (leftReads + rightReads) to (latencyMs + leftMs + rightMs)
+                }
+                if (batch.size == 2) {
+                    val (firstReads, firstMs) = runJerseyGridBatch(listOf(batch[0]), allowEchoRetry = false)
+                    val (secondReads, secondMs) = runJerseyGridBatch(listOf(batch[1]), allowEchoRetry = false)
+                    return (firstReads + secondReads) to (latencyMs + firstMs + secondMs)
+                }
+                return emptyList<NanoJerseyRead>() to latencyMs
+            }
+            if (isMultimodalUnsupported(e)) multimodalBroken = true
+            Log.w(TAG, "NANO_JERSEY_READ error latencyMs=${latencyMs}ms err=${e.javaClass.simpleName}:${e.message}")
+            return emptyList<NanoJerseyRead>() to latencyMs
+        } finally {
+            if (!grid.isRecycled) grid.recycle()
+        }
+    }
 
     suspend fun summarizeClip(
         playerNumber: String,
@@ -289,8 +349,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             }
         } catch (e: Throwable) {
             val latencyMs = max(1L, System.currentTimeMillis() - startMs)
-            if (imageForPrompt != null && isMultimodalUnsupported(e)) {
-                multimodalBroken = true
+            if (imageForPrompt != null && (isMultimodalUnsupported(e) || isPolicyCheckBlocked(e))) {
+                if (isMultimodalUnsupported(e)) multimodalBroken = true
                 return@withContext summarizeClip(
                     playerNumber, teamName, startSec, endSec, visibilitySec, avgLiveProb, avgSpeedNorm, null,
                 )
@@ -347,10 +407,19 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
 
         val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG)
         val dividerPaint = Paint().apply { color = Color.rgb(180, 190, 200); strokeWidth = 4f }
-        canvas.drawLine(384f, 0f, 384f, 384f, dividerPaint)
+        canvas.drawLine(384f, 40f, 384f, 384f, dividerPaint)
 
-        drawSideHeader(canvas, "TEAM A", 12f, 8f, Color.rgb(0, 229, 255))
-        drawSideHeader(canvas, "TEAM B", 396f, 8f, Color.rgb(255, 109, 0))
+        val bannerBg = Paint().apply { color = Color.rgb(14, 19, 27) }
+        canvas.drawRect(0f, 0f, 768f, 40f, bannerBg)
+        val bannerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(200, 214, 229)
+            textSize = 18f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("ICE HOCKEY PLAYER • TEAM KIT COMPARISON", 16f, 26f, bannerText)
+
+        drawSideHeader(canvas, "TEAM A", 12f, 48f, Color.rgb(0, 229, 255))
+        drawSideHeader(canvas, "TEAM B", 396f, 48f, Color.rgb(255, 109, 0))
 
         drawCropsInHalf(canvas, teamACrops, halfX = 0, Color.rgb(0, 229, 255), bmpPaint)
         drawCropsInHalf(canvas, teamBCrops, halfX = 384, Color.rgb(255, 109, 0), bmpPaint)
@@ -384,10 +453,10 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
     ) {
         if (crops.isEmpty()) return
         val slotW = 112f
-        val slotH = 314f
+        val slotH = 282f
         val gap = 10f
         val startX = halfX + 14f
-        val topY = 54f
+        val topY = 90f
         val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = accentColor
             style = Paint.Style.STROKE
@@ -402,17 +471,24 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         }
     }
 
-    private fun buildJerseyGridComposite(items: List<GridCropItem>): Bitmap {
-        val out = Bitmap.createBitmap(768, 768, Bitmap.Config.ARGB_8888)
+    private fun buildJerseyGridComposite(items: List<MultiViewGridCropItem>): Bitmap {
+        val cols = if (items.size == 1) 1 else 2
+        val rows = if (items.size <= 2) 1 else 2
+        val out = Bitmap.createBitmap(cols * 384, rows * 384, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
-        canvas.drawColor(Color.rgb(18, 22, 27))
+        canvas.drawColor(Color.rgb(18, 24, 34))
 
         val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG)
         val borderPaint = Paint().apply {
-            color = Color.rgb(90, 105, 120)
+            color = Color.rgb(80, 98, 120)
             style = Paint.Style.STROKE
             strokeWidth = 3f
         }
+        val innerSplitPaint = Paint().apply {
+            color = Color.rgb(60, 74, 92)
+            strokeWidth = 2f
+        }
+        val headerBg = Paint().apply { color = Color.rgb(13, 18, 27) }
         val pillBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(235, 10, 12, 16) }
         val pillBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(255, 214, 0)
@@ -421,7 +497,17 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         }
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(255, 214, 0)
-            textSize = 28f
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val cardTagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(184, 204, 228)
+            textSize = 15f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val viewTagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(210, 220, 232, 244)
+            textSize = 14f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
@@ -431,16 +517,28 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             val cellX = col * 384f
             val cellY = row * 384f
             canvas.drawRect(cellX, cellY, cellX + 384f, cellY + 384f, borderPaint)
+            canvas.drawRect(cellX + 2f, cellY + 2f, cellX + 382f, cellY + 46f, headerBg)
 
-            if (!item.crop.isRecycled) {
-                val target = RectF(cellX + 14f, cellY + 48f, cellX + 370f, cellY + 370f)
-                drawAspectFitCrop(canvas, item.crop, target, bmpPaint)
+            val validViews = item.views.filter { !it.isRecycled }.take(2)
+            if (validViews.size == 1) {
+                val target = RectF(cellX + 10f, cellY + 50f, cellX + 374f, cellY + 374f)
+                drawAspectFitCrop(canvas, validViews[0], target, bmpPaint)
+            } else if (validViews.size >= 2) {
+                val leftTarget = RectF(cellX + 10f, cellY + 50f, cellX + 188f, cellY + 374f)
+                val rightTarget = RectF(cellX + 196f, cellY + 50f, cellX + 374f, cellY + 374f)
+                drawAspectFitCrop(canvas, validViews[0], leftTarget, bmpPaint)
+                drawAspectFitCrop(canvas, validViews[1], rightTarget, bmpPaint)
+                canvas.drawLine(cellX + 192f, cellY + 50f, cellX + 192f, cellY + 374f, innerSplitPaint)
+                canvas.drawText("V1", cellX + 16f, cellY + 68f, viewTagPaint)
+                canvas.drawText("V2", cellX + 202f, cellY + 68f, viewTagPaint)
             }
 
-            val badgeRect = RectF(cellX + 12f, cellY + 10f, cellX + 68f, cellY + 46f)
-            canvas.drawRoundRect(badgeRect, 8f, 8f, pillBg)
-            canvas.drawRoundRect(badgeRect, 8f, 8f, pillBorder)
-            canvas.drawText("[${idx + 1}]", cellX + 20f, cellY + 37f, labelPaint)
+            val badgeRect = RectF(cellX + 10f, cellY + 8f, cellX + 66f, cellY + 40f)
+            canvas.drawRoundRect(badgeRect, 7f, 7f, pillBg)
+            canvas.drawRoundRect(badgeRect, 7f, 7f, pillBorder)
+            val slotLetter = SLOT_LETTERS[idx]
+            canvas.drawText("[$slotLetter]", cellX + 16f, cellY + 33f, labelPaint)
+            canvas.drawText("ICE HOCKEY PLAYER", cellX + 76f, cellY + 30f, cardTagPaint)
         }
         return out
     }
@@ -471,17 +569,44 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
     private fun sanitizeKitLabel(s: String): String =
         s.trim().trim('"', '\'', '.', ',', ':', ';').take(28).trim()
 
-    private fun parseJerseyGridResponse(raw: String, items: List<GridCropItem>): List<NanoJerseyRead> {
+    private fun parseJerseyGridResponse(raw: String, items: List<MultiViewGridCropItem>): List<NanoJerseyRead> {
         val clean = raw.replace("**", "").replace('\n', ' ').trim()
         val results = ArrayList<NanoJerseyRead>(items.size)
         val seenTracks = HashSet<Int>()
         for (match in GRID_READ_REGEX.findAll(clean)) {
-            val slot = match.groupValues[1].toIntOrNull() ?: continue
+            val slotChar = match.groupValues[1].uppercase().firstOrNull() ?: continue
+            val slotIdx = slotChar - 'A'
             val token = match.groupValues[2].uppercase()
-            if (slot !in 1..items.size) continue
+            if (slotIdx !in items.indices) continue
+            val item = items[slotIdx]
+            if (token.startsWith("?") && token.length == 2 && token[1] in '0'..'9') {
+                if (seenTracks.add(item.trackId)) {
+                    results.add(
+                        NanoJerseyRead(
+                            trackId = item.trackId,
+                            jerseyNumber = token,
+                            confidence = 0.80f,
+                            isPartialRight = true,
+                        ),
+                    )
+                }
+                continue
+            }
+            if (token.endsWith("?") && token.length == 2 && token[0] in '1'..'9') {
+                if (seenTracks.add(item.trackId)) {
+                    results.add(
+                        NanoJerseyRead(
+                            trackId = item.trackId,
+                            jerseyNumber = token,
+                            confidence = 0.80f,
+                            isPartialLeft = true,
+                        ),
+                    )
+                }
+                continue
+            }
             val value = token.toIntOrNull() ?: continue
             if (value !in 1..99) continue
-            val item = items[slot - 1]
             if (seenTracks.add(item.trackId)) {
                 results.add(NanoJerseyRead(item.trackId, value.toString(), confidence = 0.88f))
             }
@@ -489,9 +614,33 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         return results
     }
 
-    private fun isMultimodalUnsupported(t: Throwable): Boolean {
+    private fun isCrossSlotEcho(
+        reads: List<NanoJerseyRead>,
+        batch: List<MultiViewGridCropItem>,
+    ): Boolean {
+        if (batch.size < 2 || reads.size < 2) return false
+        // Reject any multi-slot batch where Nano echoes the same number >= 2 times, even across teams.
+        val seenNumbers = HashSet<String>(reads.size)
+        for (r in reads) {
+            if (!seenNumbers.add(r.jerseyNumber)) return true
+        }
+        return false
+    }
+
+    private fun isPolicyCheckBlocked(t: Throwable): Boolean {
+        if (t is GenAiException && t.errorCode == 4) return true
         val msg = t.message?.lowercase().orEmpty()
-        return msg.contains("unsupported") || msg.contains("image") && msg.contains("not support")
+        return msg.contains("errorcode 4") ||
+            msg.contains("error code 4") ||
+            msg.contains("policy check") ||
+            msg.contains("policy")
+    }
+
+    private fun isMultimodalUnsupported(t: Throwable): Boolean {
+        if (isPolicyCheckBlocked(t)) return false
+        if (t is GenAiException && t.errorCode == GenAiException.ErrorCode.NOT_SUPPORTED) return true
+        val msg = t.message?.lowercase().orEmpty()
+        return msg.contains("unsupported") || (msg.contains("image") && msg.contains("not support"))
     }
 
     private fun describeRgbKit(rgb: List<Int>, fallback: String): String {
@@ -527,10 +676,11 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
 
     companion object {
         private const val TAG = "HockeyNanoBench"
+        private val SLOT_LETTERS = listOf('A', 'B', 'C', 'D')
         private val TEAM_A_REGEX = Regex("TEAM_A\\s*[:=-]\\s*([^|\\n]+)", RegexOption.IGNORE_CASE)
         private val TEAM_B_REGEX = Regex("TEAM_B\\s*[:=-]\\s*([^|\\n]+)", RegexOption.IGNORE_CASE)
         private val GRID_READ_REGEX = Regex(
-            "(?:^|\\s)\\[?([1-4])]?\\s*[:=-]\\s*(?:#\\s*)?(\\d{1,2}|NONE|N/A|NA|UNKNOWN)\\b",
+            "(?:^|\\s)(?:Slot\\s*)?\\[?([A-D])]?\\s*[:=-]\\s*(?:#\\s*)?(\\?\\d|\\d\\?|\\d{1,2}|NONE|N/A|NA|UNKNOWN)(?=\\s|$|[,;.|])",
             RegexOption.IGNORE_CASE,
         )
     }

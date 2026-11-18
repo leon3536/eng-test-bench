@@ -32,7 +32,7 @@ object OnIceFilter {
         if (!box.x1.isFinite() || !box.y1.isFinite() || !box.x2.isFinite() || !box.y2.isFinite()) {
             return false
         }
-        if (box.width <= 0.003f || box.height <= 0.008f) return false
+        if (box.width <= 0.005f || box.height < 0.026f) return false
         if (box.width > 0.45f || box.height > 0.85f) return false
 
         val cx = box.centerX

@@ -901,18 +901,26 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 return@launch
             }
 
-            // Ensure video scan has reached near the end of topClip before burning marks
+            // Ensure video scan has reached near the end of topClip and drained in-flight vision jobs before burning marks
             if (cmd.burnMarks) {
                 val waitWindowStart = SystemClock.elapsedRealtime()
-                while (SystemClock.elapsedRealtime() - waitWindowStart < 10_000L) {
+                var playbackEndedAtMs = 0L
+                while (SystemClock.elapsedRealtime() - waitWindowStart < 18_000L) {
                     val tel = processor.state.value.telemetry
-                    if (tel.processedSec >= topClip.endSec - 1.5 ||
+                    val effectiveDur = tel.videoDurationSec.takeIf { it > 0.5 } ?: topClip.endSec
+                    val targetEndSec = kotlin.math.min(topClip.endSec, effectiveDur)
+                    if (player.playbackState == Player.STATE_ENDED && playbackEndedAtMs == 0L) {
+                        playbackEndedAtMs = SystemClock.elapsedRealtime()
+                    }
+                    val endedSettled = playbackEndedAtMs > 0L &&
+                        (SystemClock.elapsedRealtime() - playbackEndedAtMs >= 1_200L)
+                    if (tel.processedSec >= targetEndSec - 0.35 ||
                         tel.analysisBudgetReached ||
-                        player.playbackState == Player.STATE_ENDED
+                        endedSettled
                     ) {
                         break
                     }
-                    delay(500L)
+                    delay(300L)
                 }
             }
 
@@ -924,11 +932,15 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 fastOk = runFastSplitSuspend(topClip)
             }
             if (cmd.burnMarks) {
+                processor.awaitProcessingDrain(maxWaitMs = 1_800L)
+                processor.recomputeStateNow()
+                val latestClip = processor.state.value.selectedPlayerClips
+                    .firstOrNull { it.id == topClip.id } ?: topClip
                 val sampleCount = processor.state.value.history.count {
-                    it.timestampSec in (topClip.startSec - 1.0)..(topClip.endSec + 1.0)
+                    it.timestampSec in (latestClip.startSec - 1.0)..(latestClip.endSec + 1.0)
                 }
-                Log.i(TAG, "AUTO_BURN_MARKS_START clip=${topClip.id} samples=$sampleCount")
-                markedOk = runBurnMarksSuspend(topClip)
+                Log.i(TAG, "AUTO_BURN_MARKS_START clip=${latestClip.id} samples=$sampleCount")
+                markedOk = runBurnMarksSuspend(latestClip)
             }
 
             Log.i(TAG, "AUTOMATION_COMPLETE fastOk=$fastOk markedOk=$markedOk clip=${topClip.id}")

@@ -12,17 +12,50 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 data class RawDetection(
     val box: RectNorm,
     val chestRgb: List<Int>,
-    val stripeScore: Float = 0f
-)
+    val stripeScore: Float = 0f,
+    val kitSummaryLab7: FloatArray? = null,
+    val lowerBellyLuma: Float = Float.NaN,
+    val pantsDarkness: Float = Float.NaN,
+    val armbandScore: Float = 0f
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is RawDetection) return false
+        if (box != other.box) return false
+        if (chestRgb != other.chestRgb) return false
+        if (stripeScore != other.stripeScore) return false
+        if (!kitSummaryLab7.contentEquals(other.kitSummaryLab7)) return false
+        if (lowerBellyLuma != other.lowerBellyLuma && !(lowerBellyLuma.isNaN() && other.lowerBellyLuma.isNaN())) {
+            return false
+        }
+        if (pantsDarkness != other.pantsDarkness && !(pantsDarkness.isNaN() && other.pantsDarkness.isNaN())) {
+            return false
+        }
+        if (armbandScore != other.armbandScore) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = box.hashCode()
+        result = 31 * result + chestRgb.hashCode()
+        result = 31 * result + stripeScore.hashCode()
+        result = 31 * result + (kitSummaryLab7?.contentHashCode() ?: 0)
+        result = 31 * result + lowerBellyLuma.hashCode()
+        result = 31 * result + pantsDarkness.hashCode()
+        result = 31 * result + armbandScore.hashCode()
+        return result
+    }
+}
 
 /**
  * Maintains temporal track segments, hierarchical 4.0s same-team stitching, and
- * weighted majority voting (with Gemini Nano VLM reads weighted 2.5x over OCR reads)
- * so a jersey read anywhere on a stitched shift propagates across the entire shift.
+ * roster-free Bayesian jersey-number posterior fusion + Hungarian co-occurrence assignment
+ * across stitched shifts.
  */
 class TrackIdentityRegistry {
 
@@ -39,15 +72,34 @@ class TrackIdentityRegistry {
         var sumG: Double = 0.0,
         var sumB: Double = 0.0,
         var colorCount: Int = 0,
+        val sumKit7: DoubleArray = DoubleArray(KitLabFeatures.SUMMARY_SIZE),
+        var explicitKitCount: Int = 0,
+        var sumLowerBellyLuma: Double = 0.0,
+        var lowerBellyCount: Int = 0,
+        var emaPantsDarkness: Float = Float.NaN,
+        var pantsObservations: Int = 0,
+        var emaArmbandScore: Float = 0f,
+        var armbandObservations: Int = 0,
         var emaStripeScore: Float = 0f,
         var stripeObservations: Int = 0,
+        var refereeFrameVotes: Int = 0,
+        var skaterFrameVotes: Int = 0,
         var clusteredTeam: TeamId = TeamId.UNKNOWN,
         var teamOverride: TeamId? = null,
         var manualJerseyNumber: String? = null,
-        val jerseyVotes: MutableMap<String, Float> = LinkedHashMap(),
+        val observations: MutableList<JerseyReadObservation> = ArrayList(),
         val bestConfidence: MutableMap<String, Float> = LinkedHashMap(),
         val nanoVerifiedNumbers: MutableSet<String> = LinkedHashSet()
     ) {
+        fun addDetectionFeatures(det: RawDetection) {
+            addColor(det.chestRgb)
+            addStripeScore(det.stripeScore)
+            addArmbandScore(det.armbandScore)
+            addPantsDarkness(det.pantsDarkness)
+            addLowerBellyLuma(det.lowerBellyLuma)
+            addKitSummaryLab7(det.kitSummaryLab7, det.chestRgb)
+        }
+
         fun addColor(rgb: List<Int>) {
             val r = rgb.getOrNull(0)?.coerceIn(0, 255) ?: return
             val g = rgb.getOrNull(1)?.coerceIn(0, 255) ?: return
@@ -68,10 +120,67 @@ class TrackIdentityRegistry {
             stripeObservations++
         }
 
+        fun addArmbandScore(score: Float) {
+            val clean = if (score.isFinite()) score.coerceIn(0f, 1f) else 0f
+            emaArmbandScore = if (armbandObservations == 0) {
+                clean
+            } else {
+                0.8f * emaArmbandScore + 0.2f * clean
+            }
+            armbandObservations++
+        }
+
+        fun addPantsDarkness(score: Float) {
+            if (!score.isFinite()) return
+            val clean = score.coerceIn(0f, 1f)
+            emaPantsDarkness = if (pantsObservations == 0) {
+                clean
+            } else {
+                0.8f * emaPantsDarkness + 0.2f * clean
+            }
+            pantsObservations++
+        }
+
+        fun addLowerBellyLuma(luma: Float) {
+            if (!luma.isFinite()) return
+            sumLowerBellyLuma += luma.coerceIn(0f, 255f)
+            lowerBellyCount++
+        }
+
+        fun addKitSummaryLab7(kitSummaryLab7: FloatArray?, fallbackRgb: List<Int>) {
+            if (kitSummaryLab7 == null || kitSummaryLab7.size < KitLabFeatures.SUMMARY_SIZE) return
+            for (i in 0 until KitLabFeatures.SUMMARY_SIZE) {
+                if (!kitSummaryLab7[i].isFinite()) return
+            }
+            val canonical = KitLabFeatures.sanitizeKitSummary7(kitSummaryLab7, fallbackRgb)
+            for (i in 0 until KitLabFeatures.SUMMARY_SIZE) {
+                sumKit7[i] += canonical[i]
+            }
+            explicitKitCount++
+        }
+
         fun meanRgb(): FloatArray? {
             if (colorCount <= 0) return null
             val n = colorCount.toFloat()
             return floatArrayOf((sumR / n).toFloat(), (sumG / n).toFloat(), (sumB / n).toFloat())
+        }
+
+        fun meanKitSummaryLab7(): FloatArray {
+            if (explicitKitCount > 0) {
+                val n = explicitKitCount.toFloat()
+                return FloatArray(KitLabFeatures.SUMMARY_SIZE) { i -> (sumKit7[i] / n).toFloat() }
+            }
+            val rgb = meanRgb() ?: return floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f)
+            return KitLabFeatures.synthesizeKitSummary7(rgb)
+        }
+
+        fun meanLowerBellyLuma(): Float =
+            if (lowerBellyCount > 0) (sumLowerBellyLuma / lowerBellyCount).toFloat() else Float.NaN
+
+        fun isEstablishedOfficial(meanChroma: Float): Boolean {
+            if (refereeFrameVotes < 3) return false
+            val overwhelmedByChromaticSkater = skaterFrameVotes > 2 * refereeFrameVotes && meanChroma >= 15f
+            return !overwhelmedByChromaticSkater
         }
 
         fun effectiveTeam(): TeamId = teamOverride ?: clusteredTeam
@@ -96,32 +205,30 @@ class TrackIdentityRegistry {
     internal fun getOrCreateRecord(
         trackId: Int,
         timestampSec: Double,
-        box: RectNorm,
-        chestRgb: List<Int>,
-        stripeScore: Float = 0f
+        det: RawDetection
     ): TrackRecord {
         cachedResolution = null
         val existing = records[trackId]
         if (existing != null) {
             existing.lastSeenSec = max(existing.lastSeenSec, timestampSec)
-            existing.lastBox = box
+            existing.lastBox = det.box
             existing.hitCount++
-            existing.addColor(chestRgb)
-            existing.addStripeScore(stripeScore)
+            existing.addDetectionFeatures(det)
             return existing
         }
         return TrackRecord(
             trackId = trackId,
             firstSeenSec = timestampSec,
             lastSeenSec = timestampSec,
-            firstBox = box,
-            lastBox = box
+            firstBox = det.box,
+            lastBox = det.box
         ).also {
-            it.addColor(chestRgb)
-            it.addStripeScore(stripeScore)
+            it.addDetectionFeatures(det)
             records[trackId] = it
         }
     }
+
+    internal fun getRecord(trackId: Int): TrackRecord? = records[trackId]
 
     internal fun allRecords(): Collection<TrackRecord> = records.values
 
@@ -135,16 +242,145 @@ class TrackIdentityRegistry {
         confidence: Float,
         fromNano: Boolean
     ) {
-        val clean = normalizeJerseyNumber(jerseyNumber) ?: return
         val rec = records[trackId] ?: return
-        val conf = confidence.coerceIn(0.05f, 1.0f)
-        val weight = conf * if (fromNano) NANO_WEIGHT_MULTIPLIER else OCR_WEIGHT_MULTIPLIER
-        rec.jerseyVotes[clean] = (rec.jerseyVotes[clean] ?: 0f) + weight
-        rec.bestConfidence[clean] = max(rec.bestConfidence[clean] ?: 0f, conf)
-        if (fromNano) {
-            rec.nanoVerifiedNumbers.add(clean)
+        recordJerseyRead(
+            trackId = trackId,
+            jerseyNumber = jerseyNumber,
+            confidence = confidence,
+            timestampSec = rec.lastSeenSec,
+            kind = JerseyReadKind.FULL,
+            qualityWeight = 1f,
+            source = if (fromNano) JerseyReadSource.GEMINI_NANO else JerseyReadSource.MLKIT_OCR
+        )
+    }
+
+    fun recordJerseyRead(
+        trackId: Int,
+        jerseyNumber: String,
+        confidence: Float,
+        timestampSec: Double,
+        kind: JerseyReadKind = JerseyReadKind.FULL,
+        qualityWeight: Float = 1f,
+        source: JerseyReadSource = JerseyReadSource.MLKIT_OCR
+    ) {
+        val rec = records[trackId] ?: return
+        val clean = JerseyNumberPosterior.normalizeObservationNumber(jerseyNumber, kind) ?: return
+        val conf = if (confidence.isFinite()) confidence.coerceIn(0.05f, 1.0f) else return
+        val qWeight = if (qualityWeight.isFinite()) qualityWeight.coerceIn(0.05f, 1.5f) else 1f
+        val safeT = if (timestampSec.isFinite()) timestampSec else rec.lastSeenSec
+
+        rec.observations.add(
+            JerseyReadObservation(
+                timestampSec = safeT,
+                number = clean,
+                confidence = conf,
+                kind = kind,
+                qualityWeight = qWeight,
+                source = source
+            )
+        )
+        if (kind == JerseyReadKind.FULL || kind == JerseyReadKind.SINGLE) {
+            normalizeJerseyNumber(clean)?.let { fullNum ->
+                rec.bestConfidence[fullNum] = max(rec.bestConfidence[fullNum] ?: 0f, conf)
+                if (source == JerseyReadSource.GEMINI_NANO) {
+                    rec.nanoVerifiedNumbers.add(fullNum)
+                }
+            }
         }
         cachedResolution = null
+    }
+
+    fun recordJerseyDistribution(
+        trackId: Int,
+        timestampSec: Double,
+        candidates: List<Pair<String, Float>>,
+        qualityWeight: Float = 1f,
+        source: JerseyReadSource = JerseyReadSource.ONNX_STR,
+        partialLeftDigit: Pair<Char, Float>? = null,
+        partialRightDigit: Pair<Char, Float>? = null
+    ) {
+        val rec = records[trackId] ?: return
+        val qWeight = if (qualityWeight.isFinite()) qualityWeight.coerceIn(0.05f, 1.5f) else 1f
+        val safeT = if (timestampSec.isFinite()) timestampSec else rec.lastSeenSec
+
+        val cleanCandidates = candidates.mapNotNull { (rawNum, rawProb) ->
+            if (!rawProb.isFinite() || rawProb <= 0f) return@mapNotNull null
+            val norm = normalizeJerseyNumber(rawNum) ?: return@mapNotNull null
+            norm to rawProb.coerceIn(0f, 1f)
+        }
+        val topCandProb = cleanCandidates.maxOfOrNull { it.second } ?: 0f
+        var recordedAny = false
+
+        if (cleanCandidates.isNotEmpty() && topCandProb >= 0.05f) {
+            rec.observations.add(
+                JerseyReadObservation(
+                    timestampSec = safeT,
+                    number = null,
+                    confidence = topCandProb,
+                    kind = JerseyReadKind.FULL,
+                    qualityWeight = qWeight,
+                    source = source,
+                    candidates = cleanCandidates
+                )
+            )
+            for ((num, p) in cleanCandidates) {
+                if (p >= 0.20f) {
+                    rec.bestConfidence[num] = max(rec.bestConfidence[num] ?: 0f, p)
+                    if (source == JerseyReadSource.GEMINI_NANO) {
+                        rec.nanoVerifiedNumbers.add(num)
+                    }
+                }
+            }
+            recordedAny = true
+        }
+
+        val hasLeft = partialLeftDigit != null &&
+            partialLeftDigit.first in '1'..'9' &&
+            partialLeftDigit.second.isFinite() &&
+            partialLeftDigit.second > 0.05f
+        val hasRight = partialRightDigit != null &&
+            partialRightDigit.first in '0'..'9' &&
+            partialRightDigit.second.isFinite() &&
+            partialRightDigit.second > 0.05f
+
+        val partialScale = when {
+            topCandProb >= 0.15f -> 0.35f
+            hasLeft && hasRight -> 0.65f
+            else -> 1.0f
+        }
+
+        if (hasLeft) {
+            val (ch, conf) = partialLeftDigit
+            rec.observations.add(
+                JerseyReadObservation(
+                    timestampSec = safeT,
+                    number = ch.toString(),
+                    confidence = conf.coerceIn(0.05f, 0.99f),
+                    kind = JerseyReadKind.LEFT_PARTIAL,
+                    qualityWeight = (qWeight * partialScale).coerceIn(0.05f, 1.5f),
+                    source = source
+                )
+            )
+            recordedAny = true
+        }
+        if (hasRight) {
+            val (ch, conf) = partialRightDigit
+            rec.observations.add(
+                JerseyReadObservation(
+                    timestampSec = safeT,
+                    number = ch.toString(),
+                    confidence = conf.coerceIn(0.05f, 0.99f),
+                    kind = JerseyReadKind.RIGHT_PARTIAL,
+                    qualityWeight = (qWeight * partialScale).coerceIn(0.05f, 1.5f),
+                    source = source
+                )
+            )
+            recordedAny = true
+        }
+
+        if (recordedAny) {
+            cachedResolution = null
+        }
     }
 
     fun assignTrackJerseyNumber(
@@ -175,68 +411,96 @@ class TrackIdentityRegistry {
         val chains = buildStitchedChains()
         val resolved = HashMap<Int, ResolvedIdentity>(records.size)
 
-        for (chainIds in chains) {
+        data class ChainMeta(
+            val chainId: Int,
+            val trackIds: Set<Int>,
+            val team: TeamId,
+            val input: ChainNumberInput
+        )
+
+        val byTeam = LinkedHashMap<TeamId, ArrayList<ChainMeta>>()
+        val metas = ArrayList<ChainMeta>(chains.size)
+
+        for (idx in chains.indices) {
+            val chainIds = chains[idx]
             val chainRecords = chainIds.mapNotNull { records[it] }
+            if (chainRecords.isEmpty()) continue
             val resolvedTeam = resolveChainTeam(chainRecords)
             val manualNum = chainRecords
                 .sortedByDescending { it.lastSeenSec }
                 .firstOrNull { !it.manualJerseyNumber.isNullOrBlank() }
                 ?.manualJerseyNumber
 
-            val aggregatedVotes = LinkedHashMap<String, Float>()
-            val aggregatedConf = LinkedHashMap<String, Float>()
-            val nanoNumbers = LinkedHashSet<String>()
+            val obs = ArrayList<JerseyReadObservation>()
+            val bestConf = LinkedHashMap<String, Float>()
+            val nanoNums = LinkedHashSet<String>()
+            var firstSeen = Double.POSITIVE_INFINITY
+            var lastSeen = Double.NEGATIVE_INFINITY
 
             for (rec in chainRecords) {
-                for ((num, score) in rec.jerseyVotes) {
-                    aggregatedVotes[num] = (aggregatedVotes[num] ?: 0f) + score
-                }
+                if (rec.firstSeenSec < firstSeen) firstSeen = rec.firstSeenSec
+                if (rec.lastSeenSec > lastSeen) lastSeen = rec.lastSeenSec
+                obs.addAll(rec.observations)
                 for ((num, c) in rec.bestConfidence) {
-                    aggregatedConf[num] = max(aggregatedConf[num] ?: 0f, c)
+                    bestConf[num] = max(bestConf[num] ?: 0f, c)
                 }
-                nanoNumbers.addAll(rec.nanoVerifiedNumbers)
+                nanoNums.addAll(rec.nanoVerifiedNumbers)
             }
+            obs.sortBy { it.timestampSec }
 
-            val winningNumber: String?
-            val winConf: Float
-            val winNano: Boolean
-
-            if (manualNum != null) {
-                winningNumber = manualNum
-                winConf = max(aggregatedConf[manualNum] ?: 1.0f, 1.0f)
-                winNano = manualNum in nanoNumbers
-            } else if (aggregatedVotes.isNotEmpty()) {
-                val totalVotes = aggregatedVotes.values.sum()
-                val topEntry = aggregatedVotes.entries.maxByOrNull { it.value }!!
-                val topNum = topEntry.key
-                val topScore = topEntry.value
-                val isNano = topNum in nanoNumbers
-                val bestC = aggregatedConf[topNum] ?: 0f
-                val meetsSupport = (topScore * 2f >= totalVotes) || isNano || bestC >= 0.45f
-                if (meetsSupport) {
-                    winningNumber = topNum
-                    winConf = bestC
-                    winNano = isNano
-                } else {
-                    winningNumber = null
-                    winConf = 0f
-                    winNano = false
-                }
-            } else {
-                winningNumber = null
-                winConf = 0f
-                winNano = false
-            }
-
-            val idSet = chainIds.toSet()
-            val identity = ResolvedIdentity(
+            val chainId = chainIds.minOrNull() ?: idx
+            val meta = ChainMeta(
+                chainId = chainId,
+                trackIds = chainIds.toSet(),
                 team = resolvedTeam,
-                jerseyNumber = winningNumber,
-                confidence = winConf,
-                nanoVerified = winNano,
-                chainTrackIds = idSet
+                input = ChainNumberInput(
+                    chainId = chainId,
+                    firstSeenSec = firstSeen,
+                    lastSeenSec = lastSeen,
+                    observations = obs,
+                    manualNumber = manualNum,
+                    nanoVerifiedNumbers = nanoNums,
+                    bestConfidenceByNumber = bestConf
+                )
             )
-            for (tid in idSet) {
+            metas.add(meta)
+            byTeam.getOrPut(resolvedTeam) { ArrayList() }.add(meta)
+        }
+
+        val assignments = HashMap<Int, NumberAssignment>(metas.size)
+
+        for (team in listOf(TeamId.TEAM_A, TeamId.TEAM_B)) {
+            val teamChains = byTeam[team] ?: continue
+            val teamRes = JerseyNumberPosterior.assignNumbersJointly(teamChains.map { it.input })
+            assignments.putAll(teamRes)
+        }
+
+        // UNKNOWN chains resolve individually without team-wide co-occurrence blocking.
+        for (meta in byTeam[TeamId.UNKNOWN].orEmpty()) {
+            val singleRes = JerseyNumberPosterior.assignNumbersJointly(listOf(meta.input))
+            assignments.putAll(singleRes)
+        }
+
+        // REFEREE tracks do not hold skater numbers unless manually overridden.
+        for (meta in byTeam[TeamId.REFEREE].orEmpty()) {
+            val manual = meta.input.manualNumber
+            assignments[meta.chainId] = NumberAssignment(
+                number = manual,
+                probability = if (manual != null) 1f else 0f,
+                nanoVerified = manual != null && manual in meta.input.nanoVerifiedNumbers
+            )
+        }
+
+        for (meta in metas) {
+            val assign = assignments[meta.chainId]
+            val identity = ResolvedIdentity(
+                team = meta.team,
+                jerseyNumber = assign?.number,
+                confidence = assign?.probability ?: 0f,
+                nanoVerified = assign?.nanoVerified ?: false,
+                chainTrackIds = meta.trackIds
+            )
+            for (tid in meta.trackIds) {
                 resolved[tid] = identity
             }
         }
@@ -248,6 +512,44 @@ class TrackIdentityRegistry {
     private fun resolveChainTeam(chainRecords: List<TrackRecord>): TeamId {
         val override = chainRecords.lastOrNull { it.teamOverride != null }?.teamOverride
         if (override != null) return override
+
+        var totalRefVotes = 0
+        var totalSkaterVotes = 0
+        var sumR = 0.0
+        var sumG = 0.0
+        var sumB = 0.0
+        var colorW = 0.0
+        for (rec in chainRecords) {
+            totalRefVotes += rec.refereeFrameVotes
+            totalSkaterVotes += rec.skaterFrameVotes
+            val rgb = rec.meanRgb()
+            if (rgb != null) {
+                val lab = KitLabFeatures.rgbToLab(rgb)
+                val kit7 = rec.meanKitSummaryLab7()
+                val belly = rec.meanLowerBellyLuma()
+                val chroma = KitLabFeatures.labChroma(lab[1], lab[2])
+                val brightStripe = kit7[3] >= 52f || lab[0] >= 36f || (belly.isFinite() && belly >= 85f)
+                if (rec.emaStripeScore >= 0.46f && chroma < 16.5f && brightStripe) {
+                    return TeamId.REFEREE
+                }
+                val w = rec.colorCount.toDouble()
+                sumR += rgb[0] * w
+                sumG += rgb[1] * w
+                sumB += rgb[2] * w
+                colorW += w
+            }
+        }
+        if (totalRefVotes >= 3) {
+            val avgChroma = if (colorW > 0.0) {
+                val avgLab = KitLabFeatures.rgbToLab(floatArrayOf((sumR / colorW).toFloat(), (sumG / colorW).toFloat(), (sumB / colorW).toFloat()))
+                KitLabFeatures.labChroma(avgLab[1], avgLab[2])
+            } else {
+                0f
+            }
+            if (!(totalSkaterVotes > 2 * totalRefVotes && avgChroma >= 15f)) {
+                return TeamId.REFEREE
+            }
+        }
 
         val weights = LinkedHashMap<TeamId, Int>()
         for (rec in chainRecords) {
@@ -421,63 +723,59 @@ class TrackIdentityRegistry {
 
     private fun establishedChainNumber(trackIds: List<Int>): String? {
         var manual: String? = null
-        val votes = LinkedHashMap<String, Float>()
+        val obs = ArrayList<JerseyReadObservation>()
         val nanoNums = HashSet<String>()
         for (id in trackIds) {
             val rec = records[id] ?: continue
             if (!rec.manualJerseyNumber.isNullOrBlank()) manual = rec.manualJerseyNumber
-            for ((num, w) in rec.jerseyVotes) {
-                votes[num] = (votes[num] ?: 0f) + w
-            }
+            obs.addAll(rec.observations)
             nanoNums.addAll(rec.nanoVerifiedNumbers)
         }
         if (manual != null) return manual
-        if (votes.isEmpty()) return null
-        val total = votes.values.sum()
-        val top = votes.entries.maxByOrNull { it.value } ?: return null
-        val hasStrongSupport = top.key in nanoNums || top.value >= 2.0f
-        return if (hasStrongSupport && top.value * 2f >= total) top.key else null
+        if (obs.isEmpty()) return null
+        val logP = JerseyNumberPosterior.computeLogPosterior(obs)
+        val (bestNum, bestProb) = JerseyNumberPosterior.bestCandidate(logP)
+        if (bestNum == null || bestProb < 0.55f) return null
+        val evidence = JerseyNumberPosterior.totalEvidenceWeight(obs)
+        val hasStrongSupport = bestNum in nanoNums || evidence >= 1.80f
+        return if (hasStrongSupport) bestNum else null
     }
 
     private fun dominantChainNumber(trackIds: List<Int>): String? {
         var manual: String? = null
-        val votes = LinkedHashMap<String, Float>()
+        val obs = ArrayList<JerseyReadObservation>()
         for (id in trackIds) {
             val rec = records[id] ?: continue
             if (!rec.manualJerseyNumber.isNullOrBlank()) manual = rec.manualJerseyNumber
-            for ((num, w) in rec.jerseyVotes) {
-                votes[num] = (votes[num] ?: 0f) + w
-            }
+            obs.addAll(rec.observations)
         }
         if (manual != null) return manual
-        if (votes.isEmpty()) return null
-        val total = votes.values.sum()
-        val top = votes.entries.maxByOrNull { it.value } ?: return null
-        return if (top.value * 2f >= total) top.key else null
+        if (obs.isEmpty()) return null
+        val logP = JerseyNumberPosterior.computeLogPosterior(obs)
+        val (bestNum, bestProb) = JerseyNumberPosterior.bestCandidate(logP)
+        if (bestNum == null || bestProb < 0.45f) return null
+        val evidence = JerseyNumberPosterior.totalEvidenceWeight(obs)
+        return if (evidence >= JerseyNumberPosterior.MIN_EVIDENCE_WEIGHT) bestNum else null
     }
 
     companion object {
         const val OCR_WEIGHT_MULTIPLIER = 1.0f
         const val NANO_WEIGHT_MULTIPLIER = 2.5f
+        const val ONNX_STR_WEIGHT_MULTIPLIER = 1.6f
         const val MAX_STITCH_GAP_SEC = 4.0
 
-        fun normalizeJerseyNumber(raw: String): String? {
-            val s = raw.trim().trimStart('#')
-            if (s.isEmpty() || s.length > 2 || !s.all { it.isDigit() }) return null
-            if (s == "0" || s == "00") return null
-            val n = s.toIntOrNull() ?: return null
-            if (n !in 1..99) return null
-            return n.toString()
-        }
+        fun normalizeJerseyNumber(raw: String): String? =
+            JerseyNumberPosterior.normalizeNumber(raw)
     }
 }
 
 /**
  * Multi-team hockey player tracker combining:
  * - Constant-velocity + skate-foot distance + IoU frame association
- * - Contact-only kit compatibility gating (prevents 1-frame specular shadow over-splits)
- * - Weighted 2-means RGB+luminance team clustering + >10-skater referee outlier detection
- * - 4.0s same-team hierarchical stitching & Nano-weighted (2.5x) jersey voting
+ * - Contact-only order-free CIELAB + lower-belly kit compatibility gating
+ * - Order-free 2-cluster CIELAB + lower-belly team clustering & multi-cue referee exclusion
+ * - Crossfade/burst (>12 detections) transient 1-hit ghost suppression
+ * - 4.0s same-team hierarchical stitching & Bayesian + Hungarian co-occurrence jersey number solver
  */
 class MultiTeamPlayerTracker {
 
@@ -486,6 +784,8 @@ class MultiTeamPlayerTracker {
         var box: RectNorm,
         var lastSeenSec: Double,
         var emaRgb: FloatArray,
+        var kitSummaryLab7: FloatArray,
+        var lowerBellyLuma: Float = Float.NaN,
         var emaStripeScore: Float = 0f,
         var vx: Float = 0f,
         var vy: Float = 0f,
@@ -504,11 +804,27 @@ class MultiTeamPlayerTracker {
         val nanoVerified: Boolean
     )
 
+    private data class KitCentroid(
+        var kit7: FloatArray,
+        var bellyLuma: Float,
+        var rgb: FloatArray
+    )
+
+    private data class SkaterSnapshot(
+        val rec: TrackIdentityRegistry.TrackRecord,
+        val rgb: FloatArray,
+        val meanLab: FloatArray,
+        val kit7: FloatArray,
+        val bellyLuma: Float
+    )
+
     private val lock = Any()
     private val activeTracks = ArrayList<ActiveTrack>()
     private val registry = TrackIdentityRegistry()
     private val teamMetaOverrides = LinkedHashMap<TeamId, TeamOverrideMeta>()
     private var clusteredTeamRgb = LinkedHashMap<TeamId, List<Int>>()
+    private var clusteredTeamKit7 = LinkedHashMap<TeamId, FloatArray>()
+    private var clusteredTeamBellyLuma = LinkedHashMap<TeamId, Float>()
     private var nextTrackId = 1
     private var lastFrameTimestampSec = Double.NaN
 
@@ -517,6 +833,8 @@ class MultiTeamPlayerTracker {
         registry.clear()
         teamMetaOverrides.clear()
         clusteredTeamRgb.clear()
+        clusteredTeamKit7.clear()
+        clusteredTeamBellyLuma.clear()
         nextTrackId = 1
         lastFrameTimestampSec = Double.NaN
     }
@@ -578,11 +896,17 @@ class MultiTeamPlayerTracker {
                 }
 
                 val detRgb = toFloatRgb(det.chestRgb)
+                val detKit7 = KitLabFeatures.sanitizeKitSummary7(det.kitSummaryLab7, det.chestRgb)
                 val colorDist = rgbDistance(t.emaRgb, detRgb)
                 val lumDiff = abs(luminance(t.emaRgb) - luminance(detRgb))
 
                 val inContact = detInContact[di] || trackInContact[ti]
-                if (inContact && isCrossKitIncompatible(t.emaRgb, detRgb, colorDist, lumDiff)) {
+                if (inContact && isCrossKitIncompatible(
+                        t.emaRgb, t.kitSummaryLab7, t.lowerBellyLuma,
+                        detRgb, detKit7, det.lowerBellyLuma,
+                        colorDist, lumDiff
+                    )
+                ) {
                     continue
                 }
 
@@ -623,9 +947,11 @@ class MultiTeamPlayerTracker {
                 t.trail.removeFirst()
             }
 
-            val rec = registry.getOrCreateRecord(t.id, safeTime, det.box, det.chestRgb, cleanStripe)
+            val rec = registry.getOrCreateRecord(t.id, safeTime, det)
             rec.lastVx = t.vx
             rec.lastVy = t.vy
+            t.kitSummaryLab7 = rec.meanKitSummaryLab7()
+            t.lowerBellyLuma = rec.meanLowerBellyLuma()
             detToTrackId[di] = t.id
         }
 
@@ -647,39 +973,53 @@ class MultiTeamPlayerTracker {
             val det = detections[di]
             val newId = nextTrackId++
             val cleanStripe = sanitizeStripeScore(det.stripeScore)
+            val rec = registry.getOrCreateRecord(newId, safeTime, det)
             val t = ActiveTrack(
                 id = newId,
                 box = det.box,
                 lastSeenSec = safeTime,
                 emaRgb = toFloatRgb(det.chestRgb),
+                kitSummaryLab7 = rec.meanKitSummaryLab7(),
+                lowerBellyLuma = rec.meanLowerBellyLuma(),
                 emaStripeScore = cleanStripe
             )
             activeTracks.add(t)
-            registry.getOrCreateRecord(newId, safeTime, det.box, det.chestRgb, cleanStripe)
             detToTrackId[di] = newId
         }
 
-        // Re-cluster teams using weighted 2-means RGB+luminance and referee outlier detection.
-        reclusterTeams(currentSkaterCount = detections.size)
+        // Re-cluster teams using order-free CIELAB + lower-belly 2-means and multi-cue referee exclusion.
+        val currentFrameTrackIds = HashSet<Int>(detToTrackId.size)
+        for (tid in detToTrackId) {
+            if (tid >= 0) currentFrameTrackIds.add(tid)
+        }
+        reclusterTeams(currentSkaterCount = detections.size, currentFrameTrackIds = currentFrameTrackIds)
         val identities = registry.resolveAll()
 
-        val trackedPlayers = detections.indices.map { di ->
+        val suppressBurstUnconfirmed = detections.size > BURST_GHOST_DETECTION_THRESHOLD
+        val trackedPlayers = ArrayList<TrackedPlayer>(detections.size)
+        for (di in detections.indices) {
             val det = detections[di]
             val tid = detToTrackId[di]
+            val rec = registry.getRecord(tid)
+            if (suppressBurstUnconfirmed && (rec?.hitCount ?: 1) <= 1) {
+                continue
+            }
             val track = activeTracks.firstOrNull { it.id == tid }
             val resolved = identities[tid]
             val speed = if (track != null) hypot(track.vx, track.vy) else 0f
-            TrackedPlayer(
-                trackId = tid,
-                box = det.box,
-                team = resolved?.team ?: TeamId.UNKNOWN,
-                jerseyNumber = resolved?.jerseyNumber,
-                numberConfidence = resolved?.confidence ?: 0f,
-                nanoVerified = resolved?.nanoVerified ?: false,
-                roleHint = if (resolved?.team == TeamId.REFEREE) "Referee" else null,
-                chestRgb = normalizeRgbList(det.chestRgb),
-                speedNormPerSec = speed,
-                trail = track?.trail?.toList() ?: listOf(det.box.centerX to det.box.footY)
+            trackedPlayers.add(
+                TrackedPlayer(
+                    trackId = tid,
+                    box = det.box,
+                    team = resolved?.team ?: TeamId.UNKNOWN,
+                    jerseyNumber = resolved?.jerseyNumber,
+                    numberConfidence = resolved?.confidence ?: 0f,
+                    nanoVerified = resolved?.nanoVerified ?: false,
+                    roleHint = if (resolved?.team == TeamId.REFEREE) "Referee" else null,
+                    chestRgb = normalizeRgbList(det.chestRgb),
+                    speedNormPerSec = speed,
+                    trail = track?.trail?.toList() ?: listOf(det.box.centerX to det.box.footY)
+                )
             )
         }
 
@@ -697,6 +1037,38 @@ class MultiTeamPlayerTracker {
         fromNano: Boolean
     ) = synchronized(lock) {
         registry.recordJerseyRead(trackId, jerseyNumber, confidence, fromNano)
+    }
+
+    fun recordJerseyRead(
+        trackId: Int,
+        jerseyNumber: String,
+        confidence: Float,
+        timestampSec: Double,
+        kind: JerseyReadKind = JerseyReadKind.FULL,
+        qualityWeight: Float = 1f,
+        source: JerseyReadSource = JerseyReadSource.MLKIT_OCR
+    ) = synchronized(lock) {
+        registry.recordJerseyRead(trackId, jerseyNumber, confidence, timestampSec, kind, qualityWeight, source)
+    }
+
+    fun recordJerseyDistribution(
+        trackId: Int,
+        timestampSec: Double,
+        candidates: List<Pair<String, Float>>,
+        qualityWeight: Float = 1f,
+        source: JerseyReadSource = JerseyReadSource.ONNX_STR,
+        partialLeftDigit: Pair<Char, Float>? = null,
+        partialRightDigit: Pair<Char, Float>? = null
+    ) = synchronized(lock) {
+        registry.recordJerseyDistribution(
+            trackId = trackId,
+            timestampSec = timestampSec,
+            candidates = candidates,
+            qualityWeight = qualityWeight,
+            source = source,
+            partialLeftDigit = partialLeftDigit,
+            partialRightDigit = partialRightDigit
+        )
     }
 
     fun assignTrackJerseyNumber(
@@ -864,143 +1236,589 @@ class MultiTeamPlayerTracker {
         return out
     }
 
-    private fun reclusterTeams(currentSkaterCount: Int) {
+    private fun reclusterTeams(currentSkaterCount: Int, currentFrameTrackIds: Set<Int>) {
         val all = registry.allRecords().toList()
-        val withColor = all.mapNotNull { rec -> rec.meanRgb()?.let { rec to it } }
-        if (withColor.isEmpty()) return
+        val snapshots = all.mapNotNull { rec ->
+            val rgb = rec.meanRgb() ?: return@mapNotNull null
+            SkaterSnapshot(
+                rec = rec,
+                rgb = rgb,
+                meanLab = KitLabFeatures.rgbToLab(rgb),
+                kit7 = rec.meanKitSummaryLab7(),
+                bellyLuma = rec.meanLowerBellyLuma()
+            )
+        }
+        if (snapshots.isEmpty()) return
 
         var refSumR = 0.0
         var refSumG = 0.0
         var refSumB = 0.0
         var refWeight = 0.0
-        val skaterWithColor = ArrayList<Pair<TrackIdentityRegistry.TrackRecord, FloatArray>>(withColor.size)
+        val remaining = ArrayList<SkaterSnapshot>(snapshots.size)
+        val persistedRefCandidates = ArrayList<SkaterSnapshot>()
 
-        // Pre-classify striped low-saturation officials at any skater count and exclude them
-        // from Team A/B weighted 2-means so officials never skew team kit centroids.
-        for (pair in withColor) {
-            val (rec, rgb) = pair
-            if (rec.emaStripeScore >= STRIPE_REFEREE_MIN_SCORE &&
-                hsvSaturation(rgb) < STRIPE_REFEREE_MAX_HSV_SAT
-            ) {
-                rec.clusteredTeam = TeamId.REFEREE
-                val w = rec.colorCount.toDouble()
-                refSumR += rgb[0] * w
-                refSumG += rgb[1] * w
-                refSumB += rgb[2] * w
+        // Pass 1: Pre-classify close/medium striped officials and established officials so they never skew Team A/B centroids.
+        for (snap in snapshots) {
+            val isCurFrame = snap.rec.trackId in currentFrameTrackIds
+            val meanChroma = KitLabFeatures.labChroma(snap.meanLab[1], snap.meanLab[2])
+            if (isCloseOrMediumStripedOfficial(snap)) {
+                if (isCurFrame) snap.rec.refereeFrameVotes++
+                snap.rec.clusteredTeam = TeamId.REFEREE
+                val w = snap.rec.colorCount.toDouble()
+                refSumR += snap.rgb[0] * w
+                refSumG += snap.rgb[1] * w
+                refSumB += snap.rgb[2] * w
                 refWeight += w
+            } else if (snap.rec.isEstablishedOfficial(meanChroma)) {
+                persistedRefCandidates.add(snap)
             } else {
-                skaterWithColor.add(pair)
+                remaining.add(snap)
             }
         }
 
-        if (skaterWithColor.isEmpty()) {
+        if (remaining.isEmpty() && persistedRefCandidates.isEmpty()) {
             clusteredTeamRgb.remove(TeamId.TEAM_A)
             clusteredTeamRgb.remove(TeamId.TEAM_B)
+            clusteredTeamKit7.clear()
+            clusteredTeamBellyLuma.clear()
             updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
             registry.invalidateCache()
             return
         }
 
-        if (skaterWithColor.size == 1) {
-            val (rec, rgb) = skaterWithColor.first()
-            val singleTeam = if (luminance(rgb) < 128f) TeamId.TEAM_A else TeamId.TEAM_B
-            rec.clusteredTeam = singleTeam
-            clusteredTeamRgb.remove(if (singleTeam == TeamId.TEAM_A) TeamId.TEAM_B else TeamId.TEAM_A)
-            clusteredTeamRgb[singleTeam] = rgb.map { it.roundToInt().coerceIn(0, 255) }
-            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
-            registry.invalidateCache()
-            return
-        }
-
-        // Prefer tracks with >=3 hits (fallback >=2, then all) and seed p15/p85 to resist glare outliers.
-        val anchors = skaterWithColor.filter { it.first.colorCount >= 3 }
-            .ifEmpty { skaterWithColor.filter { it.first.colorCount >= 2 } }
-            .ifEmpty { skaterWithColor }
-        val sortedAnchors = anchors.sortedBy { luminance(it.second) }
-        var centroidA = if (sortedAnchors.size >= 4) {
-            sortedAnchors[(sortedAnchors.size * 15) / 100].second.copyOf()
-        } else {
-            sortedAnchors.first().second.copyOf()
-        }
-        var centroidB = if (sortedAnchors.size >= 4) {
-            sortedAnchors[(sortedAnchors.size * 85) / 100].second.copyOf()
-        } else {
-            sortedAnchors.last().second.copyOf()
-        }
-
-        // Run weighted 2-means (RGB + luminance) for 12 iterations with capped per-track weight.
-        repeat(12) {
-            var sumAR = 0.0; var sumAG = 0.0; var sumAB = 0.0; var weightA = 0.0
-            var sumBR = 0.0; var sumBG = 0.0; var sumBB = 0.0; var weightB = 0.0
-
-            for ((rec, rgb) in skaterWithColor) {
-                val dA = colorLumDistance(rgb, centroidA)
-                val dB = colorLumDistance(rgb, centroidB)
-                val team = if (dA <= dB) TeamId.TEAM_A else TeamId.TEAM_B
-
-                val w = min(rec.colorCount, 15).toDouble()
-                if (team == TeamId.TEAM_A) {
-                    sumAR += rgb[0] * w; sumAG += rgb[1] * w; sumAB += rgb[2] * w; weightA += w
-                } else {
-                    sumBR += rgb[0] * w; sumBG += rgb[1] * w; sumBB += rgb[2] * w; weightB += w
-                }
-            }
-            if (weightA > 0.0) {
-                centroidA = floatArrayOf((sumAR / weightA).toFloat(), (sumAG / weightA).toFloat(), (sumAB / weightA).toFloat())
-            }
-            if (weightB > 0.0) {
-                centroidB = floatArrayOf((sumBR / weightB).toFloat(), (sumBG / weightB).toFloat(), (sumBB / weightB).toFloat())
-            }
-        }
-
-        // Enforce TEAM_A = darker kit, TEAM_B = lighter kit.
-        if (luminance(centroidA) > luminance(centroidB)) {
-            val tmp = centroidA
-            centroidA = centroidB
-            centroidB = tmp
-        }
-
-        val abSeparation = colorLumDistance(centroidA, centroidB)
-        if (abSeparation < 25f) {
-            // Only one distinct kit color visible so far; assign uniformly by dark/light luminance.
-            val singleTeam = if (luminance(centroidA) < 128f) TeamId.TEAM_A else TeamId.TEAM_B
-            val meanRgb = centroidA.map { it.roundToInt().coerceIn(0, 255) }
-            for ((rec, _) in skaterWithColor) {
-                rec.clusteredTeam = singleTeam
+        if (remaining.isEmpty()) {
+            for (snap in persistedRefCandidates) {
+                snap.rec.clusteredTeam = TeamId.REFEREE
+                val w = snap.rec.colorCount.toDouble()
+                refSumR += snap.rgb[0] * w; refSumG += snap.rgb[1] * w; refSumB += snap.rgb[2] * w; refWeight += w
             }
             clusteredTeamRgb.remove(TeamId.TEAM_A)
             clusteredTeamRgb.remove(TeamId.TEAM_B)
-            clusteredTeamRgb[singleTeam] = meanRgb
+            clusteredTeamKit7.clear()
+            clusteredTeamBellyLuma.clear()
             updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
             registry.invalidateCache()
             return
         }
-        val allowRefereeOutlier = currentSkaterCount > 10 || activeTracks.size > 10
 
-        for ((rec, rgb) in skaterWithColor) {
-            val dA = colorLumDistance(rgb, centroidA)
-            val dB = colorLumDistance(rgb, centroidB)
+        if (remaining.size == 1 && persistedRefCandidates.isEmpty()) {
+            val only = remaining.first()
+            if (only.rec.trackId in currentFrameTrackIds) only.rec.skaterFrameVotes++
+            val singleTeam = if (KitLabFeatures.kitEffectiveLightness(only.kit7, only.bellyLuma) < 53.6f) {
+                TeamId.TEAM_A
+            } else {
+                TeamId.TEAM_B
+            }
+            only.rec.clusteredTeam = singleTeam
+            val other = if (singleTeam == TeamId.TEAM_A) TeamId.TEAM_B else TeamId.TEAM_A
+            clusteredTeamRgb.remove(other)
+            clusteredTeamKit7.remove(other)
+            clusteredTeamBellyLuma.remove(other)
+            clusteredTeamRgb[singleTeam] = only.rgb.map { it.roundToInt().coerceIn(0, 255) }
+            clusteredTeamKit7[singleTeam] = only.kit7
+            if (only.bellyLuma.isFinite()) clusteredTeamBellyLuma[singleTeam] = only.bellyLuma else clusteredTeamBellyLuma.remove(singleTeam)
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+            registry.invalidateCache()
+            return
+        }
+
+        // Initial 2-means across remaining tracks with minimum cluster-support guard against 1-vs-N collapse.
+        var (centroidA, centroidB) = if (remaining.size >= 2) {
+            runRobustOrderFree2Means(remaining)
+        } else {
+            runRobustOrderFree2Means(remaining + persistedRefCandidates)
+        }
+        var kitSep = sqrt(KitLabFeatures.orderFreeKitDistSq(centroidA.kit7, centroidB.kit7))
+        var rgbSep = colorLumDistance(centroidA.rgb, centroidB.rgb)
+
+        // Pass 2: Multi-cue blurred far-board official detection + persisted-official hysteresis.
+        val allowBlurredOfficial = currentSkaterCount >= 9 || activeTracks.size >= 9
+        val canTestBlurred = allowBlurredOfficial && (kitSep >= MIN_KIT_LAB_SEP || rgbSep >= MIN_RGB_LUM_SEP)
+        val labA = KitLabFeatures.rgbToLab(centroidA.rgb)
+        val labB = KitLabFeatures.rgbToLab(centroidB.rgb)
+
+        val skatersAfterRefs = ArrayList<SkaterSnapshot>(remaining.size + persistedRefCandidates.size)
+        var needRecomputeCentroids = false
+
+        for (snap in persistedRefCandidates) {
+            val isCurFrame = snap.rec.trackId in currentFrameTrackIds
+            val meanChroma = KitLabFeatures.labChroma(snap.meanLab[1], snap.meanLab[2])
+            val rawBlurred = canTestBlurred && isBlurredFarBoardOfficial(snap, labA, labB)
+            if (isCurFrame) {
+                if (rawBlurred) snap.rec.refereeFrameVotes++ else snap.rec.skaterFrameVotes++
+            }
+            if (rawBlurred || snap.rec.isEstablishedOfficial(meanChroma)) {
+                snap.rec.clusteredTeam = TeamId.REFEREE
+                val w = snap.rec.colorCount.toDouble()
+                refSumR += snap.rgb[0] * w; refSumG += snap.rgb[1] * w; refSumB += snap.rgb[2] * w; refWeight += w
+            } else {
+                skatersAfterRefs.add(snap)
+                needRecomputeCentroids = true
+            }
+        }
+
+        for (snap in remaining) {
+            val isCurFrame = snap.rec.trackId in currentFrameTrackIds
+            val meanChroma = KitLabFeatures.labChroma(snap.meanLab[1], snap.meanLab[2])
+            val rawBlurred = canTestBlurred && isBlurredFarBoardOfficial(snap, labA, labB)
+            if (isCurFrame) {
+                if (rawBlurred) snap.rec.refereeFrameVotes++ else snap.rec.skaterFrameVotes++
+            }
+            if (rawBlurred || snap.rec.isEstablishedOfficial(meanChroma)) {
+                snap.rec.clusteredTeam = TeamId.REFEREE
+                val w = snap.rec.colorCount.toDouble()
+                refSumR += snap.rgb[0] * w
+                refSumG += snap.rgb[1] * w
+                refSumB += snap.rgb[2] * w
+                refWeight += w
+                needRecomputeCentroids = true
+            } else {
+                skatersAfterRefs.add(snap)
+            }
+        }
+
+        if (skatersAfterRefs.isEmpty()) {
+            clusteredTeamRgb.remove(TeamId.TEAM_A)
+            clusteredTeamRgb.remove(TeamId.TEAM_B)
+            clusteredTeamKit7.clear()
+            clusteredTeamBellyLuma.clear()
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+            registry.invalidateCache()
+            return
+        }
+
+        if (skatersAfterRefs.size == 1) {
+            val only = skatersAfterRefs.first()
+            val singleTeam = if (KitLabFeatures.kitEffectiveLightness(only.kit7, only.bellyLuma) < 53.6f) {
+                TeamId.TEAM_A
+            } else {
+                TeamId.TEAM_B
+            }
+            only.rec.clusteredTeam = singleTeam
+            val other = if (singleTeam == TeamId.TEAM_A) TeamId.TEAM_B else TeamId.TEAM_A
+            clusteredTeamRgb.remove(other)
+            clusteredTeamKit7.remove(other)
+            clusteredTeamBellyLuma.remove(other)
+            clusteredTeamRgb[singleTeam] = only.rgb.map { it.roundToInt().coerceIn(0, 255) }
+            clusteredTeamKit7[singleTeam] = only.kit7
+            if (only.bellyLuma.isFinite()) clusteredTeamBellyLuma[singleTeam] = only.bellyLuma else clusteredTeamBellyLuma.remove(singleTeam)
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+            registry.invalidateCache()
+            return
+        }
+
+        if (needRecomputeCentroids) {
+            val recomputed = runRobustOrderFree2Means(skatersAfterRefs)
+            centroidA = recomputed.first
+            centroidB = recomputed.second
+            kitSep = sqrt(KitLabFeatures.orderFreeKitDistSq(centroidA.kit7, centroidB.kit7))
+            rgbSep = colorLumDistance(centroidA.rgb, centroidB.rgb)
+        }
+
+        if (kitSep < MIN_KIT_LAB_SEP && rgbSep < MIN_RGB_LUM_SEP) {
+            // Only one distinct kit color visible so far; assign uniformly by dark/light lightness.
+            val singleTeam = if (KitLabFeatures.kitEffectiveLightness(centroidA.kit7, centroidA.bellyLuma) < 53.6f) {
+                TeamId.TEAM_A
+            } else {
+                TeamId.TEAM_B
+            }
+            var sR = 0.0; var sG = 0.0; var sB = 0.0; var sW = 0.0
+            for (snap in skatersAfterRefs) {
+                snap.rec.clusteredTeam = singleTeam
+                val w = min(snap.rec.colorCount, 15).toDouble()
+                sR += snap.rgb[0] * w; sG += snap.rgb[1] * w; sB += snap.rgb[2] * w; sW += w
+            }
+            val other = if (singleTeam == TeamId.TEAM_A) TeamId.TEAM_B else TeamId.TEAM_A
+            clusteredTeamRgb.remove(other)
+            clusteredTeamKit7.remove(other)
+            clusteredTeamBellyLuma.remove(other)
+            if (sW > 0.0) {
+                clusteredTeamRgb[singleTeam] = listOf(
+                    (sR / sW).roundToInt().coerceIn(0, 255),
+                    (sG / sW).roundToInt().coerceIn(0, 255),
+                    (sB / sW).roundToInt().coerceIn(0, 255)
+                )
+            }
+            clusteredTeamKit7[singleTeam] = centroidA.kit7
+            if (centroidA.bellyLuma.isFinite()) clusteredTeamBellyLuma[singleTeam] = centroidA.bellyLuma
+            updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
+            registry.invalidateCache()
+            return
+        }
+
+        val allowLegacyOutlier = currentSkaterCount > 10 || activeTracks.size > 10
+        var sumAR = 0.0; var sumAG = 0.0; var sumAB = 0.0; var weightA = 0.0
+        var sumBR = 0.0; var sumBG = 0.0; var sumBB = 0.0; var weightB = 0.0
+
+        for (snap in skatersAfterRefs) {
+            val dA = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, centroidA.kit7, centroidA.bellyLuma)
+            val dB = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, centroidB.kit7, centroidB.bellyLuma)
             var assigned = if (dA <= dB) TeamId.TEAM_A else TeamId.TEAM_B
 
-            if (allowRefereeOutlier && abSeparation >= 35f) {
-                val sat = saturationSpread(rgb)
-                val minTeamDist = min(dA, dB)
-                val outlierThreshold = max(45f, 0.30f * abSeparation)
+            // Legacy neutral-gray fallback only when pantsDarkness was not supplied (NaN).
+            if (allowLegacyOutlier && !snap.rec.emaPantsDarkness.isFinite() && rgbSep >= 35f) {
+                val rgbDistA = colorLumDistance(snap.rgb, centroidA.rgb)
+                val rgbDistB = colorLumDistance(snap.rgb, centroidB.rgb)
+                val sat = saturationSpread(snap.rgb)
+                val minTeamDist = min(rgbDistA, rgbDistB)
+                val outlierThreshold = max(45f, 0.30f * rgbSep)
                 val isNeutralStriped = sat < 35f
                 val isBrightStripedOrOrange = sat > 95f
                 if (minTeamDist > outlierThreshold && (isNeutralStriped || isBrightStripedOrOrange)) {
                     assigned = TeamId.REFEREE
-                    val w = rec.colorCount.toDouble()
-                    refSumR += rgb[0] * w; refSumG += rgb[1] * w; refSumB += rgb[2] * w; refWeight += w
+                    val w = snap.rec.colorCount.toDouble()
+                    refSumR += snap.rgb[0] * w; refSumG += snap.rgb[1] * w; refSumB += snap.rgb[2] * w; refWeight += w
                 }
             }
-            rec.clusteredTeam = assigned
+
+            snap.rec.clusteredTeam = assigned
+            val w = min(snap.rec.colorCount, 15).toDouble()
+            if (assigned == TeamId.TEAM_A) {
+                sumAR += snap.rgb[0] * w; sumAG += snap.rgb[1] * w; sumAB += snap.rgb[2] * w; weightA += w
+            } else if (assigned == TeamId.TEAM_B) {
+                sumBR += snap.rgb[0] * w; sumBG += snap.rgb[1] * w; sumBB += snap.rgb[2] * w; weightB += w
+            }
         }
 
-        clusteredTeamRgb[TeamId.TEAM_A] = centroidA.map { it.roundToInt().coerceIn(0, 255) }
-        clusteredTeamRgb[TeamId.TEAM_B] = centroidB.map { it.roundToInt().coerceIn(0, 255) }
+        clusteredTeamRgb[TeamId.TEAM_A] = if (weightA > 0.0) {
+            listOf(
+                (sumAR / weightA).roundToInt().coerceIn(0, 255),
+                (sumAG / weightA).roundToInt().coerceIn(0, 255),
+                (sumAB / weightA).roundToInt().coerceIn(0, 255)
+            )
+        } else {
+            centroidA.rgb.map { it.roundToInt().coerceIn(0, 255) }
+        }
+        clusteredTeamRgb[TeamId.TEAM_B] = if (weightB > 0.0) {
+            listOf(
+                (sumBR / weightB).roundToInt().coerceIn(0, 255),
+                (sumBG / weightB).roundToInt().coerceIn(0, 255),
+                (sumBB / weightB).roundToInt().coerceIn(0, 255)
+            )
+        } else {
+            centroidB.rgb.map { it.roundToInt().coerceIn(0, 255) }
+        }
+
+        clusteredTeamKit7[TeamId.TEAM_A] = centroidA.kit7
+        clusteredTeamKit7[TeamId.TEAM_B] = centroidB.kit7
+        if (centroidA.bellyLuma.isFinite()) clusteredTeamBellyLuma[TeamId.TEAM_A] = centroidA.bellyLuma else clusteredTeamBellyLuma.remove(TeamId.TEAM_A)
+        if (centroidB.bellyLuma.isFinite()) clusteredTeamBellyLuma[TeamId.TEAM_B] = centroidB.bellyLuma else clusteredTeamBellyLuma.remove(TeamId.TEAM_B)
+
         updateRefereeCentroid(refSumR, refSumG, refSumB, refWeight)
         registry.invalidateCache()
+    }
+
+    private fun runRobustOrderFree2Means(skaters: List<SkaterSnapshot>): Pair<KitCentroid, KitCentroid> {
+        val initial = runOrderFree2Means(skaters)
+        if (skaters.size < 6) return initial
+
+        val (itemsA, itemsB, wA, wB) = partitionByCentroids(skaters, initial.first, initial.second)
+        if (isBalancedClusterSplit(itemsA, itemsB, wA, wB, skaters.size)) {
+            return initial
+        }
+
+        // Degenerate 1-vs-N / outlier-hijack split detected: trim tiny minority outlier cluster and retry.
+        val majority = if (itemsA.size >= itemsB.size) itemsA else itemsB
+        if (majority.size >= 4) {
+            val trimmed = runOrderFree2Means(majority)
+            val (tA, tB, twA, twB) = partitionByCentroids(majority, trimmed.first, trimmed.second)
+            if (isBalancedClusterSplit(tA, tB, twA, twB, majority.size)) {
+                val tKitSep = sqrt(KitLabFeatures.orderFreeKitDistSq(trimmed.first.kit7, trimmed.second.kit7))
+                val tRgbSep = colorLumDistance(trimmed.first.rgb, trimmed.second.rgb)
+                if (tKitSep >= MIN_KIT_LAB_SEP || tRgbSep >= MIN_RGB_LUM_SEP) {
+                    return trimmed
+                }
+            }
+        }
+
+        // Fallback: 1D kitEffectiveLightness weighted 2-means (immune to extreme chroma outliers).
+        val oneDim = runLightness1D2Means(skaters)
+        if (oneDim != null) {
+            return oneDim
+        }
+        return initial
+    }
+
+    private data class PartitionResult(
+        val itemsA: List<SkaterSnapshot>,
+        val itemsB: List<SkaterSnapshot>,
+        val weightA: Double,
+        val weightB: Double
+    )
+
+    private fun partitionByCentroids(
+        skaters: List<SkaterSnapshot>,
+        cA: KitCentroid,
+        cB: KitCentroid
+    ): PartitionResult {
+        val aList = ArrayList<SkaterSnapshot>(skaters.size)
+        val bList = ArrayList<SkaterSnapshot>(skaters.size)
+        var wA = 0.0
+        var wB = 0.0
+        for (snap in skaters) {
+            val dA = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, cA.kit7, cA.bellyLuma)
+            val dB = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, cB.kit7, cB.bellyLuma)
+            val w = min(snap.rec.colorCount, 15).toDouble()
+            if (dA <= dB) {
+                aList.add(snap)
+                wA += w
+            } else {
+                bList.add(snap)
+                wB += w
+            }
+        }
+        return PartitionResult(aList, bList, wA, wB)
+    }
+
+    private fun isBalancedClusterSplit(
+        itemsA: List<SkaterSnapshot>,
+        itemsB: List<SkaterSnapshot>,
+        weightA: Double,
+        weightB: Double,
+        totalCount: Int
+    ): Boolean {
+        val minCount = min(itemsA.size, itemsB.size)
+        val minRequired = max(2, totalCount / 6)
+        if (minCount < minRequired) return false
+        val totalWeight = weightA + weightB
+        if (totalWeight <= 0.0) return false
+        if (min(weightA, weightB) < 0.12 * totalWeight) return false
+
+        // Detect outlier-hijack splits where a tiny minority (<25%) splits off a bimodal majority containing both teams.
+        if (minCount * 4 < totalCount) {
+            val majority = if (itemsA.size >= itemsB.size) itemsA else itemsB
+            if (majority.size >= 4) {
+                val effs = majority.map { KitLabFeatures.kitEffectiveLightness(it.kit7, it.bellyLuma) }.sorted()
+                val spread = effs[(effs.size * 85) / 100] - effs[(effs.size * 15) / 100]
+                if (spread >= 22f) return false
+            }
+        }
+        return true
+    }
+
+    private fun runLightness1D2Means(skaters: List<SkaterSnapshot>): Pair<KitCentroid, KitCentroid>? {
+        val anchors = skaters.filter { it.rec.colorCount >= 3 }
+            .ifEmpty { skaters.filter { it.rec.colorCount >= 2 } }
+            .ifEmpty { skaters }
+        val sortedEff = anchors.map { KitLabFeatures.kitEffectiveLightness(it.kit7, it.bellyLuma) }.sorted()
+        var muA = if (sortedEff.size >= 4) sortedEff[(sortedEff.size * 15) / 100] else sortedEff.first()
+        var muB = if (sortedEff.size >= 4) sortedEff[(sortedEff.size * 85) / 100] else sortedEff.last()
+        if (abs(muB - muA) < 10f) return null
+
+        repeat(12) {
+            var sA = 0.0; var wA = 0.0
+            var sB = 0.0; var wB = 0.0
+            for (snap in skaters) {
+                val l = KitLabFeatures.kitEffectiveLightness(snap.kit7, snap.bellyLuma)
+                val w = min(snap.rec.colorCount, 15).toDouble()
+                if (abs(l - muA) <= abs(l - muB)) {
+                    sA += l * w; wA += w
+                } else {
+                    sB += l * w; wB += w
+                }
+            }
+            if (wA > 0.0) muA = (sA / wA).toFloat()
+            if (wB > 0.0) muB = (sB / wB).toFloat()
+        }
+        if (abs(muB - muA) < 10f) return null
+        if (muA > muB) {
+            val tmp = muA; muA = muB; muB = tmp
+        }
+
+        val groupA = ArrayList<SkaterSnapshot>()
+        val groupB = ArrayList<SkaterSnapshot>()
+        var wA = 0.0
+        var wB = 0.0
+        for (snap in skaters) {
+            val l = KitLabFeatures.kitEffectiveLightness(snap.kit7, snap.bellyLuma)
+            val w = min(snap.rec.colorCount, 15).toDouble()
+            if (abs(l - muA) <= abs(l - muB)) {
+                groupA.add(snap); wA += w
+            } else {
+                groupB.add(snap); wB += w
+            }
+        }
+        if (!isBalancedClusterSplit(groupA, groupB, wA, wB, skaters.size)) return null
+        val cA = computeCentroidFromGroup(groupA) ?: return null
+        val cB = computeCentroidFromGroup(groupB) ?: return null
+        val lA = KitLabFeatures.kitEffectiveLightness(cA.kit7, cA.bellyLuma)
+        val lB = KitLabFeatures.kitEffectiveLightness(cB.kit7, cB.bellyLuma)
+        return if (lA <= lB) cA to cB else cB to cA
+    }
+
+    private fun computeCentroidFromGroup(group: List<SkaterSnapshot>): KitCentroid? {
+        if (group.isEmpty()) return null
+        val ref = group.first().kit7
+        val sumKit = DoubleArray(KitLabFeatures.SUMMARY_SIZE)
+        var sumBelly = 0.0; var wBelly = 0.0
+        var sumR = 0.0; var sumG = 0.0; var sumB = 0.0; var wTot = 0.0
+        for (snap in group) {
+            val w = min(snap.rec.colorCount, 15).toDouble()
+            val aligned = KitLabFeatures.robustOrderFreeBestAligned(snap.kit7, ref)
+            for (k in 0 until KitLabFeatures.SUMMARY_SIZE) sumKit[k] += aligned[k] * w
+            sumR += snap.rgb[0] * w; sumG += snap.rgb[1] * w; sumB += snap.rgb[2] * w
+            wTot += w
+            if (snap.bellyLuma.isFinite()) {
+                sumBelly += snap.bellyLuma * w
+                wBelly += w
+            }
+        }
+        if (wTot <= 0.0) return null
+        val kit7 = FloatArray(KitLabFeatures.SUMMARY_SIZE) { k -> (sumKit[k] / wTot).toFloat() }
+        val finalKit = if (kit7[0] > kit7[3]) KitLabFeatures.swapSummary(kit7) else kit7
+        return KitCentroid(
+            kit7 = finalKit,
+            bellyLuma = if (wBelly > 0.0) (sumBelly / wBelly).toFloat() else Float.NaN,
+            rgb = floatArrayOf((sumR / wTot).toFloat(), (sumG / wTot).toFloat(), (sumB / wTot).toFloat())
+        )
+    }
+
+    private fun runOrderFree2Means(skaters: List<SkaterSnapshot>): Pair<KitCentroid, KitCentroid> {
+        val baseAnchors = skaters.filter { it.rec.colorCount >= 3 }
+            .ifEmpty { skaters.filter { it.rec.colorCount >= 2 } }
+            .ifEmpty { skaters }
+        // Trim rare extreme-chroma outliers from seeding only when they form a small tail (<25%).
+        val normalChromaAnchors = baseAnchors.filter { KitLabFeatures.maxZoneChroma(it.kit7) <= 25f }
+        val anchors = if (normalChromaAnchors.size >= max(4, (baseAnchors.size * 3) / 4)) {
+            normalChromaAnchors
+        } else {
+            baseAnchors
+        }
+        val sortedByLight = anchors.sortedBy { KitLabFeatures.kitEffectiveLightness(it.kit7, it.bellyLuma) }
+
+        val seedA = if (sortedByLight.size >= 4) {
+            sortedByLight[(sortedByLight.size * 15) / 100]
+        } else {
+            sortedByLight.first()
+        }
+        var seedB = if (sortedByLight.size >= 4) {
+            sortedByLight[(sortedByLight.size * 85) / 100]
+        } else {
+            sortedByLight.last()
+        }
+
+        // If lightness spread is narrow (e.g. dark green vs dark royal blue), seed B by kit distance from A.
+        if (sortedByLight.size >= 4) {
+            val lA = KitLabFeatures.kitEffectiveLightness(seedA.kit7, seedA.bellyLuma)
+            val lB = KitLabFeatures.kitEffectiveLightness(seedB.kit7, seedB.bellyLuma)
+            if (abs(lB - lA) < 10f) {
+                val sortedByDist = anchors.sortedBy {
+                    KitLabFeatures.robustKitAndBellyDistSq(it.kit7, it.bellyLuma, seedA.kit7, seedA.bellyLuma)
+                }
+                seedB = sortedByDist[(sortedByDist.size * 85) / 100]
+            }
+        }
+
+        var cA = KitCentroid(seedA.kit7.copyOf(), seedA.bellyLuma, seedA.rgb.copyOf())
+        var cB = KitCentroid(seedB.kit7.copyOf(), seedB.bellyLuma, seedB.rgb.copyOf())
+
+        repeat(12) {
+            val sumKitA = DoubleArray(KitLabFeatures.SUMMARY_SIZE)
+            val sumKitB = DoubleArray(KitLabFeatures.SUMMARY_SIZE)
+            var sumBellyA = 0.0; var wBellyA = 0.0
+            var sumBellyB = 0.0; var wBellyB = 0.0
+            var sumRA = 0.0; var sumGA = 0.0; var sumBA = 0.0; var wA = 0.0
+            var sumRB = 0.0; var sumGB = 0.0; var sumBB = 0.0; var wB = 0.0
+
+            for (snap in skaters) {
+                val dA = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, cA.kit7, cA.bellyLuma)
+                val dB = KitLabFeatures.robustKitAndBellyDistSq(snap.kit7, snap.bellyLuma, cB.kit7, cB.bellyLuma)
+                val w = min(snap.rec.colorCount, 15).toDouble()
+                if (dA <= dB) {
+                    val aligned = KitLabFeatures.robustOrderFreeBestAligned(snap.kit7, cA.kit7)
+                    for (k in 0 until KitLabFeatures.SUMMARY_SIZE) sumKitA[k] += aligned[k] * w
+                    sumRA += snap.rgb[0] * w; sumGA += snap.rgb[1] * w; sumBA += snap.rgb[2] * w; wA += w
+                    if (snap.bellyLuma.isFinite()) {
+                        sumBellyA += snap.bellyLuma * w
+                        wBellyA += w
+                    }
+                } else {
+                    val aligned = KitLabFeatures.robustOrderFreeBestAligned(snap.kit7, cB.kit7)
+                    for (k in 0 until KitLabFeatures.SUMMARY_SIZE) sumKitB[k] += aligned[k] * w
+                    sumRB += snap.rgb[0] * w; sumGB += snap.rgb[1] * w; sumBB += snap.rgb[2] * w; wB += w
+                    if (snap.bellyLuma.isFinite()) {
+                        sumBellyB += snap.bellyLuma * w
+                        wBellyB += w
+                    }
+                }
+            }
+
+            if (wA > 0.0) {
+                cA = KitCentroid(
+                    kit7 = FloatArray(KitLabFeatures.SUMMARY_SIZE) { k -> (sumKitA[k] / wA).toFloat() },
+                    bellyLuma = if (wBellyA > 0.0) (sumBellyA / wBellyA).toFloat() else Float.NaN,
+                    rgb = floatArrayOf((sumRA / wA).toFloat(), (sumGA / wA).toFloat(), (sumBA / wA).toFloat())
+                )
+            }
+            if (wB > 0.0) {
+                cB = KitCentroid(
+                    kit7 = FloatArray(KitLabFeatures.SUMMARY_SIZE) { k -> (sumKitB[k] / wB).toFloat() },
+                    bellyLuma = if (wBellyB > 0.0) (sumBellyB / wBellyB).toFloat() else Float.NaN,
+                    rgb = floatArrayOf((sumRB / wB).toFloat(), (sumGB / wB).toFloat(), (sumBB / wB).toFloat())
+                )
+            }
+        }
+
+        // Canonicalize dark-first summary slots for final centroids.
+        if (cA.kit7[0] > cA.kit7[3]) cA.kit7 = KitLabFeatures.swapSummary(cA.kit7)
+        if (cB.kit7[0] > cB.kit7[3]) cB.kit7 = KitLabFeatures.swapSummary(cB.kit7)
+
+        // Enforce TEAM_A = darker kit, TEAM_B = lighter kit.
+        val lightA = KitLabFeatures.kitEffectiveLightness(cA.kit7, cA.bellyLuma)
+        val lightB = KitLabFeatures.kitEffectiveLightness(cB.kit7, cB.bellyLuma)
+        return if (lightA <= lightB) cA to cB else cB to cA
+    }
+
+    private fun isCloseOrMediumStripedOfficial(snap: SkaterSnapshot): Boolean {
+        val rec = snap.rec
+        val stripeHit = rec.emaStripeScore >= STRIPE_REFEREE_MIN_SCORE ||
+            (rec.emaStripeScore >= STRIPE_ARMBAND_REFEREE_MIN_SCORE && rec.emaArmbandScore >= ARMBAND_MIN_SCORE)
+        if (!stripeHit) return false
+
+        val chroma = KitLabFeatures.labChroma(snap.meanLab[1], snap.meanLab[2])
+        if (chroma >= STRIPE_REFEREE_MAX_CHROMA) return false
+
+        // Require bright stripe support so solid dark navy skaters never trigger REFEREE.
+        val brightStripeSupport = snap.kit7[3] >= 52f ||
+            snap.meanLab[0] >= 36f ||
+            (snap.bellyLuma.isFinite() && snap.bellyLuma >= 85f)
+        return brightStripeSupport
+    }
+
+    private fun isBlurredFarBoardOfficial(
+        snap: SkaterSnapshot,
+        teamLabA: FloatArray,
+        teamLabB: FloatArray
+    ): Boolean {
+        val rec = snap.rec
+        if (rec.colorCount < 2) return false
+        if (!rec.emaPantsDarkness.isFinite() || rec.emaPantsDarkness < BLURRED_PANTS_DARKNESS_MIN) return false
+
+        val meanL = snap.meanLab[0]
+        if (meanL < 30f || meanL > 72f) return false
+
+        val meanChroma = KitLabFeatures.labChroma(snap.meanLab[1], snap.meanLab[2])
+        if (meanChroma >= BLURRED_MAX_MEAN_CHROMA) return false
+
+        val maxZoneChroma = KitLabFeatures.maxZoneChroma(snap.kit7)
+        if (maxZoneChroma >= BLURRED_MAX_ZONE_CHROMA) return false
+
+        // Reject white-bodied away jerseys (even with dark navy shoulder yokes).
+        if (snap.kit7[3] >= 75f && snap.kit7[6] >= 42f) return false
+        if (snap.bellyLuma.isFinite() && snap.bellyLuma >= 150f) return false
+
+        val distToGrey = sqrt(KitLabFeatures.labDistSq(snap.meanLab, NEUTRAL_GREY_LAB))
+        val distToA = sqrt(KitLabFeatures.labDistSq(snap.meanLab, teamLabA))
+        val distToB = sqrt(KitLabFeatures.labDistSq(snap.meanLab, teamLabB))
+        val minTeamDist = min(distToA, distToB)
+        if (rec.emaPantsDarkness >= 0.75f &&
+            meanL in 31f..72f &&
+            meanChroma < 10.0f &&
+            (!snap.bellyLuma.isFinite() || snap.bellyLuma < 135f)
+        ) {
+            return minTeamDist >= 3.0f && distToGrey <= minTeamDist * 1.6f
+        }
+        return minTeamDist >= 8.0f && distToGrey <= minTeamDist * 1.15f
     }
 
     private fun updateRefereeCentroid(sumR: Double, sumG: Double, sumB: Double, weight: Double) {
@@ -1017,16 +1835,36 @@ class MultiTeamPlayerTracker {
 
     private fun isCrossKitIncompatible(
         trackRgb: FloatArray,
+        trackKit7: FloatArray,
+        trackBelly: Float,
         detRgb: FloatArray,
+        detKit7: FloatArray,
+        detBelly: Float,
         rgbDist: Float,
         lumDiff: Float
     ): Boolean {
+        val kitA = clusteredTeamKit7[TeamId.TEAM_A]
+        val kitB = clusteredTeamKit7[TeamId.TEAM_B]
         val centA = clusteredTeamRgb[TeamId.TEAM_A]?.let { toFloatRgb(it) }
         val centB = clusteredTeamRgb[TeamId.TEAM_B]?.let { toFloatRgb(it) }
-        if (centA != null && centB != null && colorLumDistance(centA, centB) >= 40f) {
-            val tIsA = colorLumDistance(trackRgb, centA) <= colorLumDistance(trackRgb, centB)
-            val dIsA = colorLumDistance(detRgb, centA) <= colorLumDistance(detRgb, centB)
-            if (tIsA != dIsA && rgbDist > 65f) return true
+        val bellyA = clusteredTeamBellyLuma[TeamId.TEAM_A] ?: Float.NaN
+        val bellyB = clusteredTeamBellyLuma[TeamId.TEAM_B] ?: Float.NaN
+
+        if (kitA != null && kitB != null && centA != null && centB != null) {
+            val kitSep = sqrt(KitLabFeatures.orderFreeKitDistSq(kitA, kitB))
+            val rgbSep = colorLumDistance(centA, centB)
+            if (kitSep >= 12f || rgbSep >= 40f) {
+                val tDistA = KitLabFeatures.kitAndBellyDistSq(trackKit7, trackBelly, kitA, bellyA)
+                val tDistB = KitLabFeatures.kitAndBellyDistSq(trackKit7, trackBelly, kitB, bellyB)
+                val dDistA = KitLabFeatures.kitAndBellyDistSq(detKit7, detBelly, kitA, bellyA)
+                val dDistB = KitLabFeatures.kitAndBellyDistSq(detKit7, detBelly, kitB, bellyB)
+                val tIsA = tDistA <= tDistB
+                val dIsA = dDistA <= dDistB
+                if (tIsA != dIsA) {
+                    val kitCrossDist = KitLabFeatures.kitAndBellyDistSq(trackKit7, trackBelly, detKit7, detBelly)
+                    if (rgbDist > 65f || kitCrossDist > 250f) return true
+                }
+            }
         }
         return rgbDist > 80f && lumDiff > 42f
     }
@@ -1040,8 +1878,21 @@ class MultiTeamPlayerTracker {
         private const val MAX_ACTIVE_MISSES = 4
         private const val MAX_ACTIVE_GAP_SEC = 1.0
         private const val MAX_TRAIL_POINTS = 16
-        private const val STRIPE_REFEREE_MIN_SCORE = 0.58f
-        private const val STRIPE_REFEREE_MAX_HSV_SAT = 0.22f
+        private const val BURST_GHOST_DETECTION_THRESHOLD = 15
+
+        private const val STRIPE_REFEREE_MIN_SCORE = 0.46f
+        private const val STRIPE_ARMBAND_REFEREE_MIN_SCORE = 0.34f
+        private const val ARMBAND_MIN_SCORE = 0.04f
+        private const val STRIPE_REFEREE_MAX_CHROMA = 16.5f
+
+        private const val BLURRED_PANTS_DARKNESS_MIN = 0.60f
+        private const val BLURRED_MAX_MEAN_CHROMA = 15.0f
+        private const val BLURRED_MAX_ZONE_CHROMA = 17.5f
+
+        private const val MIN_KIT_LAB_SEP = 11.0f
+        private const val MIN_RGB_LUM_SEP = 25.0f
+
+        private val NEUTRAL_GREY_LAB = floatArrayOf(55f, 0f, 0f)
 
         private fun sanitizeStripeScore(score: Float): Float =
             if (score.isFinite()) score.coerceIn(0f, 1f) else 0f
@@ -1079,7 +1930,7 @@ class MultiTeamPlayerTracker {
             val dr = a[0] - b[0]
             val dg = a[1] - b[1]
             val db = a[2] - b[2]
-            return kotlin.math.sqrt(dr * dr + dg * dg + db * db)
+            return sqrt(dr * dr + dg * dg + db * db)
         }
 
         private fun luminance(rgb: FloatArray): Float =
@@ -1088,18 +1939,12 @@ class MultiTeamPlayerTracker {
         private fun saturationSpread(rgb: FloatArray): Float =
             maxOf(rgb[0], rgb[1], rgb[2]) - minOf(rgb[0], rgb[1], rgb[2])
 
-        private fun hsvSaturation(rgb: FloatArray): Float {
-            val maxC = maxOf(rgb[0], rgb[1], rgb[2])
-            val minC = minOf(rgb[0], rgb[1], rgb[2])
-            return if (maxC <= 1e-4f) 0f else (maxC - minC) / maxC
-        }
-
         private fun colorLumDistance(a: FloatArray, b: FloatArray): Float {
             val dr = a[0] - b[0]
             val dg = a[1] - b[1]
             val db = a[2] - b[2]
             val dl = luminance(a) - luminance(b)
-            return kotlin.math.sqrt(dr * dr + dg * dg + db * db + 1.5f * dl * dl)
+            return sqrt(dr * dr + dg * dg + db * db + 1.5f * dl * dl)
         }
 
         private fun defaultRgbFor(team: TeamId): List<Int> = when (team) {
