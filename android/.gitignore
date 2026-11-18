@@ -1,0 +1,10 @@
+.gradle/
+.kotlin/
+build/
+*/build/
+**/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex

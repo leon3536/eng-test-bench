@@ -1,0 +1,49 @@
+{
+ "window": 16,
+ "fps": 2.0,
+ "features": [
+  "people",
+  "height_med",
+  "spread",
+  "nn_med",
+  "pile_frac",
+  "largest_group",
+  "left_frac",
+  "right_frac",
+  "cam_shift",
+  "move_med",
+  "move_p75",
+  "moving_frac",
+  "matched_frac"
+ ],
+ "norm_prior": 8,
+ "threshold": 0.5724300646781922,
+ "det_w": 640,
+ "det_h": 360,
+ "img_w": 640,
+ "img_h": 384,
+ "min_conf": 0.3,
+ "grey_w": 160,
+ "grey_h": 90,
+ "coarse": 10,
+ "match_heights": 3.0,
+ "moving_heights": 0.3,
+ "held_out": {
+  "auroc": 0.875,
+  "ap": 0.906,
+  "base": 0.608,
+  "positives_s": 47032
+ },
+ "hand": {
+  "auroc": 0.888,
+  "points": 420,
+  "stoppage": 87,
+  "per_game": {
+   "5B_DFSHV_Ys": 0.854,
+   "N7ww6YIV3CA": 0.9,
+   "gP2NWmZ-2R8": 0.921,
+   "wge3D30pkEI": 0.94,
+   "2L62Z75QZfE": 0.87
+  }
+ }
+}
