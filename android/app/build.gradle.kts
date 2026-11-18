@@ -64,9 +64,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
+    implementation("androidx.media3:media3-datasource:1.4.1")
 
-    // ONNX Runtime & Networking
+    // ONNX Runtime, YouTube Extractor & Networking
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Coroutines & Serialization

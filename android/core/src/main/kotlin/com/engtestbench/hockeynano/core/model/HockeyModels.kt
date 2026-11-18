@@ -83,6 +83,46 @@ data class DiscoveredPlayerSummary(
 )
 
 @Serializable
+enum class AnalysisDurationPreset(val label: String, val seconds: Double?) {
+    MIN_5("5 min", 300.0),
+    MIN_10("10 min", 600.0),
+    HOUR_30("30 hr", 108_000.0),
+    ALL("All", null);
+
+    companion object {
+        private val CUSTOM_DURATION_REGEX =
+            Regex("""^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)?$""")
+
+        fun fromToken(token: String?): Pair<AnalysisDurationPreset?, Double?> {
+            val raw = token?.trim()?.lowercase() ?: return null to null
+            if (raw.isEmpty()) return null to null
+
+            val compact = raw.replace(Regex("""\s+"""), "")
+            when (compact) {
+                "5m", "5min", "5mins", "5minute", "5minutes" -> return MIN_5 to MIN_5.seconds
+                "10m", "10min", "10mins", "10minute", "10minutes" -> return MIN_10 to MIN_10.seconds
+                "30h", "30hr", "30hrs", "30hour", "30hours" -> return HOUR_30 to HOUR_30.seconds
+                "all", "full", "unlimited", "none" -> return ALL to null
+            }
+
+            val match = CUSTOM_DURATION_REGEX.matchEntire(compact) ?: return null to null
+            val numeric = match.groupValues[1].toDoubleOrNull() ?: return null to null
+            if (!numeric.isFinite() || numeric <= 0.0) return null to null
+
+            val multiplier = when (match.groupValues[2]) {
+                "", "s", "sec", "secs", "second", "seconds" -> 1.0
+                "m", "min", "mins", "minute", "minutes" -> 60.0
+                "h", "hr", "hrs", "hour", "hours" -> 3600.0
+                else -> return null to null
+            }
+            val totalSeconds = numeric * multiplier
+            if (!totalSeconds.isFinite() || totalSeconds <= 0.0) return null to null
+            return null to totalSeconds
+        }
+    }
+}
+
+@Serializable
 data class PipelineTelemetry(
     val nanoStatus: String = "initializing",
     val fps: Float = 0f,
@@ -93,7 +133,11 @@ data class PipelineTelemetry(
     val lastNanoMessage: String = "",
     val panoramicTilingEnabled: Boolean = true,
     val processedSec: Double = 0.0,
-    val videoDurationSec: Double = 0.0
+    val videoDurationSec: Double = 0.0,
+    val analysisStartSec: Double = 0.0,
+    val analyzedSpanSec: Double = 0.0,
+    val analysisLimitSec: Double? = null,
+    val analysisBudgetReached: Boolean = false
 )
 
 @Serializable

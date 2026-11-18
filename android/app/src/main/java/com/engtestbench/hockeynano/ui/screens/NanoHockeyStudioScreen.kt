@@ -32,14 +32,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -53,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -70,9 +77,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.exoplayer.ExoPlayer
+import com.engtestbench.hockeynano.core.model.AnalysisDurationPreset
 import com.engtestbench.hockeynano.core.model.ClipWindow30s
 import com.engtestbench.hockeynano.core.model.DiscoveredPlayerSummary
 import com.engtestbench.hockeynano.core.model.PipelineState
+import com.engtestbench.hockeynano.core.model.PipelineTelemetry
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.model.TeamProfile
 import com.engtestbench.hockeynano.ui.components.PlayerVideoOverlay
@@ -91,7 +100,14 @@ import com.engtestbench.hockeynano.ui.theme.TextPrimary
 import com.engtestbench.hockeynano.ui.theme.formatClock
 import com.engtestbench.hockeynano.ui.theme.teamColor
 import com.engtestbench.hockeynano.ui.theme.teamTag
+import com.engtestbench.hockeynano.youtube.ResolvedYouTubeVideo
+import com.engtestbench.hockeynano.youtube.YouTubeHockeyResolver
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private const val PRESET_BULLS_JR_REIGN_URL = "https://www.youtube.com/watch?v=1W1ZfGruhP4"
+private val YouTubeAccentRed = Color(0xFFFF3B30)
 
 data class StudioExportUiState(
     val exportingClipId: String? = null,
@@ -112,9 +128,15 @@ fun NanoHockeyStudioScreen(
     clipPlayRange: Pair<Double, Double>?,
     exportState: StudioExportUiState,
     hasMediaPermission: Boolean,
+    analysisLimitSec: Double?,
+    isResolvingYouTube: Boolean,
+    youtubeError: String?,
+    resolvedYoutube: ResolvedYouTubeVideo?,
     onRequestMediaPermission: () -> Unit,
     onRefreshVideos: () -> Unit,
     onSelectVideo: (title: String, source: String) -> Unit,
+    onAnalyzeYouTubeUrl: (url: String) -> Unit,
+    onSetAnalysisDurationLimit: (limitSec: Double?) -> Unit,
     onToggleSpeed: (Float) -> Unit,
     onTogglePanoramic: (Boolean) -> Unit,
     onVideoDimensionsKnown: (durationSec: Double, width: Int, height: Int) -> Unit,
@@ -129,8 +151,23 @@ fun NanoHockeyStudioScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var manualNumber by remember(pipelineState.selectedPlayerNumber) {
         mutableStateOf(pipelineState.selectedPlayerNumber.orEmpty())
+    }
+    var youtubePanelExpanded by remember { mutableStateOf(false) }
+    var youtubeUrlInput by remember { mutableStateOf("") }
+    var showCustomDurationDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(youtubeError) {
+        if (!youtubeError.isNullOrBlank()) {
+            youtubePanelExpanded = true
+        }
+    }
+    LaunchedEffect(selectedVideoSource) {
+        if (YouTubeHockeyResolver.isYouTubeUrl(selectedVideoSource)) {
+            youtubeUrlInput = selectedVideoSource
+        }
     }
 
     val openDocLauncher = rememberLauncherForActivityResult(
@@ -169,17 +206,56 @@ fun NanoHockeyStudioScreen(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // 1. Video selector + speed + panoramic tiling controls
+        // 1. Video selector + YouTube toggle + speed + panoramic tiling controls
         VideoSelectorRow(
             discoveredVideos = discoveredVideos,
             selectedVideoSource = selectedVideoSource,
             playbackSpeed = playbackSpeed,
             panoramicEnabled = pipelineState.telemetry.panoramicTilingEnabled,
+            youtubePanelExpanded = youtubePanelExpanded,
+            isResolvingYouTube = isResolvingYouTube,
+            hasYoutubeError = !youtubeError.isNullOrBlank(),
             onRefreshVideos = onRefreshVideos,
             onPickVideo = { openDocLauncher.launch(arrayOf("video/*")) },
+            onToggleYoutubePanel = { youtubePanelExpanded = !youtubePanelExpanded },
             onSelectVideo = onSelectVideo,
             onToggleSpeed = onToggleSpeed,
             onTogglePanoramic = onTogglePanoramic
+        )
+
+        // 1b. Collapsible YouTube link input panel
+        AnimatedVisibility(
+            visible = youtubePanelExpanded || isResolvingYouTube || !youtubeError.isNullOrBlank()
+        ) {
+            YouTubeLinkPanel(
+                urlInput = youtubeUrlInput,
+                isResolving = isResolvingYouTube,
+                errorMessage = youtubeError,
+                resolvedYoutube = resolvedYoutube,
+                selectedVideoSource = selectedVideoSource,
+                onUrlChange = { youtubeUrlInput = it },
+                onPaste = {
+                    val clip = clipboardManager.getText()?.text?.trim()
+                    if (!clip.isNullOrEmpty()) {
+                        youtubeUrlInput = clip
+                    }
+                },
+                onSelectPreset = {
+                    youtubeUrlInput = PRESET_BULLS_JR_REIGN_URL
+                    onAnalyzeYouTubeUrl(PRESET_BULLS_JR_REIGN_URL)
+                },
+                onAnalyze = {
+                    onAnalyzeYouTubeUrl(youtubeUrlInput.trim())
+                }
+            )
+        }
+
+        // 1c. Analysis duration budget selector + live budget progress pill
+        AnalysisDurationRow(
+            analysisLimitSec = analysisLimitSec,
+            telemetry = pipelineState.telemetry,
+            onSelectLimit = onSetAnalysisDurationLimit,
+            onOpenCustomDialog = { showCustomDurationDialog = true }
         )
 
         if (!hasMediaPermission) {
@@ -306,6 +382,17 @@ fun NanoHockeyStudioScreen(
             }
         }
     }
+
+    if (showCustomDurationDialog) {
+        CustomAnalysisDurationDialog(
+            currentLimitSec = analysisLimitSec,
+            onDismiss = { showCustomDurationDialog = false },
+            onApplyLimitSec = { newLimitSec ->
+                onSetAnalysisDurationLimit(newLimitSec)
+                showCustomDurationDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -314,8 +401,12 @@ private fun VideoSelectorRow(
     selectedVideoSource: String,
     playbackSpeed: Float,
     panoramicEnabled: Boolean,
+    youtubePanelExpanded: Boolean,
+    isResolvingYouTube: Boolean,
+    hasYoutubeError: Boolean,
     onRefreshVideos: () -> Unit,
     onPickVideo: () -> Unit,
+    onToggleYoutubePanel: () -> Unit,
     onSelectVideo: (String, String) -> Unit,
     onToggleSpeed: (Float) -> Unit,
     onTogglePanoramic: (Boolean) -> Unit
@@ -336,6 +427,44 @@ private fun VideoSelectorRow(
             Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(15.dp), tint = TeamACyan)
             Spacer(Modifier.width(4.dp))
             Text("Pick MP4", fontSize = 11.sp, color = TextPrimary)
+        }
+
+        val isYouTubeActive = YouTubeHockeyResolver.isYouTubeUrl(selectedVideoSource) ||
+            youtubePanelExpanded ||
+            isResolvingYouTube ||
+            hasYoutubeError
+        Surface(
+            onClick = onToggleYoutubePanel,
+            shape = RoundedCornerShape(8.dp),
+            color = if (isYouTubeActive) YouTubeAccentRed.copy(alpha = 0.25f) else YouTubeAccentRed.copy(alpha = 0.14f),
+            modifier = Modifier
+                .height(32.dp)
+                .border(
+                    width = if (youtubePanelExpanded) 1.5.dp else 1.dp,
+                    color = if (isYouTubeActive) YouTubeAccentRed else YouTubeAccentRed.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SmartDisplay,
+                    contentDescription = "YouTube",
+                    tint = YouTubeAccentRed,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "YouTube",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
 
         IconButton(
@@ -374,6 +503,7 @@ private fun VideoSelectorRow(
 
         discoveredVideos.forEach { (title, src) ->
             val selected = src == selectedVideoSource
+            val isYtChip = YouTubeHockeyResolver.isYouTubeUrl(src)
             FilterChip(
                 selected = selected,
                 onClick = { onSelectVideo(title, src) },
@@ -385,13 +515,448 @@ private fun VideoSelectorRow(
                         overflow = TextOverflow.Ellipsis
                     )
                 },
+                leadingIcon = if (isYtChip) {
+                    {
+                        Icon(
+                            Icons.Rounded.SmartDisplay,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
+                            tint = YouTubeAccentRed
+                        )
+                    }
+                } else null,
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = BenchGreen.copy(alpha = 0.22f),
-                    selectedLabelColor = BenchGreen
+                    selectedContainerColor = if (isYtChip) YouTubeAccentRed.copy(alpha = 0.2f) else BenchGreen.copy(alpha = 0.22f),
+                    selectedLabelColor = if (isYtChip) Color.White else BenchGreen
                 ),
                 modifier = Modifier.height(32.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun YouTubeLinkPanel(
+    urlInput: String,
+    isResolving: Boolean,
+    errorMessage: String?,
+    resolvedYoutube: ResolvedYouTubeVideo?,
+    selectedVideoSource: String,
+    onUrlChange: (String) -> Unit,
+    onPaste: () -> Unit,
+    onSelectPreset: () -> Unit,
+    onAnalyze: () -> Unit
+) {
+    val borderColor = if (!errorMessage.isNullOrBlank()) DangerRed.copy(alpha = 0.85f) else BorderSubtle
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PanelBg, RoundedCornerShape(10.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            OutlinedTextField(
+                value = urlInput,
+                onValueChange = onUrlChange,
+                placeholder = {
+                    Text(
+                        "https://www.youtube.com/watch?v=...",
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(Icons.Rounded.Link, contentDescription = null, tint = YouTubeAccentRed, modifier = Modifier.size(16.dp))
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Go
+                ),
+                keyboardActions = KeyboardActions(
+                    onGo = {
+                        if (urlInput.isNotBlank() && !isResolving) onAnalyze()
+                    }
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = YouTubeAccentRed,
+                    unfocusedBorderColor = BorderSubtle,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                modifier = Modifier.weight(1f)
+            )
+
+            OutlinedButton(
+                onClick = onPaste,
+                enabled = !isResolving,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(36.dp)
+            ) {
+                Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = TeamACyan, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Paste", fontSize = 11.sp, color = TextPrimary)
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            FilterChip(
+                selected = selectedVideoSource == PRESET_BULLS_JR_REIGN_URL,
+                onClick = { if (!isResolving) onSelectPreset() },
+                label = {
+                    Text(
+                        "Bulls vs Jr Reign",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                },
+                leadingIcon = {
+                    Icon(Icons.Rounded.SmartDisplay, contentDescription = null, modifier = Modifier.size(14.dp), tint = YouTubeAccentRed)
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = YouTubeAccentRed.copy(alpha = 0.22f),
+                    selectedLabelColor = Color.White,
+                    selectedLeadingIconColor = YouTubeAccentRed
+                ),
+                modifier = Modifier.height(30.dp)
+            )
+
+            Button(
+                onClick = onAnalyze,
+                enabled = urlInput.isNotBlank() && !isResolving,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BenchGreen,
+                    contentColor = ObsidianBg
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(32.dp)
+            ) {
+                if (isResolving) {
+                    CircularProgressIndicator(
+                        color = ObsidianBg,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Resolving…", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Analyze", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (!errorMessage.isNullOrBlank()) {
+            Text(
+                text = errorMessage,
+                color = DangerRed,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else if (resolvedYoutube != null && resolvedYoutube.originalUrl == selectedVideoSource) {
+            Text(
+                text = "YT ${resolvedYoutube.width}×${resolvedYoutube.height} • ${formatBudgetClock(resolvedYoutube.durationSec)} • ${
+                    if (resolvedYoutube.audioStreamUrl != null && !resolvedYoutube.hasEmbeddedAudio) "DASH+Audio" else "Muxed"
+                }",
+                color = TextMuted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnalysisDurationRow(
+    analysisLimitSec: Double?,
+    telemetry: PipelineTelemetry,
+    onSelectLimit: (Double?) -> Unit,
+    onOpenCustomDialog: () -> Unit
+) {
+    fun isPresetMatch(preset: AnalysisDurationPreset): Boolean = when (preset) {
+        AnalysisDurationPreset.ALL -> analysisLimitSec == null
+        else -> analysisLimitSec != null && preset.seconds != null &&
+            abs(analysisLimitSec - preset.seconds!!) < 0.5
+    }
+    val isCustomSelected = AnalysisDurationPreset.entries.none { isPresetMatch(it) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PanelBg, RoundedCornerShape(8.dp))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            AnalysisDurationPreset.entries.forEach { preset ->
+                val selected = isPresetMatch(preset)
+                Surface(
+                    onClick = { onSelectLimit(preset.seconds) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (selected) TeamACyan.copy(alpha = 0.22f) else PanelBgElevated,
+                    modifier = Modifier
+                        .height(26.dp)
+                        .border(
+                            width = 1.dp,
+                            color = if (selected) TeamACyan else BorderSubtle,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = preset.label,
+                            color = if (selected) TeamACyan else TextPrimary,
+                            fontSize = 10.5.sp,
+                            lineHeight = 14.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+
+            val customLabel = if (isCustomSelected && analysisLimitSec != null) {
+                formatCompactDuration(analysisLimitSec)
+            } else {
+                "Custom"
+            }
+            Surface(
+                onClick = onOpenCustomDialog,
+                shape = RoundedCornerShape(6.dp),
+                color = if (isCustomSelected) TargetGold.copy(alpha = 0.22f) else PanelBgElevated,
+                modifier = Modifier
+                    .height(26.dp)
+                    .border(
+                        width = 1.dp,
+                        color = if (isCustomSelected) TargetGold else BorderSubtle,
+                        shape = RoundedCornerShape(6.dp)
+                    )
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = customLabel,
+                        color = if (isCustomSelected) TargetGold else TextPrimary,
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = if (isCustomSelected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+
+        val budgetReached = telemetry.analysisBudgetReached
+        val pillBg = if (budgetReached) BenchGreen.copy(alpha = 0.22f) else PanelBgElevated
+        val pillBorder = if (budgetReached) BenchGreen else BorderSubtle
+        val pillTextColor = if (budgetReached) BenchGreen else TextPrimary
+        val pillText = if (budgetReached) {
+            "DONE ✓"
+        } else {
+            val elapsedLabel = formatBudgetClock(telemetry.analyzedSpanSec)
+            val limitLabel = formatBudgetLimit(analysisLimitSec)
+            "$elapsedLabel / $limitLabel"
+        }
+
+        Surface(
+            color = pillBg,
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.border(1.dp, pillBorder, RoundedCornerShape(6.dp))
+        ) {
+            Text(
+                text = pillText,
+                color = pillTextColor,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CustomAnalysisDurationDialog(
+    currentLimitSec: Double?,
+    onDismiss: () -> Unit,
+    onApplyLimitSec: (Double) -> Unit
+) {
+    var useHours by remember { mutableStateOf((currentLimitSec ?: 0.0) >= 3600.0) }
+    var valueText by remember {
+        val initial = when {
+            currentLimitSec == null -> "15"
+            currentLimitSec >= 3600.0 -> {
+                val h = currentLimitSec / 3600.0
+                if (abs(h - h.roundToInt()) < 0.05) h.roundToInt().toString()
+                else String.format(Locale.US, "%.1f", h)
+            }
+            else -> {
+                val m = currentLimitSec / 60.0
+                if (abs(m - m.roundToInt()) < 0.05) m.roundToInt().coerceAtLeast(1).toString()
+                else String.format(Locale.US, "%.2f", m)
+            }
+        }
+        mutableStateOf(initial)
+    }
+    var inputError by remember { mutableStateOf<String?>(null) }
+
+    fun submit() {
+        val parsed = valueText.trim().toDoubleOrNull()
+        if (parsed == null || parsed <= 0.0) {
+            inputError = "Enter a positive number"
+            return
+        }
+        val sec = parsed * if (useHours) 3600.0 else 60.0
+        onApplyLimitSec(sec)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = PanelBg,
+        titleContentColor = TextPrimary,
+        textContentColor = TextPrimary,
+        title = {
+            Text("Custom Analysis Duration", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !useHours,
+                        onClick = { useHours = false },
+                        label = { Text("Minutes", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = TeamACyan.copy(alpha = 0.22f),
+                            selectedLabelColor = TeamACyan
+                        )
+                    )
+                    FilterChip(
+                        selected = useHours,
+                        onClick = { useHours = true },
+                        label = { Text("Hours", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = TeamACyan.copy(alpha = 0.22f),
+                            selectedLabelColor = TeamACyan
+                        )
+                    )
+                }
+                OutlinedTextField(
+                    value = valueText,
+                    onValueChange = { ch ->
+                        valueText = ch.filter { it.isDigit() || it == '.' }
+                        inputError = null
+                    },
+                    label = {
+                        Text(
+                            if (useHours) "Hours (e.g. 2 or 1.5)" else "Minutes (e.g. 15 or 0.75)",
+                            fontSize = 11.sp
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = BenchGreen,
+                        unfocusedBorderColor = BorderSubtle,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (inputError != null) {
+                    Text(inputError!!, color = DangerRed, fontSize = 11.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = ::submit,
+                colors = ButtonDefaults.buttonColors(containerColor = BenchGreen, contentColor = ObsidianBg)
+            ) {
+                Text("Apply", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextMuted)
+            }
+        }
+    )
+}
+
+private fun formatBudgetClock(seconds: Double): String {
+    val total = seconds.coerceAtLeast(0.0).roundToInt()
+    val hours = total / 3600
+    val mins = (total % 3600) / 60
+    val secs = total % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, mins, secs)
+    } else {
+        String.format(Locale.US, "%02d:%02d", mins, secs)
+    }
+}
+
+private fun formatBudgetLimit(limitSec: Double?): String {
+    if (limitSec == null) return "ALL"
+    if (limitSec >= 3600.0) {
+        val hours = limitSec / 3600.0
+        val rounded = hours.roundToInt()
+        return if (abs(hours - rounded) < 0.05) {
+            "${rounded}h"
+        } else {
+            String.format(Locale.US, "%.1fh", hours)
+        }
+    }
+    return formatBudgetClock(limitSec)
+}
+
+private fun formatCompactDuration(seconds: Double): String {
+    val total = seconds.coerceAtLeast(0.0).roundToInt()
+    return when {
+        total >= 3600 && total % 3600 == 0 -> "${total / 3600}h"
+        total >= 60 && total % 60 == 0 -> "${total / 60}m"
+        else -> "${total}s"
     }
 }
 

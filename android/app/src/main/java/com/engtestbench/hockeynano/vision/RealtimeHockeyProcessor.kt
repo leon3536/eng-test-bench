@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.engtestbench.hockeynano.core.clip.PlayerClipSegmenter
 import com.engtestbench.hockeynano.core.model.ClipWindow30s
+import com.engtestbench.hockeynano.core.model.DiscoveredPlayerSummary
 import com.engtestbench.hockeynano.core.model.FrameMarkSample
 import com.engtestbench.hockeynano.core.model.PipelineState
 import com.engtestbench.hockeynano.core.model.PipelineTelemetry
@@ -27,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.Closeable
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -65,6 +67,15 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private var panoramicTiling: Boolean = true
     private var selectedPlayerNumber: String? = null
     private var selectedTeamFilter: TeamId? = null
+    private var analysisLimitSec: Double? = null
+    private var analysisStartSecConfigured: Double = 0.0
+    private var analysisAnchorSec: Double = 0.0
+    private var hasProcessedFirstFrame: Boolean = false
+    private var analysisBudgetReached: Boolean = false
+    private var lastFullRecomputeWallMs: Long = 0L
+    private var nextCompactionThreshold: Int = COMPACT_HISTORY_THRESHOLD + 1
+    private var cachedDiscoveredPlayers: List<DiscoveredPlayerSummary> = emptyList()
+    private var cachedRawClips: List<ClipWindow30s> = emptyList()
 
     private val historySamples = ArrayList<FrameMarkSample>(512)
     private var currentSample: FrameMarkSample? = null
@@ -123,6 +134,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         videoSource: String,
         durationSec: Double,
         panoramicTiling: Boolean = true,
+        analysisLimitSec: Double? = null,
+        analysisStartSec: Double = 0.0,
     ) {
         if (closed.get()) return
         val gen = sessionGen.incrementAndGet()
@@ -132,6 +145,9 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         detector?.resetTemporalState()
         clearAllCropBuffers()
 
+        val cleanLimit = analysisLimitSec?.takeIf { it.isFinite() && it >= 0.0 }
+        val safeStart = analysisStartSec.takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+
         synchronized(stateLock) {
             tracker.reset()
             this.videoTitle = videoTitle
@@ -140,6 +156,15 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             this.panoramicTiling = panoramicTiling
             this.selectedPlayerNumber = null
             this.selectedTeamFilter = null
+            this.analysisLimitSec = cleanLimit
+            this.analysisStartSecConfigured = safeStart
+            this.analysisAnchorSec = safeStart
+            this.hasProcessedFirstFrame = false
+            this.analysisBudgetReached = false
+            this.lastFullRecomputeWallMs = 0L
+            this.nextCompactionThreshold = COMPACT_HISTORY_THRESHOLD + 1
+            this.cachedDiscoveredPlayers = emptyList()
+            this.cachedRawClips = emptyList()
 
             historySamples.clear()
             currentSample = null
@@ -169,12 +194,14 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             teamLabelAttempts = 0
             lastPreviewCaptureWallMs = 0L
 
-            emitStateLocked()
+            emitStateLocked(forceFullRecompute = false)
         }
 
         Log.i(
             TAG,
-            "SESSION_START title=\"$videoTitle\" duration=${"%.1f".format(durationSec)}s panoramic=$panoramicTiling detectorReady=${detector != null}",
+            "SESSION_START title=\"$videoTitle\" duration=${"%.1f".format(Locale.US, durationSec)}s " +
+                "panoramic=$panoramicTiling limitSec=$cleanLimit startSec=${"%.1f".format(Locale.US, safeStart)} " +
+                "detectorReady=${detector != null}",
         )
 
         scope.launch {
@@ -184,8 +211,27 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         }
     }
 
+    fun setAnalysisDurationLimit(limitSec: Double?) {
+        val cleanLimit = limitSec?.takeIf { it.isFinite() && it >= 0.0 }
+        synchronized(stateLock) {
+            analysisLimitSec = cleanLimit
+            val analyzedSpanSec = computeAnalyzedSpanSecLocked()
+            val wasReached = analysisBudgetReached
+            val nowReached = cleanLimit != null && analyzedSpanSec >= cleanLimit
+            analysisBudgetReached = nowReached
+            if (!wasReached && nowReached) {
+                Log.i(
+                    TAG,
+                    "ANALYSIS_LIMIT_REACHED limitSec=$cleanLimit analyzedSpanSec=${"%.1f".format(Locale.US, analyzedSpanSec)} samples=${historySamples.size}",
+                )
+            }
+            emitStateLocked(forceFullRecompute = true)
+        }
+    }
+
     suspend fun onVideoFrame(highResBitmap: Bitmap, timestampSec: Double) {
         if (closed.get() || highResBitmap.isRecycled) return
+        if (synchronized(stateLock) { analysisBudgetReached }) return
         if (!yoloBusy.compareAndSet(false, true)) return
 
         try {
@@ -194,7 +240,11 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 val detEngine = detector ?: return@withContext
                 val gen = sessionGen.get()
 
-                val useTiling = synchronized(stateLock) { panoramicTiling }
+                val (useTiling, budgetReachedBeforeDetect) = synchronized(stateLock) {
+                    panoramicTiling to analysisBudgetReached
+                }
+                if (budgetReachedBeforeDetect || sessionGen.get() != gen) return@withContext
+
                 val yoloResult = detEngine.detect(highResBitmap, timestampSec, useTiling)
                 if (sessionGen.get() != gen) return@withContext
 
@@ -204,8 +254,15 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                     .map { RawDetection(it.box, it.chestRgb) }
 
                 val nowMs = SystemClock.elapsedRealtime()
-                val frameSample: FrameMarkSample? = synchronized(stateLock) {
-                    if (sessionGen.get() != gen) return@synchronized null
+                val frameResult: Pair<FrameMarkSample, Boolean>? = synchronized(stateLock) {
+                    if (sessionGen.get() != gen || analysisBudgetReached) return@synchronized null
+
+                    if (!hasProcessedFirstFrame) {
+                        hasProcessedFirstFrame = true
+                        if (analysisStartSecConfigured <= 0.0 && analysisAnchorSec <= 0.0 && timestampSec > 5.0) {
+                            analysisAnchorSec = timestampSec
+                        }
+                    }
 
                     if (lastFrameWallMs > 0L) {
                         val dtSec = (nowMs - lastFrameWallMs) / 1000f
@@ -237,32 +294,55 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                         val s = tracker.updateFrame(timestampSec, rawDetections, yoloResult.livePlayProb)
                         if (historySamples.isEmpty() || timestampSec - historySamples.last().timestampSec >= 0.08) {
                             historySamples.add(s)
-                            maxHistoryTimeSec = max(maxHistoryTimeSec, timestampSec)
                         }
+                        maxHistoryTimeSec = max(maxHistoryTimeSec, timestampSec)
                         lastTrackerTimestampSec = timestampSec
                         s
                     }
 
+                    compactOlderHalfIfNeededLocked()
                     currentSample = sampleForOverlay
-                    emitStateLocked()
-                    sampleForOverlay
+
+                    val analyzedSpanSec = computeAnalyzedSpanSecLocked()
+                    val limit = analysisLimitSec
+                    val reachedNow = limit != null && analyzedSpanSec >= limit
+                    val transitionedToReached = !analysisBudgetReached && reachedNow
+                    if (reachedNow) {
+                        analysisBudgetReached = true
+                    }
+                    if (transitionedToReached) {
+                        Log.i(
+                            TAG,
+                            "ANALYSIS_LIMIT_REACHED limitSec=$limit analyzedSpanSec=${"%.1f".format(Locale.US, analyzedSpanSec)} samples=${historySamples.size}",
+                        )
+                    }
+
+                    val shouldFullRecompute = transitionedToReached ||
+                        lastFullRecomputeWallMs == 0L ||
+                        (nowMs - lastFullRecomputeWallMs >= FULL_RECOMPUTE_CADENCE_MS)
+
+                    emitStateLocked(forceFullRecompute = shouldFullRecompute)
+                    sampleForOverlay to reachedNow
                 }
 
-                if (frameSample == null || sessionGen.get() != gen) return@withContext
+                if (frameResult == null || sessionGen.get() != gen) return@withContext
+                val (frameSample, budgetReachedNow) = frameResult
                 frameSample.players.forEach { p ->
                     trackHitCounts[p.trackId] = (trackHitCounts[p.trackId] ?: 0) + 1
                 }
 
                 Log.i(
                     TAG,
-                    "FRAME_STEP t=${"%.2f".format(timestampSec)}s detMs=${"%.1f".format(yoloResult.detectorMs)} " +
+                    "FRAME_STEP t=${"%.2f".format(Locale.US, timestampSec)}s detMs=${"%.1f".format(Locale.US, yoloResult.detectorMs)} " +
                         "tiled=${yoloResult.tiledPassUsed} det=${yoloResult.detections.size} onIce=${rawDetections.size} " +
-                        "live=${"%.2f".format(yoloResult.livePlayProb)} ocr=${ocrReadsTotal.get()} nano=${nanoEngine.status.value}",
+                        "live=${"%.2f".format(Locale.US, yoloResult.livePlayProb)} ocr=${ocrReadsTotal.get()} nano=${nanoEngine.status.value}",
                 )
 
-                scheduleAsyncOcrIfDue(highResBitmap, frameSample, nowMs, gen)
-                captureNanoCrops(highResBitmap, frameSample, nowMs)
-                maybeLaunchNanoWorker(gen)
+                if (!budgetReachedNow) {
+                    scheduleAsyncOcrIfDue(highResBitmap, frameSample, nowMs, gen)
+                    captureNanoCrops(highResBitmap, frameSample, nowMs)
+                    maybeLaunchNanoWorker(gen)
+                }
             }
         } finally {
             yoloBusy.set(false)
@@ -275,7 +355,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         synchronized(stateLock) {
             selectedPlayerNumber = clean
             selectedTeamFilter = teamFilter
-            emitStateLocked()
+            emitStateLocked(forceFullRecompute = true)
         }
         if (clean != null) {
             maybeLaunchNanoWorker(gen)
@@ -288,8 +368,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         val gen = sessionGen.get()
         synchronized(stateLock) {
             tracker.assignTrackJerseyNumber(trackId, clean, team)
-            reannotateHistoryLocked()
-            emitStateLocked()
+            emitStateLocked(forceFullRecompute = true)
         }
         maybeLaunchNanoWorker(gen)
     }
@@ -380,8 +459,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 if (sessionGen.get() == gen) {
                     synchronized(stateLock) {
                         if (sessionGen.get() == gen) {
-                            if (anyRead) reannotateHistoryLocked()
-                            emitStateLocked()
+                            emitStateLocked(forceFullRecompute = anyRead)
                         }
                     }
                 }
@@ -594,12 +672,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                                     reads.forEach { r ->
                                         tracker.recordJerseyRead(r.trackId, r.jerseyNumber, r.confidence, true)
                                     }
-                                    reannotateHistoryLocked()
                                     lastNanoMessage = "Nano read ${reads.joinToString { "#${it.jerseyNumber}" }}"
+                                    emitStateLocked(forceFullRecompute = true)
                                 } else {
                                     lastNanoMessage = "Nano 2x2 grid (${latencyMs}ms)"
+                                    emitStateLocked(forceFullRecompute = false)
                                 }
-                                emitStateLocked()
                             }
                         }
                     }
@@ -631,37 +709,78 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         if (idx < 0) historySamples.add(sample) else historySamples.add(idx, sample)
     }
 
-    private fun reannotateHistoryLocked() {
-        if (historySamples.isNotEmpty()) {
-            val updated = tracker.annotateHistory(historySamples.toList())
-            historySamples.clear()
-            historySamples.addAll(updated)
+    private fun computeAnalyzedSpanSecLocked(): Double =
+        (maxHistoryTimeSec - analysisAnchorSec).coerceAtLeast(0.0)
+
+    private fun compactOlderHalfIfNeededLocked() {
+        if (historySamples.size <= COMPACT_HISTORY_THRESHOLD) return
+        if (historySamples.size < nextCompactionThreshold) return
+
+        val beforeSize = historySamples.size
+        val halfIdx = beforeSize / 2
+        val compacted = ArrayList<FrameMarkSample>(beforeSize)
+        var lastKeptTime = Double.NEGATIVE_INFINITY
+
+        for (i in 0 until halfIdx) {
+            val sample = historySamples[i]
+            val hasJersey = sample.players.any { !it.jerseyNumber.isNullOrBlank() }
+            if (hasJersey || sample.timestampSec - lastKeptTime >= COMPACT_MIN_SPACING_SEC) {
+                compacted.add(sample)
+                lastKeptTime = sample.timestampSec
+            }
         }
-        currentSample = currentSample?.let { tracker.annotateHistory(listOf(it)).firstOrNull() }
+        for (i in halfIdx until beforeSize) {
+            compacted.add(historySamples[i])
+        }
+
+        historySamples.clear()
+        historySamples.addAll(compacted)
+        nextCompactionThreshold = if (historySamples.size > COMPACT_HISTORY_THRESHOLD) {
+            historySamples.size + 1_000
+        } else {
+            COMPACT_HISTORY_THRESHOLD + 1
+        }
+        Log.i(TAG, "HISTORY_COMPACTED before=$beforeSize after=${historySamples.size}")
     }
 
-    private fun emitStateLocked(nanoStatusOverride: String? = null) {
-        val historySnapshot = historySamples.toList()
+    private fun emitStateLocked(
+        forceFullRecompute: Boolean = false,
+        nanoStatusOverride: String? = null,
+    ) {
         val effectiveDuration = max(videoDurationSec, maxHistoryTimeSec)
-        val discovered = tracker.getDiscoveredPlayers(historySnapshot, effectiveDuration)
         val selNum = selectedPlayerNumber
-        val rawClips = if (!selNum.isNullOrBlank()) {
-            PlayerClipSegmenter.compute30sWindows(
-                historySnapshot,
-                selNum,
-                selectedTeamFilter,
-                effectiveDuration,
-            )
-        } else {
-            emptyList()
+
+        if (forceFullRecompute) {
+            if (historySamples.isNotEmpty()) {
+                val annotated = tracker.annotateHistory(historySamples.toList())
+                historySamples.clear()
+                historySamples.addAll(annotated)
+            }
+            currentSample = currentSample?.let { tracker.annotateHistory(listOf(it)).firstOrNull() }
+            val snapshotForCompute = historySamples.toList()
+            cachedDiscoveredPlayers = tracker.getDiscoveredPlayers(snapshotForCompute, effectiveDuration)
+            cachedRawClips = if (!selNum.isNullOrBlank()) {
+                PlayerClipSegmenter.compute30sWindows(
+                    snapshotForCompute,
+                    selNum,
+                    selectedTeamFilter,
+                    effectiveDuration,
+                )
+            } else {
+                emptyList()
+            }
+            lastFullRecomputeWallMs = SystemClock.elapsedRealtime()
         }
-        val enrichedClips = rawClips.map { c ->
+
+        val historySnapshot = historySamples.toList()
+        val enrichedClips = cachedRawClips.map { c ->
             c.copy(
                 nanoSummary = clipSummariesById[c.id] ?: c.nanoSummary,
                 fastClipPath = exportedFastPaths[c.id] ?: c.fastClipPath,
                 markedClipPath = exportedMarkedPaths[c.id] ?: c.markedClipPath,
             )
         }
+        val analyzedSpanSec = computeAnalyzedSpanSecLocked()
         val telemetry = PipelineTelemetry(
             nanoStatus = nanoStatusOverride ?: nanoEngine.status.value,
             fps = fpsEma,
@@ -673,6 +792,10 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             panoramicTilingEnabled = panoramicTiling,
             processedSec = maxHistoryTimeSec,
             videoDurationSec = effectiveDuration,
+            analysisStartSec = analysisAnchorSec,
+            analyzedSpanSec = analyzedSpanSec,
+            analysisLimitSec = analysisLimitSec,
+            analysisBudgetReached = analysisBudgetReached,
         )
         _state.value = PipelineState(
             videoTitle = videoTitle,
@@ -680,7 +803,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             teams = tracker.getTeamProfiles(),
             currentFrame = currentSample,
             history = historySnapshot,
-            discoveredPlayers = discovered,
+            discoveredPlayers = cachedDiscoveredPlayers,
             selectedPlayerNumber = selNum,
             selectedTeamFilter = selectedTeamFilter,
             selectedPlayerClips = enrichedClips,
@@ -830,5 +953,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         private const val MAX_OCR_TRACKS_PER_STEP = 4
         private const val NANO_GRID_CADENCE_MS = 2000L
         private const val MIN_OCR_BOX_HEIGHT = 0.045f
+        private const val FULL_RECOMPUTE_CADENCE_MS = 1_200L
+        private const val COMPACT_HISTORY_THRESHOLD = 18_000
+        private const val COMPACT_MIN_SPACING_SEC = 1.0
     }
 }

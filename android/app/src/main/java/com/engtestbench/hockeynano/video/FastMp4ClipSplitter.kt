@@ -42,6 +42,9 @@ data class ExportedClipInfo(
 
 internal object MediaSourceHelper {
     private const val LOG_TAG = "HockeyNanoBench"
+    private const val HTTP_USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    private val HTTP_HEADERS = mapOf("User-Agent" to HTTP_USER_AGENT)
 
     fun openForExtractor(
         context: Context,
@@ -72,8 +75,8 @@ internal object MediaSourceHelper {
                 extractor.setDataSource(path)
                 Closeable {}
             }
-            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> {
-                extractor.setDataSource(trimmed, emptyMap())
+            trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> {
+                extractor.setDataSource(trimmed, HTTP_HEADERS)
                 Closeable {}
             }
             else -> {
@@ -112,14 +115,110 @@ internal object MediaSourceHelper {
                 retriever.setDataSource(path)
                 Closeable {}
             }
-            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> {
-                retriever.setDataSource(trimmed, emptyMap())
+            trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true) -> {
+                retriever.setDataSource(trimmed, HTTP_HEADERS)
                 Closeable {}
             }
             else -> {
                 retriever.setDataSource(trimmed)
                 Closeable {}
             }
+        }
+    }
+
+    fun probeFirstAudioTrack(
+        context: Context,
+        sourcePathOrUri: String,
+        verifySeekUs: Long? = null
+    ): Pair<Int, MediaFormat>? {
+        val extractor = MediaExtractor()
+        return try {
+            openForExtractor(context, sourcePathOrUri, extractor).use {
+                for (i in 0 until extractor.trackCount) {
+                    val fmt = extractor.getTrackFormat(i)
+                    if (fmt.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                        if (verifySeekUs != null && fmt.containsKey(MediaFormat.KEY_DURATION)) {
+                            val durUs = fmt.getLong(MediaFormat.KEY_DURATION)
+                            if (durUs > 0L && durUs < verifySeekUs) {
+                                return@use null
+                            }
+                        }
+                        return@use (i to fmt)
+                    }
+                }
+                null
+            }
+        } catch (t: Throwable) {
+            Log.w(LOG_TAG, "Audio track probe failed for $sourcePathOrUri: ${t.message}")
+            null
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
+
+    fun muxAudioWindow(
+        context: Context,
+        audioSourcePathOrUri: String,
+        srcAudioTrack: Int,
+        muxer: MediaMuxer,
+        dstAudioTrack: Int,
+        seekUs: Long,
+        windowStartUs: Long,
+        windowEndUs: Long,
+        ptsOriginUs: Long
+    ) {
+        val audioExtractor = MediaExtractor()
+        try {
+            openForExtractor(context, audioSourcePathOrUri, audioExtractor).use {
+                audioExtractor.selectTrack(srcAudioTrack)
+                audioExtractor.seekTo(seekUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+                val fmt = audioExtractor.getTrackFormat(srcAudioTrack)
+                val maxBuf = if (fmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                    fmt.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                } else {
+                    256 * 1024
+                }
+                val buf = ByteBuffer.allocateDirect(max(256 * 1024, maxBuf))
+                val info = MediaCodec.BufferInfo()
+                var lastAudioRelPts = -1L
+
+                while (true) {
+                    val track = audioExtractor.sampleTrackIndex
+                    if (track < 0) break
+                    val pts = audioExtractor.sampleTime
+                    if (pts < 0L) {
+                        audioExtractor.advance()
+                        continue
+                    }
+                    if (pts < windowStartUs) {
+                        audioExtractor.advance()
+                        continue
+                    }
+                    if (pts > windowEndUs) break
+
+                    buf.clear()
+                    val size = audioExtractor.readSampleData(buf, 0)
+                    if (size < 0) break
+                    val relPts = pts - ptsOriginUs
+                    if (relPts < 0L || relPts <= lastAudioRelPts) {
+                        audioExtractor.advance()
+                        continue
+                    }
+                    lastAudioRelPts = relPts
+                    buf.position(0)
+                    buf.limit(size)
+                    val flags = if ((audioExtractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    } else {
+                        0
+                    }
+                    info.set(0, size, relPts, flags)
+                    muxer.writeSampleData(dstAudioTrack, buf, info)
+                    audioExtractor.advance()
+                }
+            }
+        } finally {
+            runCatching { audioExtractor.release() }
         }
     }
 
@@ -189,7 +288,8 @@ object FastMp4ClipSplitter {
         playerNumber: String,
         team: TeamId,
         outputFile: File,
-        nanoSummary: String? = null
+        nanoSummary: String? = null,
+        audioSourcePathOrUri: String? = null
     ): Result<ExportedClipInfo> = withContext(Dispatchers.IO) {
         try {
             val safeStartSec = startSec.coerceAtLeast(0.0)
@@ -227,6 +327,19 @@ object FastMp4ClipSplitter {
                         "No video track found in $sourcePathOrUri"
                     }
 
+                    var secSrcAudioTrack = -1
+                    var secAudioFormat: MediaFormat? = null
+                    if (srcAudioTrack < 0 && !audioSourcePathOrUri.isNullOrBlank()) {
+                        MediaSourceHelper.probeFirstAudioTrack(
+                            context = context,
+                            sourcePathOrUri = audioSourcePathOrUri,
+                            verifySeekUs = startUs
+                        )?.let { (idx, fmt) ->
+                            secSrcAudioTrack = idx
+                            secAudioFormat = fmt
+                        }
+                    }
+
                     extractor.selectTrack(srcVideoTrack)
                     if (srcAudioTrack >= 0) {
                         extractor.selectTrack(srcAudioTrack)
@@ -250,14 +363,20 @@ object FastMp4ClipSplitter {
                     if (dstAudioTrack < 0 && srcAudioTrack >= 0) {
                         extractor.unselectTrack(srcAudioTrack)
                     }
+                    val secDstAudioTrack = if (dstAudioTrack < 0 && secAudioFormat != null) {
+                        runCatching { m.addTrack(secAudioFormat) }.getOrDefault(-1)
+                    } else {
+                        -1
+                    }
 
+                    val effectiveAudioFmt = audioFormat ?: secAudioFormat
                     val videoMaxBuf = if (videoFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
                         videoFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
                     } else {
                         DEFAULT_BUFFER_BYTES
                     }
-                    val audioMaxBuf = if (audioFormat != null && audioFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
-                        audioFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                    val audioMaxBuf = if (effectiveAudioFmt != null && effectiveAudioFmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                        effectiveAudioFmt.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
                     } else {
                         256 * 1024
                     }
@@ -362,6 +481,28 @@ object FastMp4ClipSplitter {
 
                     require(videoFramesWritten > 0) {
                         "No video frames extracted in range [${safeStartSec}s, +${safeTargetDurSec}s]"
+                    }
+
+                    if (secDstAudioTrack >= 0 && secSrcAudioTrack >= 0 && !audioSourcePathOrUri.isNullOrBlank()) {
+                        runCatching {
+                            val audioWindowStartUs = pts0
+                            val audioWindowEndUs = minOf(endUs, pts0 + maxRelVideoPtsUs + 50_000L)
+                            if (audioWindowEndUs > audioWindowStartUs) {
+                                MediaSourceHelper.muxAudioWindow(
+                                    context = context,
+                                    audioSourcePathOrUri = audioSourcePathOrUri,
+                                    srcAudioTrack = secSrcAudioTrack,
+                                    muxer = m,
+                                    dstAudioTrack = secDstAudioTrack,
+                                    seekUs = pts0,
+                                    windowStartUs = audioWindowStartUs,
+                                    windowEndUs = audioWindowEndUs,
+                                    ptsOriginUs = pts0
+                                )
+                            }
+                        }.onFailure {
+                            Log.w(LOG_TAG, "Skipping separate audio mux on fast split: ${it.message}")
+                        }
                     }
 
                     m.stop()

@@ -18,6 +18,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -48,9 +49,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.engtestbench.hockeynano.core.model.AnalysisDurationPreset
 import com.engtestbench.hockeynano.core.model.ClipWindow30s
 import com.engtestbench.hockeynano.core.model.PipelineState
 import com.engtestbench.hockeynano.core.model.TeamId
@@ -70,6 +80,9 @@ import com.engtestbench.hockeynano.ui.theme.TextPrimary
 import com.engtestbench.hockeynano.video.FastMp4ClipSplitter
 import com.engtestbench.hockeynano.video.MarkedMp4ClipExporter
 import com.engtestbench.hockeynano.vision.RealtimeHockeyProcessor
+import com.engtestbench.hockeynano.youtube.ResolvedYouTubeVideo
+import com.engtestbench.hockeynano.youtube.YouTubeHockeyResolver
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -93,19 +106,39 @@ enum class AppTab(val label: String, val icon: ImageVector) {
 data class AutomationCommand(
     val seq: Int,
     val videoPath: String?,
+    val youtubeUrl: String?,
+    val analysisDuration: String?,
+    val startOffsetSec: Double?,
     val selectPlayer: String?,
     val autoSplit: Boolean,
     val burnMarks: Boolean,
     val playbackSpeed: Float
 )
 
+@OptIn(UnstableApi::class)
 class HockeyStudioViewModel(application: Application) : AndroidViewModel(application) {
     private val appContext: Context = application.applicationContext
 
     val processor = RealtimeHockeyProcessor(appContext)
     val clipLibraryRepository = ClipLibraryRepository(appContext)
     val benchSeedRepository = BenchSeedRepository(appContext)
-    val player: ExoPlayer = ExoPlayer.Builder(appContext).build()
+
+    private val httpDataSourceFactory: DefaultHttpDataSource.Factory =
+        DefaultHttpDataSource.Factory()
+            .setUserAgent(YouTubeHockeyResolver.USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+
+    private val dataSourceFactory: DefaultDataSource.Factory =
+        DefaultDataSource.Factory(appContext, httpDataSourceFactory)
+
+    val player: ExoPlayer = ExoPlayer.Builder(appContext)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        .setLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 45_000, 1_200, 2_000)
+                .build()
+        )
+        .build()
 
     val pipelineState: StateFlow<PipelineState> = processor.state
 
@@ -119,6 +152,15 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
         private set
     var clipPlayRange by mutableStateOf<Pair<Double, Double>?>(null)
         private set
+    var analysisLimitSec by mutableStateOf<Double?>(AnalysisDurationPreset.MIN_5.seconds)
+        private set
+    var isResolvingYouTube by mutableStateOf(false)
+        private set
+    var youtubeError by mutableStateOf<String?>(null)
+        private set
+    var resolvedYoutube by mutableStateOf<ResolvedYouTubeVideo?>(null)
+        private set
+
     private val _exportState = MutableStateFlow(StudioExportUiState())
     val exportState: StateFlow<StudioExportUiState> = _exportState.asStateFlow()
     var clipsRefreshNonce by mutableIntStateOf(0)
@@ -127,9 +169,95 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
     private var videoLoadJob: Job? = null
     private var automationJob: Job? = null
     private var initialVideoLoaded = false
+    private var activeYouTubeFallbackUrl: String? = null
+    private var activeYouTubeStartSec: Double = 0.0
+    private var didMuxedFallbackForLoad: Boolean = false
+    private var lastBudgetReached: Boolean = false
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            val yt = resolvedYoutube
+            val fallbackUrl = activeYouTubeFallbackUrl
+            if (yt != null && !didMuxedFallbackForLoad && !fallbackUrl.isNullOrBlank()) {
+                didMuxedFallbackForLoad = true
+                val curSec = player.currentPosition.coerceAtLeast(0L) / 1000.0
+                val resumeSec = if (curSec > activeYouTubeStartSec + 1.0) curSec else activeYouTubeStartSec
+                val resumeMs = (resumeSec * 1000.0).toLong()
+                val resumeAutoPlay = player.playWhenReady
+                Log.w(
+                    TAG,
+                    "YOUTUBE_FALLBACK_MUXED id=${yt.videoId} err=${error.errorCodeName} " +
+                        "resumeSec=${String.format(Locale.US, "%.1f", resumeSec)}"
+                )
+                player.stop()
+                player.clearMediaItems()
+                player.setMediaItem(MediaItem.fromUri(fallbackUrl), resumeMs)
+                player.playbackParameters = PlaybackParameters(playbackSpeed)
+                player.prepare()
+                player.playWhenReady = resumeAutoPlay
+            } else if (yt != null) {
+                val msg = error.cause?.message ?: error.message ?: error.errorCodeName
+                youtubeError = "Stream playback error: $msg"
+                Log.e(TAG, "YOUTUBE_PLAYBACK_ERROR id=${yt.videoId} err=$msg", error)
+            } else {
+                Log.e(TAG, "PLAYER_ERROR source='$selectedVideoSource' err=${error.errorCodeName}", error)
+            }
+        }
+    }
 
     init {
+        player.addListener(playerListener)
+        observeAnalysisBudget()
         refreshDiscoveredVideos(autoSelectFirst = true)
+    }
+
+    private fun observeAnalysisBudget() {
+        viewModelScope.launch {
+            processor.state.collect { st ->
+                val reached = st.telemetry.analysisBudgetReached
+                if (!lastBudgetReached && reached && clipPlayRange == null) {
+                    player.pause()
+                    _exportState.update { cur ->
+                        cur.copy(statusMessage = "Analysis duration complete — select #player to split 30s clips")
+                    }
+                    Log.i(
+                        TAG,
+                        "ANALYSIS_AUTO_PAUSED analyzedSpan=${String.format(Locale.US, "%.1f", st.telemetry.analyzedSpanSec)}s " +
+                            "limitSec=${st.telemetry.analysisLimitSec} players=${st.discoveredPlayers.size} history=${st.history.size}"
+                    )
+                }
+                lastBudgetReached = reached
+            }
+        }
+    }
+
+    fun setAnalysisDurationLimit(limitSec: Double?) {
+        val normalized = limitSec?.takeIf { it > 0.0 }
+        analysisLimitSec = normalized
+        processor.setAnalysisDurationLimit(normalized)
+        if (normalized == null || processor.state.value.telemetry.analyzedSpanSec < normalized) {
+            _exportState.update { cur ->
+                if (cur.statusMessage?.startsWith("Analysis duration complete") == true) {
+                    cur.copy(statusMessage = null)
+                } else {
+                    cur
+                }
+            }
+        }
+        Log.i(TAG, "ANALYSIS_LIMIT_SET limitSec=$normalized")
+    }
+
+    fun analyzeYouTubeUrl(rawUrl: String) {
+        val clean = rawUrl.trim()
+        if (clean.isEmpty()) {
+            youtubeError = "Enter a YouTube link to analyze"
+            return
+        }
+        if (!YouTubeHockeyResolver.isYouTubeUrl(clean)) {
+            youtubeError = "Unsupported URL — paste a youtube.com or youtu.be link"
+            return
+        }
+        loadVideo(title = "YouTube Hockey", source = clean, autoPlay = true)
     }
 
     fun refreshDiscoveredVideos(autoSelectFirst: Boolean = false) {
@@ -143,44 +271,150 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
             }
             discoveredVideos = found
             if (autoSelectFirst && !initialVideoLoaded && found.isNotEmpty()) {
-                val first = found.first()
+                val first = found.firstOrNull { !YouTubeHockeyResolver.isYouTubeUrl(it.second) } ?: found.first()
                 loadVideo(first.first, first.second, autoPlay = false)
             }
         }
     }
 
-    fun loadVideo(title: String, source: String, autoPlay: Boolean) {
+    fun loadVideo(
+        title: String,
+        source: String,
+        autoPlay: Boolean,
+        startOffsetSecOverride: Double? = null
+    ) {
+        val cleanSource = source.trim()
+        if (cleanSource.isEmpty()) return
         initialVideoLoaded = true
         videoLoadJob?.cancel()
         videoLoadJob = viewModelScope.launch {
-            selectedVideoTitle = title
-            selectedVideoSource = source
+            selectedVideoTitle = title.ifBlank {
+                if (YouTubeHockeyResolver.isYouTubeUrl(cleanSource)) "Resolving YouTube…" else "Hockey Video"
+            }
+            selectedVideoSource = cleanSource
             clipPlayRange = null
-
-            val playableUri = withContext(Dispatchers.IO) { resolvePlayableUri(appContext, source) }
-            val probedDuration = withContext(Dispatchers.IO) { probeDurationSeconds(appContext, playableUri) }
-            val startDuration = if (probedDuration > 0.5) probedDuration else 120.0
-            val panoramic = processor.state.value.telemetry.panoramicTilingEnabled
-
-            processor.startSession(
-                videoTitle = title,
-                videoSource = source,
-                durationSec = startDuration,
-                panoramicTiling = panoramic
-            )
+            youtubeError = null
+            resolvedYoutube = null
+            activeYouTubeFallbackUrl = null
+            activeYouTubeStartSec = 0.0
+            didMuxedFallbackForLoad = false
+            lastBudgetReached = false
 
             player.stop()
             player.clearMediaItems()
-            player.setMediaItem(MediaItem.fromUri(playableUri))
+
+            if (YouTubeHockeyResolver.isYouTubeUrl(cleanSource)) {
+                isResolvingYouTube = true
+                val yt = try {
+                    withContext(Dispatchers.IO) {
+                        YouTubeHockeyResolver.resolve(cleanSource, preferMaxHeight = 1080)
+                    }
+                } catch (ce: CancellationException) {
+                    isResolvingYouTube = false
+                    throw ce
+                } catch (err: Throwable) {
+                    isResolvingYouTube = false
+                    val msg = err.message?.takeIf { it.isNotBlank() } ?: "Unable to resolve YouTube stream"
+                    youtubeError = msg
+                    Log.e(TAG, "YOUTUBE_RESOLVE_ERROR url='$cleanSource' err=$msg", err)
+                    return@launch
+                }
+                isResolvingYouTube = false
+                resolvedYoutube = yt
+                val displayTitle = yt.title.ifBlank { title }.ifBlank { "YouTube (${yt.videoId})" }
+                selectedVideoTitle = displayTitle
+
+                withContext(Dispatchers.IO) {
+                    runCatching { clipLibraryRepository.saveRecentYouTubeVideo(displayTitle, cleanSource) }
+                }
+                refreshDiscoveredVideos(autoSelectFirst = false)
+
+                val rawStart = startOffsetSecOverride ?: yt.startOffsetSec ?: 0.0
+                val startSec = if (yt.durationSec > 1.0) {
+                    rawStart.coerceIn(0.0, (yt.durationSec - 1.0).coerceAtLeast(0.0))
+                } else {
+                    rawStart.coerceAtLeast(0.0)
+                }
+                val startMs = (startSec * 1000.0).toLong()
+                val sessionDuration = if (yt.durationSec > 0.5) yt.durationSec else 120.0
+                val panoramic = processor.state.value.telemetry.panoramicTilingEnabled
+
+                activeYouTubeFallbackUrl = yt.muxedFallbackUrl?.takeIf { it.isNotBlank() && it != yt.videoStreamUrl }
+                activeYouTubeStartSec = startSec
+
+                processor.startSession(
+                    videoTitle = displayTitle,
+                    videoSource = cleanSource,
+                    durationSec = sessionDuration,
+                    panoramicTiling = panoramic,
+                    analysisLimitSec = analysisLimitSec,
+                    analysisStartSec = startSec
+                )
+
+                val audioUrl = yt.audioStreamUrl?.takeIf { it.isNotBlank() }
+                if (audioUrl != null && !yt.hasEmbeddedAudio) {
+                    val progFactory = ProgressiveMediaSource.Factory(dataSourceFactory)
+                    val videoSrc = progFactory.createMediaSource(MediaItem.fromUri(yt.videoStreamUrl))
+                    val audioSrc = progFactory.createMediaSource(MediaItem.fromUri(audioUrl))
+                    val merged = MergingMediaSource(videoSrc, audioSrc)
+                    player.setMediaSource(merged, startMs)
+                } else {
+                    player.setMediaItem(MediaItem.fromUri(yt.videoStreamUrl), startMs)
+                }
+                player.playbackParameters = PlaybackParameters(playbackSpeed)
+                player.prepare()
+                player.playWhenReady = autoPlay
+
+                Log.i(
+                    TAG,
+                    "YOUTUBE_STREAM_LOADED id=${yt.videoId} title='$displayTitle' size=${yt.width}x${yt.height} " +
+                        "dur=${String.format(Locale.US, "%.1f", yt.durationSec)}s startSec=${String.format(Locale.US, "%.1f", startSec)}s " +
+                        "limitSec=$analysisLimitSec mergedAudio=${audioUrl != null && !yt.hasEmbeddedAudio} " +
+                        "muxedFallback=${activeYouTubeFallbackUrl != null} speed=$playbackSpeed autoPlay=$autoPlay"
+                )
+                return@launch
+            }
+
+            isResolvingYouTube = false
+            val playableUri = withContext(Dispatchers.IO) { resolvePlayableUri(appContext, cleanSource) }
+            val isRemoteHttp = playableUri.scheme?.lowercase(Locale.US) in setOf("http", "https")
+            val probedDuration = if (isRemoteHttp) {
+                0.0
+            } else {
+                withContext(Dispatchers.IO) { probeDurationSeconds(appContext, playableUri) }
+            }
+            val startDuration = if (probedDuration > 0.5) probedDuration else 120.0
+            val startSec = if (startOffsetSecOverride != null) {
+                if (probedDuration > 1.0) {
+                    startOffsetSecOverride.coerceIn(0.0, (probedDuration - 1.0).coerceAtLeast(0.0))
+                } else {
+                    startOffsetSecOverride.coerceAtLeast(0.0)
+                }
+            } else {
+                0.0
+            }
+            val startMs = (startSec * 1000.0).toLong()
+            val panoramic = processor.state.value.telemetry.panoramicTilingEnabled
+
+            processor.startSession(
+                videoTitle = selectedVideoTitle,
+                videoSource = cleanSource,
+                durationSec = startDuration,
+                panoramicTiling = panoramic,
+                analysisLimitSec = analysisLimitSec,
+                analysisStartSec = startSec
+            )
+
+            player.setMediaItem(MediaItem.fromUri(playableUri), startMs)
             player.playbackParameters = PlaybackParameters(playbackSpeed)
             player.prepare()
             player.playWhenReady = autoPlay
 
             Log.i(
                 TAG,
-                "VIDEO_LOADED title='$title' source='$source' uri='$playableUri' probedDur=${
+                "VIDEO_LOADED title='$selectedVideoTitle' source='$cleanSource' uri='$playableUri' probedDur=${
                     String.format(Locale.US, "%.1f", probedDuration)
-                }s speed=$playbackSpeed autoPlay=$autoPlay"
+                }s startSec=${String.format(Locale.US, "%.1f", startSec)}s limitSec=$analysisLimitSec speed=$playbackSpeed autoPlay=$autoPlay"
             )
         }
     }
@@ -196,7 +430,9 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 videoTitle = selectedVideoTitle,
                 videoSource = selectedVideoSource,
                 durationSec = durationSec,
-                panoramicTiling = cur.telemetry.panoramicTilingEnabled
+                panoramicTiling = cur.telemetry.panoramicTilingEnabled,
+                analysisLimitSec = analysisLimitSec,
+                analysisStartSec = cur.telemetry.analysisStartSec
             )
         }
     }
@@ -293,19 +529,43 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private suspend fun runFastSplitInternal(clip: ClipWindow30s): Boolean {
-        val sourceStr = withContext(Dispatchers.IO) { resolveExtractorSource(appContext, selectedVideoSource) }
+        val activeYt = resolvedYoutube?.takeIf { it.originalUrl == selectedVideoSource }
+        val primarySource = activeYt?.videoStreamUrl
+            ?: withContext(Dispatchers.IO) { resolveExtractorSource(appContext, selectedVideoSource) }
+        val primaryAudio = activeYt?.audioStreamUrl
         val outFile = clipLibraryRepository.outputFileFor(clip.playerNumber, clip.startSec, clip.endSec, burnedMarks = false)
-        val result = withContext(Dispatchers.IO) {
+        var result = withContext(Dispatchers.IO) {
             FastMp4ClipSplitter.split30sClip(
                 context = appContext,
-                sourcePathOrUri = sourceStr,
+                sourcePathOrUri = primarySource,
                 startSec = clip.startSec,
                 durationSec = clip.durationSec,
                 playerNumber = clip.playerNumber,
                 team = clip.team,
                 outputFile = outFile,
-                nanoSummary = clip.nanoSummary
+                nanoSummary = clip.nanoSummary,
+                audioSourcePathOrUri = primaryAudio
             )
+        }
+        val muxedFallback = activeYt?.muxedFallbackUrl?.takeIf { it.isNotBlank() && it != primarySource }
+        if (result.isFailure && muxedFallback != null) {
+            Log.w(
+                TAG,
+                "YOUTUBE_EXPORT_MUXED_FALLBACK kind=fast clip=${clip.id} err=${result.exceptionOrNull()?.message}"
+            )
+            result = withContext(Dispatchers.IO) {
+                FastMp4ClipSplitter.split30sClip(
+                    context = appContext,
+                    sourcePathOrUri = muxedFallback,
+                    startSec = clip.startSec,
+                    durationSec = clip.durationSec,
+                    playerNumber = clip.playerNumber,
+                    team = clip.team,
+                    outputFile = outFile,
+                    nanoSummary = clip.nanoSummary,
+                    audioSourcePathOrUri = null
+                )
+            }
         }
         return result.fold(
             onSuccess = { info ->
@@ -333,16 +593,19 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
             exportLabel = "Burning AI marks into 30s MP4 for #${clip.playerNumber} (0%)…",
             progress = 0f
         )
-        val sourceStr = withContext(Dispatchers.IO) { resolveExtractorSource(appContext, selectedVideoSource) }
+        val activeYt = resolvedYoutube?.takeIf { it.originalUrl == selectedVideoSource }
+        val primarySource = activeYt?.videoStreamUrl
+            ?: withContext(Dispatchers.IO) { resolveExtractorSource(appContext, selectedVideoSource) }
+        val primaryAudio = activeYt?.audioStreamUrl
         val outFile = clipLibraryRepository.outputFileFor(clip.playerNumber, clip.startSec, clip.endSec, burnedMarks = true)
         val snapshotState = processor.state.value
         val windowSamples = snapshotState.history.filter {
             it.timestampSec in (clip.startSec - 1.0)..(clip.endSec + 1.0)
         }
-        val result = withContext(Dispatchers.IO) {
+        var result = withContext(Dispatchers.IO) {
             MarkedMp4ClipExporter.exportMarked30sClip(
                 context = appContext,
-                sourcePathOrUri = sourceStr,
+                sourcePathOrUri = primarySource,
                 startSec = clip.startSec,
                 durationSec = clip.durationSec,
                 samples = windowSamples,
@@ -351,6 +614,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 teamId = clip.team,
                 outputFile = outFile,
                 nanoSummary = clip.nanoSummary,
+                audioSourcePathOrUri = primaryAudio,
                 onProgress = { p ->
                     val pct = (p * 100f).toInt().coerceIn(0, 100)
                     _exportState.update { cur ->
@@ -361,6 +625,43 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
             )
+        }
+        val muxedFallback = activeYt?.muxedFallbackUrl?.takeIf { it.isNotBlank() && it != primarySource }
+        if (result.isFailure && muxedFallback != null) {
+            Log.w(
+                TAG,
+                "YOUTUBE_EXPORT_MUXED_FALLBACK kind=marked clip=${clip.id} err=${result.exceptionOrNull()?.message}"
+            )
+            _exportState.update { cur ->
+                cur.copy(
+                    progress = 0f,
+                    exportLabel = "Retrying AI marks on muxed stream for #${clip.playerNumber} (0%)…"
+                )
+            }
+            result = withContext(Dispatchers.IO) {
+                MarkedMp4ClipExporter.exportMarked30sClip(
+                    context = appContext,
+                    sourcePathOrUri = muxedFallback,
+                    startSec = clip.startSec,
+                    durationSec = clip.durationSec,
+                    samples = windowSamples,
+                    teams = snapshotState.teams,
+                    highlightPlayerNumber = clip.playerNumber,
+                    teamId = clip.team,
+                    outputFile = outFile,
+                    nanoSummary = clip.nanoSummary,
+                    audioSourcePathOrUri = null,
+                    onProgress = { p ->
+                        val pct = (p * 100f).toInt().coerceIn(0, 100)
+                        _exportState.update { cur ->
+                            cur.copy(
+                                progress = p,
+                                exportLabel = "Retrying AI marks #${clip.playerNumber} ($pct%)…"
+                            )
+                        }
+                    }
+                )
+            }
         }
         clipsRefreshNonce++
         return result.fold(
@@ -388,20 +689,42 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
         automationJob = viewModelScope.launch {
             Log.i(
                 TAG,
-                "AUTOMATION_START seq=${cmd.seq} video=${cmd.videoPath} select=${cmd.selectPlayer} " +
+                "AUTOMATION_START seq=${cmd.seq} video=${cmd.videoPath} youtube=${cmd.youtubeUrl} " +
+                    "duration=${cmd.analysisDuration} startOffset=${cmd.startOffsetSec} select=${cmd.selectPlayer} " +
                     "autoSplit=${cmd.autoSplit} burnMarks=${cmd.burnMarks} speed=${cmd.playbackSpeed}"
             )
             setSpeed(cmd.playbackSpeed)
-            if (!cmd.videoPath.isNullOrBlank()) {
-                val title = File(cmd.videoPath).name.ifBlank { "Auto Hockey Clip" }
-                loadVideo(title, cmd.videoPath, autoPlay = true)
+
+            if (!cmd.analysisDuration.isNullOrBlank()) {
+                val (preset, parsedLimit) = AnalysisDurationPreset.fromToken(cmd.analysisDuration)
+                if (preset != null || parsedLimit != null) {
+                    setAnalysisDurationLimit(parsedLimit)
+                }
+            }
+
+            val targetSource = cmd.youtubeUrl?.takeIf { it.isNotBlank() }
+                ?: cmd.videoPath?.takeIf { it.isNotBlank() }
+            if (!targetSource.isNullOrBlank()) {
+                val isYt = YouTubeHockeyResolver.isYouTubeUrl(targetSource)
+                val title = if (isYt) "YouTube Hockey" else File(targetSource).name.ifBlank { "Auto Hockey Clip" }
+                loadVideo(
+                    title = title,
+                    source = targetSource,
+                    autoPlay = true,
+                    startOffsetSecOverride = cmd.startOffsetSec
+                )
+                videoLoadJob?.join()
+                if (isYt && youtubeError != null) {
+                    Log.e(TAG, "AUTOMATION_ABORT_YT_ERROR err=$youtubeError")
+                    return@launch
+                }
             }
 
             if (cmd.selectPlayer.isNullOrBlank() && !cmd.autoSplit && !cmd.burnMarks) {
                 return@launch
             }
 
-            // Wait for initial real-time scan window so YOLO + OCR + Gemini Nano build player tracks & windows
+            // Wait for real-time scan window so YOLO + OCR + Gemini Nano build player tracks & windows
             val scanStartMs = SystemClock.elapsedRealtime()
             val explicitTarget = cmd.selectPlayer?.trim()?.trimStart('#')
             if (!explicitTarget.isNullOrBlank() && !explicitTarget.equals("auto", ignoreCase = true)) {
@@ -410,33 +733,68 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
 
             var chosenNumber: String? = null
             var chosenTeam: TeamId? = null
+            val limit = analysisLimitSec
+            val isShortBoundedRun = limit != null && limit <= 60.0
+            val maxWaitMs = if (limit != null && limit <= 60.0) {
+                (limit * 2_000.0).toLong().coerceIn(35_000L, 140_000L)
+            } else {
+                26_000L
+            }
 
-            while (SystemClock.elapsedRealtime() - scanStartMs < 24_000L) {
-                delay(750L)
+            while (SystemClock.elapsedRealtime() - scanStartMs < maxWaitMs) {
+                delay(650L)
                 val st = processor.state.value
                 val dur = st.telemetry.videoDurationSec.takeIf { it > 1.0 } ?: 120.0
-                val targetScanSec = kotlin.math.min(dur * 0.85, 31.5)
+                val availableSpan = (dur - st.telemetry.analysisStartSec).coerceAtLeast(1.0)
+                val targetScanSec = kotlin.math.min(availableSpan * 0.85, 31.5)
+                val spanSec = st.telemetry.analyzedSpanSec
                 val elapsed = SystemClock.elapsedRealtime() - scanStartMs
 
-                if (!explicitTarget.isNullOrBlank() && !explicitTarget.equals("auto", ignoreCase = true)) {
-                    if (st.selectedPlayerClips.isNotEmpty() && st.telemetry.processedSec >= targetScanSec) {
+                if (st.telemetry.analysisBudgetReached) {
+                    if (!explicitTarget.isNullOrBlank() && !explicitTarget.equals("auto", ignoreCase = true)) {
                         chosenNumber = explicitTarget
                         chosenTeam = st.selectedTeamFilter
-                        break
-                    }
-                } else {
-                    val readyPlayers = st.discoveredPlayers
-                    val enoughCoverage = st.telemetry.processedSec >= targetScanSec || elapsed >= 18_000L
-                    if (enoughCoverage && readyPlayers.isNotEmpty()) {
-                        val best = readyPlayers.maxByOrNull { it.totalSeenSec + it.clipCount30s * 3.0 }
+                    } else {
+                        val best = st.discoveredPlayers.maxByOrNull { it.totalSeenSec + it.clipCount30s * 3.0 }
                         if (best != null) {
                             chosenNumber = best.jerseyNumber
                             chosenTeam = best.team
                             processor.selectPlayerNumber(best.jerseyNumber, null)
+                        }
+                    }
+                    break
+                }
+
+                if (player.playbackState == Player.STATE_ENDED && elapsed > 3_000L) {
+                    break
+                }
+
+                if (!isShortBoundedRun) {
+                    if (!explicitTarget.isNullOrBlank() && !explicitTarget.equals("auto", ignoreCase = true)) {
+                        if (st.selectedPlayerClips.isNotEmpty() && spanSec >= targetScanSec) {
+                            chosenNumber = explicitTarget
+                            chosenTeam = st.selectedTeamFilter
                             break
+                        }
+                    } else {
+                        val readyPlayers = st.discoveredPlayers
+                        val enoughCoverage = spanSec >= targetScanSec || elapsed >= 18_000L
+                        if (enoughCoverage && readyPlayers.isNotEmpty()) {
+                            val best = readyPlayers.maxByOrNull { it.totalSeenSec + it.clipCount30s * 3.0 }
+                            if (best != null) {
+                                chosenNumber = best.jerseyNumber
+                                chosenTeam = best.team
+                                processor.selectPlayerNumber(best.jerseyNumber, null)
+                                break
+                            }
                         }
                     }
                 }
+            }
+
+            if (chosenNumber == null && !explicitTarget.isNullOrBlank() && !explicitTarget.equals("auto", ignoreCase = true)) {
+                chosenNumber = explicitTarget
+                chosenTeam = processor.state.value.selectedTeamFilter
             }
 
             // Fallback if "auto" had no OCR/Nano jersey number yet: pick top tracked skater ID
@@ -472,7 +830,8 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
                 TAG,
                 "AUTO_PLAYER_SELECTED player=#$chosenNumber team=$chosenTeam " +
                     "discovered=${afterSelect.discoveredPlayers.size} clips=${afterSelect.selectedPlayerClips.size} " +
-                    "processedSec=${String.format(Locale.US, "%.1f", afterSelect.telemetry.processedSec)}"
+                    "processedSec=${String.format(Locale.US, "%.1f", afterSelect.telemetry.processedSec)} " +
+                    "analyzedSpanSec=${String.format(Locale.US, "%.1f", afterSelect.telemetry.analyzedSpanSec)}"
             )
 
             val topClip = afterSelect.selectedPlayerClips.maxByOrNull {
@@ -488,8 +847,13 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
             if (cmd.burnMarks) {
                 val waitWindowStart = SystemClock.elapsedRealtime()
                 while (SystemClock.elapsedRealtime() - waitWindowStart < 10_000L) {
-                    val curProc = processor.state.value.telemetry.processedSec
-                    if (curProc >= topClip.endSec - 1.5 || player.playbackState == Player.STATE_ENDED) break
+                    val tel = processor.state.value.telemetry
+                    if (tel.processedSec >= topClip.endSec - 1.5 ||
+                        tel.analysisBudgetReached ||
+                        player.playbackState == Player.STATE_ENDED
+                    ) {
+                        break
+                    }
                     delay(500L)
                 }
             }
@@ -516,6 +880,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
     override fun onCleared() {
         videoLoadJob?.cancel()
         automationJob?.cancel()
+        player.removeListener(playerListener)
         player.release()
         processor.close()
         super.onCleared()
@@ -546,11 +911,17 @@ class MainActivity : ComponentActivity() {
     private fun parseAutomationIntent(intent: Intent?): AutomationCommand? {
         if (intent == null) return null
         val videoPath = intent.getStringExtra("video_path")
+        val youtubeUrl = intent.getStringExtra("youtube_url")
+        val analysisDuration = intent.getStringExtra("analysis_duration")
+        val startOffsetSec = readDoubleExtraCompat(intent, "start_offset_sec")
         val selectPlayer = intent.getStringExtra("select_player")
         val autoSplit = intent.getBooleanExtra("auto_split", false)
         val burnMarks = intent.getBooleanExtra("burn_marks", false)
         val speed = readFloatExtraCompat(intent, "playback_speed", 1.0f)
-        val hasAnyExtra = !videoPath.isNullOrBlank() ||
+        val hasAnyExtra = !youtubeUrl.isNullOrBlank() ||
+            !videoPath.isNullOrBlank() ||
+            !analysisDuration.isNullOrBlank() ||
+            startOffsetSec != null ||
             !selectPlayer.isNullOrBlank() ||
             autoSplit ||
             burnMarks ||
@@ -560,6 +931,9 @@ class MainActivity : ComponentActivity() {
         val cmd = AutomationCommand(
             seq = ++cmdSeq,
             videoPath = videoPath,
+            youtubeUrl = youtubeUrl,
+            analysisDuration = analysisDuration,
+            startOffsetSec = startOffsetSec,
             selectPlayer = selectPlayer,
             autoSplit = autoSplit,
             burnMarks = burnMarks,
@@ -567,21 +941,31 @@ class MainActivity : ComponentActivity() {
         )
         Log.i(
             TAG,
-            "INTENT_RECEIVED seq=${cmd.seq} video=${cmd.videoPath} select=${cmd.selectPlayer} " +
+            "INTENT_RECEIVED seq=${cmd.seq} video=${cmd.videoPath} youtube=${cmd.youtubeUrl} " +
+                "duration=${cmd.analysisDuration} startOffset=${cmd.startOffsetSec} select=${cmd.selectPlayer} " +
                 "autoSplit=${cmd.autoSplit} burnMarks=${cmd.burnMarks} speed=${cmd.playbackSpeed}"
         )
         return cmd
     }
 
+    @Suppress("DEPRECATION")
     private fun readFloatExtraCompat(intent: Intent, key: String, defaultVal: Float): Float {
-        if (!intent.hasExtra(key)) return defaultVal
-        val asFloat = intent.getFloatExtra(key, Float.NaN)
-        if (!asFloat.isNaN()) return asFloat
-        val asDouble = intent.getDoubleExtra(key, Double.NaN)
-        if (!asDouble.isNaN()) return asDouble.toFloat()
-        val asInt = intent.getIntExtra(key, Int.MIN_VALUE)
-        if (asInt != Int.MIN_VALUE) return asInt.toFloat()
-        return intent.getStringExtra(key)?.toFloatOrNull() ?: defaultVal
+        val raw = intent.extras?.get(key) ?: return defaultVal
+        return when (raw) {
+            is Number -> raw.toFloat()
+            is String -> raw.toFloatOrNull() ?: defaultVal
+            else -> defaultVal
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun readDoubleExtraCompat(intent: Intent, key: String): Double? {
+        val raw = intent.extras?.get(key) ?: return null
+        return when (raw) {
+            is Number -> raw.toDouble()
+            is String -> raw.toDoubleOrNull()
+            else -> null
+        }
     }
 }
 
@@ -671,9 +1055,15 @@ private fun HockeyNanoBenchApp(
                 clipPlayRange = vm.clipPlayRange,
                 exportState = exportState,
                 hasMediaPermission = hasMediaPermission,
+                analysisLimitSec = vm.analysisLimitSec,
+                isResolvingYouTube = vm.isResolvingYouTube,
+                youtubeError = vm.youtubeError,
+                resolvedYoutube = vm.resolvedYoutube,
                 onRequestMediaPermission = { permissionLauncher.launch(permissionName) },
                 onRefreshVideos = { vm.refreshDiscoveredVideos(autoSelectFirst = false) },
                 onSelectVideo = { title, src -> vm.loadVideo(title, src, autoPlay = true) },
+                onAnalyzeYouTubeUrl = { url -> vm.analyzeYouTubeUrl(url) },
+                onSetAnalysisDurationLimit = { limitSec -> vm.setAnalysisDurationLimit(limitSec) },
                 onToggleSpeed = { vm.setSpeed(it) },
                 onTogglePanoramic = { vm.setPanoramic(it) },
                 onVideoDimensionsKnown = { dur, w, h -> vm.onVideoDimensionsKnown(dur, w, h) },
@@ -759,9 +1149,11 @@ private fun queryMediaStoreVideoUri(context: Context, rawPath: String): Uri? {
 }
 
 private fun probeDurationSeconds(context: Context, uri: Uri): Double {
+    val scheme = uri.scheme?.lowercase(Locale.US)
+    if (scheme == "http" || scheme == "https") return 0.0
     val retriever = MediaMetadataRetriever()
     return try {
-        when (uri.scheme) {
+        when (scheme) {
             "file", null -> {
                 val p = uri.path ?: return 0.0
                 retriever.setDataSource(p)

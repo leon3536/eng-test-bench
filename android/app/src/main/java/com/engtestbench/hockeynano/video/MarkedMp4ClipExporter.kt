@@ -79,7 +79,8 @@ object MarkedMp4ClipExporter {
         teamId: TeamId,
         outputFile: File,
         nanoSummary: String? = null,
-        onProgress: (Float) -> Unit = {}
+        onProgress: (Float) -> Unit = {},
+        audioSourcePathOrUri: String? = null
     ): Result<ExportedClipInfo> {
         val executor = Executors.newSingleThreadExecutor { r ->
             Thread(r, "MarkedMp4Exporter").apply { isDaemon = true }
@@ -104,6 +105,7 @@ object MarkedMp4ClipExporter {
                         exportViaMediaCodecGl(
                             context = context,
                             sourcePathOrUri = sourcePathOrUri,
+                            audioSourcePathOrUri = audioSourcePathOrUri,
                             startSec = safeStartSec,
                             durationSec = safeTargetDurSec,
                             samples = sortedSamples,
@@ -123,6 +125,7 @@ object MarkedMp4ClipExporter {
                         exportViaRetrieverFallback(
                             context = context,
                             sourcePathOrUri = sourcePathOrUri,
+                            audioSourcePathOrUri = audioSourcePathOrUri,
                             startSec = safeStartSec,
                             durationSec = safeTargetDurSec,
                             samples = sortedSamples,
@@ -197,6 +200,7 @@ object MarkedMp4ClipExporter {
     private suspend fun exportViaMediaCodecGl(
         context: Context,
         sourcePathOrUri: String,
+        audioSourcePathOrUri: String?,
         startSec: Double,
         durationSec: Double,
         samples: List<FrameMarkSample>,
@@ -238,6 +242,19 @@ object MarkedMp4ClipExporter {
                 }
                 require(srcVideoTrack >= 0 && videoFormat != null) {
                     "No video track in $sourcePathOrUri"
+                }
+
+                var resolvedAudioSource = sourcePathOrUri
+                if (srcAudioTrack < 0 && !audioSourcePathOrUri.isNullOrBlank()) {
+                    MediaSourceHelper.probeFirstAudioTrack(
+                        context = context,
+                        sourcePathOrUri = audioSourcePathOrUri,
+                        verifySeekUs = startUs
+                    )?.let { (idx, fmt) ->
+                        srcAudioTrack = idx
+                        audioFormat = fmt
+                        resolvedAudioSource = audioSourcePathOrUri
+                    }
                 }
 
                 val mime = videoFormat.getString(MediaFormat.KEY_MIME)!!
@@ -378,7 +395,7 @@ object MarkedMp4ClipExporter {
                 val totalClipUs = max(lastEncPtsUs + FRAME_INTERVAL_US, FRAME_INTERVAL_US)
                 encSession.finishVideoAndMuxAudio(
                     context = context,
-                    sourcePathOrUri = sourcePathOrUri,
+                    sourcePathOrUri = resolvedAudioSource,
                     srcAudioTrack = if (encSession.hasAudioTrack) srcAudioTrack else -1,
                     startUs = startUs,
                     endUs = startUs + totalClipUs
@@ -403,6 +420,7 @@ object MarkedMp4ClipExporter {
     private suspend fun exportViaRetrieverFallback(
         context: Context,
         sourcePathOrUri: String,
+        audioSourcePathOrUri: String?,
         startSec: Double,
         durationSec: Double,
         samples: List<FrameMarkSample>,
@@ -447,6 +465,25 @@ object MarkedMp4ClipExporter {
                 }
                 runCatching { extractor.release() }
 
+                val startUs = (startSec * 1_000_000.0).roundToLong()
+                val maxEndUs = min(
+                    startUs + (durationSec * 1_000_000.0).roundToLong(),
+                    totalDurMs * 1_000L
+                ).coerceAtLeast(startUs + FRAME_INTERVAL_US)
+
+                var resolvedAudioSource = sourcePathOrUri
+                if (srcAudioTrack < 0 && !audioSourcePathOrUri.isNullOrBlank()) {
+                    MediaSourceHelper.probeFirstAudioTrack(
+                        context = context,
+                        sourcePathOrUri = audioSourcePathOrUri,
+                        verifySeekUs = startUs
+                    )?.let { (idx, fmt) ->
+                        srcAudioTrack = idx
+                        audioFormat = fmt
+                        resolvedAudioSource = audioSourcePathOrUri
+                    }
+                }
+
                 val encSession = VideoMuxEncoderSession(
                     outputFile = tmpOutputFile,
                     width = outW,
@@ -454,12 +491,6 @@ object MarkedMp4ClipExporter {
                     audioFormat = audioFormat
                 )
                 encoderSession = encSession
-
-                val startUs = (startSec * 1_000_000.0).roundToLong()
-                val maxEndUs = min(
-                    startUs + (durationSec * 1_000_000.0).roundToLong(),
-                    totalDurMs * 1_000L
-                ).coerceAtLeast(startUs + FRAME_INTERVAL_US)
 
                 val bmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
                 workBmp = bmp
@@ -521,7 +552,7 @@ object MarkedMp4ClipExporter {
                 val actualDurUs = max(encodedCount * FRAME_INTERVAL_US, FRAME_INTERVAL_US)
                 encSession.finishVideoAndMuxAudio(
                     context = context,
-                    sourcePathOrUri = sourcePathOrUri,
+                    sourcePathOrUri = resolvedAudioSource,
                     srcAudioTrack = if (encSession.hasAudioTrack) srcAudioTrack else -1,
                     startUs = startUs,
                     endUs = startUs + actualDurUs
@@ -626,13 +657,16 @@ object MarkedMp4ClipExporter {
 
             if (muxerStarted && muxerAudioTrack >= 0 && srcAudioTrack >= 0) {
                 runCatching {
-                    copyAudioSegment(
+                    MediaSourceHelper.muxAudioWindow(
                         context = context,
-                        sourcePathOrUri = sourcePathOrUri,
+                        audioSourcePathOrUri = sourcePathOrUri,
                         srcAudioTrack = srcAudioTrack,
+                        muxer = muxer,
                         dstAudioTrack = muxerAudioTrack,
-                        startUs = startUs,
-                        endUs = endUs
+                        seekUs = startUs,
+                        windowStartUs = startUs,
+                        windowEndUs = endUs,
+                        ptsOriginUs = startUs
                     )
                 }.onFailure {
                     Log.w(LOG_TAG, "Skipping audio mux on marked export: ${it.message}")
@@ -680,69 +714,6 @@ object MarkedMp4ClipExporter {
                 }
             }
             return progressed
-        }
-
-        private fun copyAudioSegment(
-            context: Context,
-            sourcePathOrUri: String,
-            srcAudioTrack: Int,
-            dstAudioTrack: Int,
-            startUs: Long,
-            endUs: Long
-        ) {
-            val audioExtractor = MediaExtractor()
-            MediaSourceHelper.openForExtractor(context, sourcePathOrUri, audioExtractor).use {
-                try {
-                    audioExtractor.selectTrack(srcAudioTrack)
-                    audioExtractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-                    val fmt = audioExtractor.getTrackFormat(srcAudioTrack)
-                    val maxBuf = if (fmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
-                        fmt.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
-                    } else {
-                        256 * 1024
-                    }
-                    val buf = ByteBuffer.allocateDirect(max(256 * 1024, maxBuf))
-                    val info = MediaCodec.BufferInfo()
-                    var lastAudioPts = -1L
-
-                    while (true) {
-                        val track = audioExtractor.sampleTrackIndex
-                        if (track < 0) break
-                        val pts = audioExtractor.sampleTime
-                        if (pts < 0L) {
-                            audioExtractor.advance()
-                            continue
-                        }
-                        if (pts < startUs) {
-                            audioExtractor.advance()
-                            continue
-                        }
-                        if (pts > endUs) break
-
-                        buf.clear()
-                        val size = audioExtractor.readSampleData(buf, 0)
-                        if (size < 0) break
-                        val relPts = pts - startUs
-                        if (relPts <= lastAudioPts) {
-                            audioExtractor.advance()
-                            continue
-                        }
-                        lastAudioPts = relPts
-                        buf.position(0)
-                        buf.limit(size)
-                        val flags = if ((audioExtractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
-                            MediaCodec.BUFFER_FLAG_KEY_FRAME
-                        } else {
-                            0
-                        }
-                        info.set(0, size, relPts, flags)
-                        muxer.writeSampleData(dstAudioTrack, buf, info)
-                        audioExtractor.advance()
-                    }
-                } finally {
-                    runCatching { audioExtractor.release() }
-                }
-            }
         }
 
         fun release() {

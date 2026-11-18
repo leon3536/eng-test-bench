@@ -114,4 +114,73 @@ class PlayerClipSegmenterTest {
         assertTrue(windows[0].avgLiveProb > 0.9f, "Window with higher livePlayProb must win tie in visibility")
         assertTrue(windows[0].startSec >= 7.0, "Window should capture high-livePlayProb shift at 35..37s")
     }
+
+    @Test
+    fun `30 hour 108000s video windows segment accurately in under 100ms`() {
+        val durationSec = 108_000.0
+        val history = ArrayList<FrameMarkSample>(8_000)
+
+        // 150 distinct shifts spaced across 30 hours (~700s apart, 32 hits = 8s each -> 4,800 hits),
+        // including one right near the 30h end at 107_980..107_988s.
+        for (shiftIdx in 0 until 149) {
+            val base = 15.0 + shiftIdx * 700.0
+            for (h in 0 until 32) {
+                history.add(sampleWith(base + h * 0.25, "97", TeamId.TEAM_A, live = 0.88f))
+            }
+        }
+        for (h in 0 until 32) {
+            history.add(sampleWith(107_980.0 + h * 0.25, "97", TeamId.TEAM_A, live = 0.92f))
+        }
+
+        // Warm up JIT once, then measure actual latency.
+        PlayerClipSegmenter.compute30sWindows(
+            history = history.take(64),
+            playerNumber = "97",
+            teamFilter = TeamId.TEAM_A,
+            videoDurationSec = durationSec
+        )
+
+        val t0Ns = System.nanoTime()
+        val windows = PlayerClipSegmenter.compute30sWindows(
+            history = history,
+            playerNumber = "97",
+            teamFilter = TeamId.TEAM_A,
+            videoDurationSec = durationSec
+        )
+        val elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000.0
+
+        assertTrue(
+            elapsedMs < 100.0,
+            "30-hour (108_000.0s) compute30sWindows took ${elapsedMs}ms (must be < 100ms)"
+        )
+        assertEquals(150, windows.size, "Expected one 30s window per shift across 30h")
+        for (i in windows.indices) {
+            val w = windows[i]
+            assertEquals(30.0, w.durationSec, 1e-6)
+            assertEquals(32, w.sampleHits)
+            assertEquals(8.0, w.visibilitySec, 1e-6)
+            assertTrue(w.startSec >= 0.0 && w.endSec <= durationSec)
+            if (i + 1 < windows.size) {
+                assertTrue(w.endSec <= windows[i + 1].startSec + 1e-6)
+            }
+        }
+        assertTrue(windows.last().endSec <= durationSec + 1e-6)
+        assertTrue(windows.last().startSec <= 107_970.0 + 1e-6)
+    }
+
+    @Test
+    fun `hit-local candidate offsets cover fractional shift boundaries inside 30h stream`() {
+        val history = (0 until 8).map { sampleWith(50_000.25 + it * 0.25, "88", TeamId.TEAM_B, live = 0.95f) }
+        val windows = PlayerClipSegmenter.compute30sWindows(
+            history = history,
+            playerNumber = "88",
+            teamFilter = TeamId.TEAM_B,
+            videoDurationSec = 108_000.0
+        )
+        assertEquals(1, windows.size)
+        val w = windows[0]
+        assertEquals(30.0, w.durationSec, 1e-6)
+        assertEquals(8, w.sampleHits)
+        assertTrue(w.startSec <= 50_000.25 && w.endSec >= 50_002.0)
+    }
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -18,6 +19,13 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Locale
 import kotlin.math.roundToInt
+
+@Serializable
+private data class RecentYouTubeEntry(
+    val title: String,
+    val watchUrl: String,
+    val savedAtMs: Long = 0L
+)
 
 class ClipLibraryRepository(private val context: Context) {
     private val json = Json {
@@ -28,6 +36,9 @@ class ClipLibraryRepository(private val context: Context) {
 
     private val indexFile: File
         get() = File(context.filesDir, INDEX_FILE_NAME)
+
+    private val recentYouTubeFile: File
+        get() = File(context.filesDir, RECENT_YT_FILE_NAME)
 
     private fun clipsDir(): File {
         val moviesDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
@@ -72,6 +83,25 @@ class ClipLibraryRepository(private val context: Context) {
                 .filter { File(it.filePath).let { f -> f.exists() && f.length() > 0L } }
             val updated = (listOf(info) + current).sortedByDescending { it.createdAtMs }
             writeIndexLocked(updated)
+        }
+    }
+
+    suspend fun saveRecentYouTubeVideo(title: String, watchUrl: String) = withContext(Dispatchers.IO) {
+        val cleanUrl = watchUrl.trim()
+        if (cleanUrl.isBlank()) return@withContext
+        val cleanTitle = title.trim().ifBlank { "YouTube Hockey" }
+
+        ytMutex.withLock {
+            val current = readRecentYouTubeLocked()
+                .filterNot { it.watchUrl.trim() == cleanUrl }
+            val updated = (listOf(
+                RecentYouTubeEntry(
+                    title = cleanTitle,
+                    watchUrl = cleanUrl,
+                    savedAtMs = System.currentTimeMillis()
+                )
+            ) + current).take(MAX_RECENT_YOUTUBE)
+            writeJsonAtomically(recentYouTubeFile, json.encodeToString(updated))
         }
     }
 
@@ -126,6 +156,28 @@ class ClipLibraryRepository(private val context: Context) {
                 pathOrUri = "android.resource://${context.packageName}/raw/hockey_sample_30s"
             )
         }
+
+        // 5) Saved recent YouTube URLs (newest first, deduplicated)
+        val recentYt = ytMutex.withLock { readRecentYouTubeLocked() }
+        recentYt.forEach { entry ->
+            val url = entry.watchUrl.trim()
+            if (url.isNotEmpty()) {
+                val label = if (entry.title.contains("(YT)", ignoreCase = true) ||
+                    entry.title.startsWith("YT:", ignoreCase = true)
+                ) {
+                    entry.title
+                } else {
+                    "${entry.title} (YT)"
+                }
+                addEntry(title = label, pathOrUri = url)
+            }
+        }
+
+        // 6) Built-in YouTube hockey preset
+        addEntry(
+            title = PRESET_YOUTUBE_TITLE,
+            pathOrUri = PRESET_YOUTUBE_URL
+        )
 
         results
     }
@@ -230,10 +282,25 @@ class ClipLibraryRepository(private val context: Context) {
     }
 
     private fun writeIndexLocked(items: List<ExportedClipInfo>) {
-        val target = indexFile
+        writeJsonAtomically(indexFile, json.encodeToString(items))
+    }
+
+    private fun readRecentYouTubeLocked(): List<RecentYouTubeEntry> {
+        val file = recentYouTubeFile
+        if (!file.exists() || !file.isFile) return emptyList()
+        return runCatching {
+            val raw = file.readText()
+            if (raw.isBlank()) emptyList() else json.decodeFromString<List<RecentYouTubeEntry>>(raw)
+        }.getOrElse { err ->
+            Log.w(LOG_TAG, "Failed parsing $RECENT_YT_FILE_NAME: ${err.message}")
+            emptyList()
+        }
+    }
+
+    private fun writeJsonAtomically(target: File, content: String) {
         target.parentFile?.mkdirs()
         val tmp = File(target.parentFile, "${target.name}.tmp")
-        tmp.writeText(json.encodeToString(items))
+        tmp.writeText(content)
         val moved = runCatching {
             Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             true
@@ -291,7 +358,12 @@ class ClipLibraryRepository(private val context: Context) {
         private const val LOG_TAG = "HockeyNanoBench"
         private const val CLIPS_DIR_NAME = "HockeyClips30s"
         private const val INDEX_FILE_NAME = "clips_index.json"
+        private const val RECENT_YT_FILE_NAME = "recent_youtube.json"
+        private const val MAX_RECENT_YOUTUBE = 15
+        private const val PRESET_YOUTUBE_TITLE = "TV Bulls vs Jr Reign (YT)"
+        private const val PRESET_YOUTUBE_URL = "https://www.youtube.com/watch?v=1W1ZfGruhP4"
         private val indexMutex = Mutex()
+        private val ytMutex = Mutex()
         private val ORPHAN_NAME_REGEX = Regex("^hockey_p([A-Za-z0-9_-]+)_(\\d+)s_(\\d+)s_(fast|marked)\\.mp4$")
     }
 }

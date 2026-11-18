@@ -1,6 +1,7 @@
 package com.engtestbench.hockeynano.core
 
 import com.engtestbench.hockeynano.core.bench.BenchSeedReport
+import com.engtestbench.hockeynano.core.model.AnalysisDurationPreset
 import com.engtestbench.hockeynano.core.model.ClipWindow30s
 import com.engtestbench.hockeynano.core.model.DiscoveredPlayerSummary
 import com.engtestbench.hockeynano.core.model.FrameMarkSample
@@ -102,5 +103,65 @@ class HockeyModelsAndBenchSerializationTest {
         assertEquals(89, report.cells.size)
         assertEquals(28, report.designsCount)
         assertTrue(report.findings.isNotEmpty())
+    }
+
+    @Test
+    fun `analysis duration preset fromToken parses presets custom durations and invalid tokens`() {
+        assertEquals(AnalysisDurationPreset.MIN_5 to 300.0, AnalysisDurationPreset.fromToken("5m"))
+        assertEquals(AnalysisDurationPreset.MIN_5 to 300.0, AnalysisDurationPreset.fromToken("5min"))
+        assertEquals(AnalysisDurationPreset.MIN_5 to 300.0, AnalysisDurationPreset.fromToken("5 min"))
+        assertEquals(AnalysisDurationPreset.MIN_5 to 300.0, AnalysisDurationPreset.fromToken(" 5 MIN "))
+
+        assertEquals(AnalysisDurationPreset.MIN_10 to 600.0, AnalysisDurationPreset.fromToken("10m"))
+        assertEquals(AnalysisDurationPreset.MIN_10 to 600.0, AnalysisDurationPreset.fromToken("10min"))
+        assertEquals(AnalysisDurationPreset.MIN_10 to 600.0, AnalysisDurationPreset.fromToken("10 min"))
+
+        assertEquals(AnalysisDurationPreset.HOUR_30 to 108_000.0, AnalysisDurationPreset.fromToken("30h"))
+        assertEquals(AnalysisDurationPreset.HOUR_30 to 108_000.0, AnalysisDurationPreset.fromToken("30hr"))
+        assertEquals(AnalysisDurationPreset.HOUR_30 to 108_000.0, AnalysisDurationPreset.fromToken("30 hr"))
+        assertEquals(AnalysisDurationPreset.HOUR_30 to 108_000.0, AnalysisDurationPreset.fromToken("30hour"))
+        assertEquals(AnalysisDurationPreset.HOUR_30 to 108_000.0, AnalysisDurationPreset.fromToken("30 hours"))
+
+        assertEquals(AnalysisDurationPreset.ALL to null, AnalysisDurationPreset.fromToken("all"))
+        assertEquals(AnalysisDurationPreset.ALL to null, AnalysisDurationPreset.fromToken("ALL"))
+        assertEquals(AnalysisDurationPreset.ALL to null, AnalysisDurationPreset.fromToken("full"))
+        assertEquals(AnalysisDurationPreset.ALL to null, AnalysisDurationPreset.fromToken("unlimited"))
+        assertEquals(AnalysisDurationPreset.ALL to null, AnalysisDurationPreset.fromToken("none"))
+
+        assertEquals(null to 45.0, AnalysisDurationPreset.fromToken("45s"))
+        assertEquals(null to 45.0, AnalysisDurationPreset.fromToken("45"))
+        assertEquals(null to 900.0, AnalysisDurationPreset.fromToken("15m"))
+        assertEquals(null to 900.0, AnalysisDurationPreset.fromToken("15min"))
+        assertEquals(null to 7200.0, AnalysisDurationPreset.fromToken("2h"))
+        assertEquals(null to 7200.0, AnalysisDurationPreset.fromToken("2hr"))
+
+        assertEquals(null to null, AnalysisDurationPreset.fromToken(null))
+        assertEquals(null to null, AnalysisDurationPreset.fromToken(""))
+        assertEquals(null to null, AnalysisDurationPreset.fromToken("   "))
+        assertEquals(null to null, AnalysisDurationPreset.fromToken("0"))
+        assertEquals(null to null, AnalysisDurationPreset.fromToken("-5s"))
+        assertEquals(null to null, AnalysisDurationPreset.fromToken("invalid"))
+    }
+
+    @Test
+    fun `pipeline telemetry round trips budget fields and preserves defaults`() {
+        val telemetry = PipelineTelemetry(
+            nanoStatus = "ready",
+            processedSec = 645.0,
+            videoDurationSec = 5489.0,
+            analysisStartSec = 600.0,
+            analyzedSpanSec = 45.0,
+            analysisLimitSec = 45.0,
+            analysisBudgetReached = true
+        )
+        val encoded = json.encodeToString(telemetry)
+        val decoded = json.decodeFromString<PipelineTelemetry>(encoded)
+        assertEquals(telemetry, decoded)
+
+        val legacyDecoded = json.decodeFromString<PipelineTelemetry>("""{"nanoStatus":"ready"}""")
+        assertEquals(0.0, legacyDecoded.analysisStartSec)
+        assertEquals(0.0, legacyDecoded.analyzedSpanSec)
+        assertEquals(null, legacyDecoded.analysisLimitSec)
+        assertEquals(false, legacyDecoded.analysisBudgetReached)
     }
 }
