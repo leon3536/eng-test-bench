@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
 import com.engtestbench.hockeynano.core.model.RectNorm
+import com.engtestbench.hockeynano.core.tracking.OnIceFilter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.Closeable
@@ -59,6 +60,8 @@ data class YoloDetection(
     val lowerBellyLuma: Float = Float.NaN,
     val pantsDarkness: Float = Float.NaN,
     val armbandScore: Float = 0f,
+    val torsoUpperLabL: Float = Float.NaN,
+    val iceContext: OnIceFilter.IceContext? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -70,7 +73,9 @@ data class YoloDetection(
             kitSummaryLab7.contentEquals(other.kitSummaryLab7) &&
             lowerBellyLuma.toBits() == other.lowerBellyLuma.toBits() &&
             pantsDarkness.toBits() == other.pantsDarkness.toBits() &&
-            armbandScore == other.armbandScore
+            armbandScore == other.armbandScore &&
+            torsoUpperLabL.toBits() == other.torsoUpperLabL.toBits() &&
+            iceContext == other.iceContext
     }
 
     override fun hashCode(): Int {
@@ -82,6 +87,8 @@ data class YoloDetection(
         result = 31 * result + lowerBellyLuma.toBits()
         result = 31 * result + pantsDarkness.toBits()
         result = 31 * result + armbandScore.hashCode()
+        result = 31 * result + torsoUpperLabL.toBits()
+        result = 31 * result + (iceContext?.hashCode() ?: 0)
         return result
     }
 }
@@ -146,6 +153,10 @@ class YoloOnnxDetector private constructor(
     private val detCanvas = Canvas(detBitmap)
     private val tileBitmap = Bitmap.createBitmap(imgW, imgH, Bitmap.Config.ARGB_8888)
     private val tileCanvas = Canvas(tileBitmap)
+    private val featW = CANONICAL_FEAT_W
+    private val featH = CANONICAL_FEAT_H
+    private val featBitmap = Bitmap.createBitmap(featW, featH, Bitmap.Config.ARGB_8888)
+    private val featCanvas = Canvas(featBitmap)
     private val filterPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
     private val detPixels = IntArray(detW * detH)
@@ -169,6 +180,10 @@ class YoloOnnxDetector private constructor(
     private var torsoKeep = BooleanArray(4096)
     private var torsoAssign = IntArray(4096)
     private var bellyLumaBuf = FloatArray(2048)
+    private var upperLabLBuf = FloatArray(4096)
+    private var lastExtractedUpperLabL: Float = Float.NaN
+    private val iceStatsBuf = IntArray(2)
+    private val tmpIceLab = FloatArray(3)
     private val dftLuma = FloatArray(DFT_W * DFT_H)
     private val dftLumaSorted = FloatArray(DFT_W * DFT_H)
     private val dftWinRow = FloatArray(DFT_W)
@@ -190,6 +205,7 @@ class YoloOnnxDetector private constructor(
         val lowerBellyLuma: Float,
         val pantsDarkness: Float,
         val armbandScore: Float,
+        val torsoUpperLabL: Float,
     )
 
     fun currentIceWhiteBalance(): FloatArray = synchronized(wbLock) {
@@ -234,12 +250,14 @@ class YoloOnnxDetector private constructor(
             return YoloFrameResult(emptyList(), lastLivePlayProb, 0f, false)
         }
 
+        val softMinConf = min(config.min_conf, SOFT_PLAYER_MIN_CONF)
+
         // 1. Full-frame 640x360 pass letterboxed with 12px 114/255 grey bars to 640x384.
         detCanvas.drawBitmap(highResBitmap, Rect(0, 0, srcW, srcH), Rect(0, 0, detW, detH), filterPaint)
         detBitmap.getPixels(detPixels, 0, detW, 0, 0, detW, detH)
-        val fullCandidates = runFullFramePass()
+        val fullCandidates = runFullFramePass(softMinConf)
 
-        // 2. Causal 2-fps live-play head update on full-frame layout & 160x90 grey shift.
+        // 2. Causal 2-fps live-play head update strictly on >= config.min_conf full-frame layout & 160x90 grey shift.
         if (!lastMotionTimeSec.isNaN() && timestampSec < lastMotionTimeSec - 1.5) {
             motionExtractor.reset()
             featureRing.reset()
@@ -247,7 +265,8 @@ class YoloOnnxDetector private constructor(
             lastMotionTimeSec = Double.NaN
         }
         if (lastMotionTimeSec.isNaN() || timestampSec - lastMotionTimeSec >= 0.45) {
-            lastLivePlayProb = stepLiveHead(fullCandidates)
+            val liveHeadCandidates = fullCandidates.filter { it.confidence >= config.min_conf }
+            lastLivePlayProb = stepLiveHead(liveHeadCandidates)
             lastMotionTimeSec = timestampSec
         }
 
@@ -257,28 +276,49 @@ class YoloOnnxDetector private constructor(
         val allCandidates = ArrayList<CandidateBox>(fullCandidates.size + 32)
         allCandidates.addAll(fullCandidates)
         if (useTiles) {
-            allCandidates.addAll(runTilePass(highResBitmap, 0.08f, 0.20f, 0.56f, 0.72f))
-            allCandidates.addAll(runTilePass(highResBitmap, 0.44f, 0.20f, 0.92f, 0.72f))
+            allCandidates.addAll(runTilePass(highResBitmap, 0.08f, 0.20f, 0.56f, 0.72f, softMinConf))
+            allCandidates.addAll(runTilePass(highResBitmap, 0.44f, 0.20f, 0.92f, 0.72f, softMinConf))
         }
 
         // 4. Class-agnostic NMS (IoU > 0.42 or containment > 0.60), preferring unclipped boxes on tile seams.
         val kept = nmsMerge(allCandidates, iouThreshold = 0.42f)
 
-        // 5. Estimate lower-ice white-balance gains, then extract multi-zone CIELAB + stripe + pants + armband cues.
-        updateIceWhiteBalance(highResBitmap)
+        // 5. Canonicalize feature/ice-context scale at <= 960x540 for clean WB/kit clustering while
+        //    retaining highResBitmap for crisp DFT stripe & dark-pants official separation.
+        val featureBitmap = if (srcW > featW || srcH > featH) {
+            featCanvas.drawBitmap(highResBitmap, Rect(0, 0, srcW, srcH), Rect(0, 0, featW, featH), filterPaint)
+            featBitmap
+        } else {
+            highResBitmap
+        }
+        updateIceWhiteBalance(featureBitmap)
         val wb = currentIceWhiteBalance()
-        val detections = kept.map { cand ->
+        val detections = ArrayList<YoloDetection>(kept.size)
+        for (cand in kept) {
             val rect = RectNorm(cand.x1, cand.y1, cand.x2, cand.y2)
-            val torso = extractTorsoFeatures(highResBitmap, rect, wb[0], wb[1], wb[2])
-            YoloDetection(
-                box = rect,
-                confidence = cand.confidence,
-                chestRgb = torso.chestRgb,
-                stripeScore = torso.stripeScore,
-                kitSummaryLab7 = torso.kitSummaryLab7,
-                lowerBellyLuma = torso.lowerBellyLuma,
-                pantsDarkness = torso.pantsDarkness,
-                armbandScore = torso.armbandScore,
+            val iceCtx = computeIceContext(featureBitmap, rect, wb[0], wb[1], wb[2])
+            if (cand.confidence < config.min_conf) {
+                val loOrFoot = iceCtx.footIceFraction >= SOFT_MIN_FOOT_ICE ||
+                    iceCtx.lowerSideIceFraction >= SOFT_MIN_LOWER_SIDE_ICE
+                val admitSoft = rect.height >= SOFT_MIN_BOX_HEIGHT &&
+                    iceCtx.surroundingIceFraction >= SOFT_MIN_SURROUND_ICE &&
+                    loOrFoot
+                if (!admitSoft) continue
+            }
+            val torso = extractTorsoFeatures(featureBitmap, highResBitmap, rect, wb[0], wb[1], wb[2])
+            detections.add(
+                YoloDetection(
+                    box = rect,
+                    confidence = cand.confidence,
+                    chestRgb = torso.chestRgb,
+                    stripeScore = torso.stripeScore,
+                    kitSummaryLab7 = torso.kitSummaryLab7,
+                    lowerBellyLuma = torso.lowerBellyLuma,
+                    pantsDarkness = torso.pantsDarkness,
+                    armbandScore = torso.armbandScore,
+                    torsoUpperLabL = torso.torsoUpperLabL,
+                    iceContext = iceCtx,
+                )
             )
         }
 
@@ -291,7 +331,7 @@ class YoloOnnxDetector private constructor(
         )
     }
 
-    private fun runFullFramePass(): List<CandidateBox> {
+    private fun runFullFramePass(minConf: Float): List<CandidateBox> {
         val plane = imgW * imgH
         inputTensorBuf.fill(114f / 255f)
         for (y in 0 until detH) {
@@ -308,7 +348,7 @@ class YoloOnnxDetector private constructor(
         val rows = runDetectorOnBuffer()
         val out = ArrayList<CandidateBox>(24)
         for (r in rows) {
-            if (r.size < 6 || r[4] < config.min_conf || r[5] != 0f) continue
+            if (r.size < 6 || r[4] < minConf || r[5] != 0f) continue
             val x1 = (r[0] / detW).coerceIn(0f, 1f)
             val y1 = ((r[1] - detPadY) / detH).coerceIn(0f, 1f)
             val x2 = (r[2] / detW).coerceIn(0f, 1f)
@@ -325,6 +365,7 @@ class YoloOnnxDetector private constructor(
         cropY0: Float,
         cropX1: Float,
         cropY1: Float,
+        minConf: Float,
     ): List<CandidateBox> {
         val srcW = highResBitmap.width
         val srcH = highResBitmap.height
@@ -363,7 +404,7 @@ class YoloOnnxDetector private constructor(
         val cropH = cropY1 - cropY0
         val out = ArrayList<CandidateBox>(20)
         for (r in rows) {
-            if (r.size < 6 || r[4] < config.min_conf || r[5] != 0f) continue
+            if (r.size < 6 || r[4] < minConf || r[5] != 0f) continue
             val nx1 = ((r[0] - padX) / dw).coerceIn(0f, 1f)
             val ny1 = ((r[1] - padY) / dh).coerceIn(0f, 1f)
             val nx2 = ((r[2] - padX) / dw).coerceIn(0f, 1f)
@@ -495,13 +536,7 @@ class YoloOnnxDetector private constructor(
         }
     }
 
-    private fun extractTorsoFeatures(
-        bitmap: Bitmap,
-        box: RectNorm,
-        wbR: Float,
-        wbG: Float,
-        wbB: Float,
-    ): TorsoFeatures {
+    private fun loadBoxPixels(bitmap: Bitmap, box: RectNorm): Pair<Int, Int>? {
         val w = bitmap.width
         val h = bitmap.height
         val bx0 = (box.x1 * w).toInt().coerceIn(0, w - 1)
@@ -511,28 +546,64 @@ class YoloOnnxDetector private constructor(
         val bwPx = bx1 - bx0
         val bhPx = by1 - by0
         val boxCount = bwPx * bhPx
-        if (bwPx < 3 || bhPx < 6 || boxCount <= 0) {
-            return TorsoFeatures(
+        if (bwPx < 3 || bhPx < 6 || boxCount <= 0) return null
+        if (boxPixelBuf.size < boxCount) {
+            boxPixelBuf = IntArray(boxCount)
+        }
+        bitmap.getPixels(boxPixelBuf, 0, bwPx, bx0, by0, bwPx, bhPx)
+        return bwPx to bhPx
+    }
+
+    private fun extractTorsoFeatures(
+        featureBitmap: Bitmap,
+        highResBitmap: Bitmap,
+        box: RectNorm,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): TorsoFeatures {
+        val featDims = loadBoxPixels(featureBitmap, box)
+            ?: return TorsoFeatures(
                 chestRgb = listOf(128, 128, 128),
                 stripeScore = 0f,
                 kitSummaryLab7 = floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f),
                 lowerBellyLuma = Float.NaN,
                 pantsDarkness = Float.NaN,
                 armbandScore = 0f,
+                torsoUpperLabL = Float.NaN,
             )
-        }
-        if (boxPixelBuf.size < boxCount) {
-            boxPixelBuf = IntArray(boxCount)
-        }
-        bitmap.getPixels(boxPixelBuf, 0, bwPx, bx0, by0, bwPx, bhPx)
+        val featBwPx = featDims.first
+        val featBhPx = featDims.second
+        val featTorsoCenterFrac = findTorsoCenterFrac(featBwPx, featBhPx, wbR, wbG, wbB)
+        val chestRgb = extractCoreChestRgb(featBwPx, featBhPx, wbR, wbG, wbB, featTorsoCenterFrac)
+        val kitSummaryLab7 = extractKitSummaryLab7(featBwPx, featBhPx, wbR, wbG, wbB, featTorsoCenterFrac)
+        val torsoUpperLabL = lastExtractedUpperLabL
+        val lowerBellyLuma = extractLowerBellyLuma(featBwPx, featBhPx, wbR, wbG, wbB, featTorsoCenterFrac)
 
-        val torsoCenterFrac = findTorsoCenterFrac(bwPx, bhPx, wbR, wbG, wbB)
-        val chestRgb = extractCoreChestRgb(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
-        val kitSummaryLab7 = extractKitSummaryLab7(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
-        val lowerBellyLuma = extractLowerBellyLuma(bwPx, bhPx, wbR, wbG, wbB, torsoCenterFrac)
-        val pantsDarkness = extractPantsDarkness(bwPx, bhPx, wbR, wbG, wbB)
-        val armbandScore = extractArmbandScore(bwPx, bhPx, wbR, wbG, wbB)
-        val stripeScore = computeDftStripeScore(bwPx, bhPx, wbR, wbG, wbB)
+        val hiDims = if (featureBitmap === highResBitmap) {
+            featDims
+        } else {
+            loadBoxPixels(highResBitmap, box)
+        }
+        val pantsDarkness: Float
+        val armbandScore: Float
+        val stripeScore: Float
+        if (hiDims != null) {
+            val hiBwPx = hiDims.first
+            val hiBhPx = hiDims.second
+            val hiTorsoCenterFrac = if (featureBitmap === highResBitmap) {
+                featTorsoCenterFrac
+            } else {
+                findTorsoCenterFrac(hiBwPx, hiBhPx, wbR, wbG, wbB)
+            }
+            pantsDarkness = extractPantsDarkness(hiBwPx, hiBhPx, wbR, wbG, wbB)
+            armbandScore = extractArmbandScore(hiBwPx, hiBhPx, wbR, wbG, wbB)
+            stripeScore = computeDftStripeScore(hiBwPx, hiBhPx, wbR, wbG, wbB, hiTorsoCenterFrac)
+        } else {
+            pantsDarkness = Float.NaN
+            armbandScore = 0f
+            stripeScore = 0f
+        }
 
         return TorsoFeatures(
             chestRgb = chestRgb,
@@ -541,6 +612,7 @@ class YoloOnnxDetector private constructor(
             lowerBellyLuma = lowerBellyLuma,
             pantsDarkness = pantsDarkness,
             armbandScore = armbandScore,
+            torsoUpperLabL = torsoUpperLabL,
         )
     }
 
@@ -650,6 +722,7 @@ class YoloOnnxDetector private constructor(
         wbB: Float,
         torsoCenterFrac: Float,
     ): FloatArray {
+        lastExtractedUpperLabL = Float.NaN
         // 1. Border ice background estimation on x: 0..10% & 90..100%, y: 15..55%.
         val by0 = (0.15f * bhPx).toInt().coerceIn(0, bhPx - 1)
         val by1 = (0.55f * bhPx).toInt().coerceIn(by0 + 1, bhPx)
@@ -796,8 +869,20 @@ class YoloOnnxDetector private constructor(
             }
         }
         if (keptCount <= 0 || minIdx < 0 || maxIdx < 0) {
+            lastExtractedUpperLabL = Float.NaN
             return floatArrayOf(50f, 0f, 0f, 50f, 0f, 0f, 0f)
         }
+        if (upperLabLBuf.size < keptCount) upperLabLBuf = FloatArray(keptCount)
+        var upperIdx = 0
+        for (i in 0 until torsoCount) {
+            if (torsoKeep[i]) upperLabLBuf[upperIdx++] = torsoL[i]
+        }
+        upperLabLBuf.sort(0, upperIdx)
+        val p80Pos = 0.80f * (upperIdx - 1)
+        val p80Lo = p80Pos.toInt().coerceIn(0, upperIdx - 1)
+        val p80Hi = min(upperIdx - 1, p80Lo + 1)
+        val p80Frac = p80Pos - p80Lo
+        lastExtractedUpperLabL = upperLabLBuf[p80Lo] * (1f - p80Frac) + upperLabLBuf[p80Hi] * p80Frac
         if (maxL - minL < 2.0f || keptCount < 4) {
             val mL = (sumAllL / keptCount).toFloat()
             val mA = (sumAllA / keptCount).toFloat()
@@ -904,7 +989,7 @@ class YoloOnnxDetector private constructor(
         wbG: Float,
         wbB: Float,
     ): Float {
-        // Fraction of achromatic dark pixels (luma < 72 && chromaSpread < 24) across x: 28%..72%, y: 56%..84%.
+        // Fraction of achromatic shadow-tolerant dark pixels (luma < 88 && chromaSpread < 36) across x: 28%..72%, y: 56%..84%.
         val x0 = (0.28f * bwPx).toInt().coerceIn(0, bwPx - 1)
         val x1 = (0.72f * bwPx).toInt().coerceIn(x0 + 1, bwPx)
         val y0 = (0.56f * bhPx).toInt().coerceIn(0, bhPx - 1)
@@ -921,7 +1006,7 @@ class YoloOnnxDetector private constructor(
                 val b = ((p and 0xFF) * wbB).coerceIn(0f, 255f)
                 val lum = 0.299f * r + 0.587f * g + 0.114f * b
                 val spread = maxOf(r, g, b) - minOf(r, g, b)
-                if (lum < 72f && spread < 24f) darkCount++
+                if (lum < 88f && spread < 36f) darkCount++
             }
         }
         return darkCount.toFloat() / count.toFloat()
@@ -961,12 +1046,15 @@ class YoloOnnxDetector private constructor(
         wbR: Float,
         wbG: Float,
         wbB: Float,
+        torsoCenterFrac: Float,
     ): Float {
-        // Full-torso bilinear 64x36 1D Hann-DFT on x: 14%..86%, y: 16%..55%.
-        val sx0 = 0.14f * bwPx
-        val sx1 = 0.86f * bwPx
-        val sy0 = 0.16f * bhPx
-        val sy1 = 0.55f * bhPx
+        // Torso-centered bilinear 64x36 1D Hann-DFT on x: torsoCenterFrac ± halfW, y: 22%..58%.
+        val wideStickBox = bwPx > 0.65f * bhPx
+        val halfW = if (wideStickBox) 0.21f else 0.24f
+        val sx0 = (torsoCenterFrac - halfW).coerceIn(0f, 1f) * bwPx
+        val sx1 = (torsoCenterFrac + halfW).coerceIn(0f, 1f) * bwPx
+        val sy0 = 0.22f * bhPx
+        val sy1 = 0.58f * bhPx
         val spanW = sx1 - sx0
         val spanH = sy1 - sy0
         if (spanW < 4f || spanH < 4f) return 0f
@@ -1116,7 +1204,7 @@ class YoloOnnxDetector private constructor(
                 (amp / 6.5f).coerceIn(0f, 1f)
         }
         dftGroupScores.sort()
-        val bandConsistency = 0.55f * dftGroupScores[1] + 0.45f * dftGroupScores[2]
+        val bandConsistency = 0.55f * dftGroupScores[2] + 0.45f * dftGroupScores[3]
         if (bandConsistency <= 0f) return 0f
 
         // Vertical row extent: referee stripes span almost every torso row; jersey numbers do not.
@@ -1135,6 +1223,98 @@ class YoloOnnxDetector private constructor(
         return (sqrt(bandConsistency * extentScore * pxBalance) * chromaGate).coerceIn(0f, 1f)
     }
 
+    private fun computeIceContext(
+        bitmap: Bitmap,
+        box: RectNorm,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+    ): OnIceFilter.IceContext {
+        val w = bitmap.width
+        val h = bitmap.height
+        val x1 = box.x1
+        val y1 = box.y1
+        val x2 = box.x2
+        val y2 = box.y2
+        val bw = box.width
+        val bh = box.height
+
+        val footX0 = x1 - 0.20f * bw
+        val footY0 = y2 - 0.02f * bh
+        val footX1 = x2 + 0.20f * bw
+        val footY1 = min(1f, y2 + 0.14f * bh)
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, footX0, footY0, footX1, footY1, wbR, wbG, wbB, iceStatsBuf)
+        val footIce = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, x1 - 0.25f * bw, y1 + 0.50f * bh, x1, y1 + 0.90f * bh, wbR, wbG, wbB, iceStatsBuf)
+        val loL = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, x2, y1 + 0.50f * bh, x2 + 0.25f * bw, y1 + 0.90f * bh, wbR, wbG, wbB, iceStatsBuf)
+        val loR = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, x1 - 0.25f * bw, y1 + 0.10f * bh, x1, y1 + 0.50f * bh, wbR, wbG, wbB, iceStatsBuf)
+        val upL = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, x2, y1 + 0.10f * bh, x2 + 0.25f * bw, y1 + 0.50f * bh, wbR, wbG, wbB, iceStatsBuf)
+        val upR = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        iceStatsBuf[0] = 0; iceStatsBuf[1] = 0
+        accumulateIceSamples(bitmap, w, h, footX0, footY0, footX1, footY1, wbR, wbG, wbB, iceStatsBuf)
+        accumulateIceSamples(bitmap, w, h, x1 - 0.25f * bw, y1 + 0.30f * bh, x1, y1 + 0.90f * bh, wbR, wbG, wbB, iceStatsBuf)
+        accumulateIceSamples(bitmap, w, h, x2, y1 + 0.30f * bh, x2 + 0.25f * bw, y1 + 0.90f * bh, wbR, wbG, wbB, iceStatsBuf)
+        val surrIce = if (iceStatsBuf[1] > 0) iceStatsBuf[0].toFloat() / iceStatsBuf[1].toFloat() else 0f
+
+        return OnIceFilter.IceContext(
+            footIceFraction = footIce,
+            surroundingIceFraction = surrIce,
+            lowerSideIceFraction = 0.5f * (loL + loR),
+            upperSideIceFraction = 0.5f * (upL + upR),
+        )
+    }
+
+    private fun accumulateIceSamples(
+        bitmap: Bitmap,
+        w: Int,
+        h: Int,
+        rx0: Float,
+        ry0: Float,
+        rx1: Float,
+        ry1: Float,
+        wbR: Float,
+        wbG: Float,
+        wbB: Float,
+        statsOut: IntArray,
+    ) {
+        val px0 = (rx0 * w).toInt().coerceIn(0, w)
+        val px1 = (rx1 * w).toInt().coerceIn(0, w)
+        val py0 = (ry0 * h).toInt().coerceIn(0, h)
+        val py1 = (ry1 * h).toInt().coerceIn(0, h)
+        val spanW = px1 - px0
+        val spanH = py1 - py0
+        if (spanW <= 0 || spanH <= 0) return
+
+        val ny = min(8, spanH)
+        val nx = min(8, spanW)
+        for (iy in 0 until ny) {
+            val y = if (ny == 1) py0 else py0 + (iy * (spanH - 1)) / (ny - 1)
+            for (ix in 0 until nx) {
+                val x = if (nx == 1) px0 else px0 + (ix * (spanW - 1)) / (nx - 1)
+                pixelToLab(bitmap.getPixel(x, y), wbR, wbG, wbB, tmpIceLab)
+                val chroma = hypot(tmpIceLab[1], tmpIceLab[2])
+                if (tmpIceLab[0] >= ICE_CTX_MIN_L && chroma < ICE_CTX_MAX_CHROMA) {
+                    statsOut[0]++
+                }
+                statsOut[1]++
+            }
+        }
+    }
+
     override fun close() {
         runCatching { detectorSession.close() }
         runCatching { liveHeadSession.close() }
@@ -1142,6 +1322,7 @@ class YoloOnnxDetector private constructor(
         runCatching { liveHeadOptions.close() }
         runCatching { detBitmap.recycle() }
         runCatching { tileBitmap.recycle() }
+        runCatching { featBitmap.recycle() }
     }
 
     private class CausalFeatureRing(private val window: Int, private val dim: Int) {
@@ -1406,9 +1587,18 @@ class YoloOnnxDetector private constructor(
     }
 
     companion object {
+        private const val CANONICAL_FEAT_W = 960
+        private const val CANONICAL_FEAT_H = 540
         private const val ICE_WB_COLS = 16
         private const val ICE_WB_ROWS = 12
         private const val ICE_DELTA_E_SQ_THRESHOLD = 121f // deltaE < 11
+        private const val ICE_CTX_MIN_L = 55f
+        private const val ICE_CTX_MAX_CHROMA = 22f
+        private const val SOFT_PLAYER_MIN_CONF = 0.23f
+        private const val SOFT_MIN_BOX_HEIGHT = 0.052f
+        private const val SOFT_MIN_SURROUND_ICE = 0.56f
+        private const val SOFT_MIN_FOOT_ICE = 0.60f
+        private const val SOFT_MIN_LOWER_SIDE_ICE = 0.48f
         private const val DFT_W = 64
         private const val DFT_H = 36
         private const val DFT_K_MAX = 15

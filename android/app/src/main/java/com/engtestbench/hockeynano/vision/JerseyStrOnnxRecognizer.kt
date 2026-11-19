@@ -106,7 +106,7 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
         val y1 = ((box.y1 + 0.62f * bh) * h).toInt().coerceIn(y0 + 1, h)
         val cw = x1 - x0
         val ch = y1 - y0
-        if (cw < 8 || ch < 10) return null
+        if (cw < MIN_CROP_WIDTH_PX || ch < MIN_CROP_HEIGHT_PX) return null
 
         return Bitmap.createBitmap(highResBitmap, x0, y0, cw, ch)
     }
@@ -130,7 +130,9 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
         iceWb: FloatArray = DEFAULT_WB,
     ): StrInferenceResult? {
         val activeSession = session ?: return null
-        if (torsoCrop.isRecycled || torsoCrop.width < 8 || torsoCrop.height < 10) return null
+        if (torsoCrop.isRecycled || torsoCrop.width < MIN_CROP_WIDTH_PX || torsoCrop.height < MIN_CROP_HEIGHT_PX) {
+            return null
+        }
 
         val wbR = iceWb.getOrElse(0) { 1f }.coerceIn(0.6f, 1.6f)
         val wbG = iceWb.getOrElse(1) { 1f }.coerceIn(0.6f, 1.6f)
@@ -199,6 +201,16 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
             val contentMid = 0.5f * (pLow + pHigh)
 
             val sharpness = computeContentLaplacianVariance(padX, padY, dw, dh)
+            if (sharpness < MIN_LAPLACIAN_SHARPNESS) {
+                return StrInferenceResult(
+                    legibilityProb = 0f,
+                    backProb = 0f,
+                    sharpness = sharpness,
+                    topCandidates = emptyList(),
+                    partialLeftDigit = null,
+                    partialRightDigit = null,
+                )
+            }
 
             // Pack NCHW float32 [1, 3, 96, 96] in [0, 1].
             val plane = INPUT_SIZE * INPUT_SIZE
@@ -285,9 +297,12 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
         val leftProbs = leftLogits?.let { softmax(it) }
         val rightProbs = rightLogits?.let { softmax(it) }
 
-        // Uniform prior 1..99: extract top legible 1..99 candidates only when not illegible-dominant.
+        // Uniform prior 1..99: extract top legible 1..99 back-view candidates only above crisp confidence floor.
         val topCandidates = ArrayList<Pair<String, Float>>(5)
-        if (numProbs[0] < MAX_ILLEGIBLE_PROB && legibilityProb >= MIN_CANDIDATE_LEGIBILITY_PROB) {
+        if (numProbs[0] < MAX_ILLEGIBLE_PROB &&
+            legibilityProb >= MIN_CANDIDATE_LEGIBILITY_PROB &&
+            backProb >= MIN_CANDIDATE_BACK_PROB
+        ) {
             val indexed = ArrayList<Pair<Int, Float>>(24)
             for (n in 1..99) {
                 val p = numProbs[n]
@@ -296,14 +311,19 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
                 }
             }
             indexed.sortByDescending { it.second }
-            for (i in 0 until min(5, indexed.size)) {
-                val (n, p) = indexed[i]
-                topCandidates.add(n.toString() to p)
+            if (indexed.isNotEmpty() && indexed[0].second >= MIN_TOP_CANDIDATE_PROB) {
+                for (i in 0 until min(5, indexed.size)) {
+                    val (n, p) = indexed[i]
+                    topCandidates.add(n.toString() to p)
+                }
             }
         }
 
         var partialLeft: Pair<Char, Float>? = null
-        if (leftProbs != null && legibilityProb >= MIN_PARTIAL_LEGIBILITY_PROB) {
+        if (leftProbs != null &&
+            legibilityProb >= MIN_PARTIAL_LEGIBILITY_PROB &&
+            backProb >= MIN_PARTIAL_BACK_PROB
+        ) {
             val leftBlankProb = leftProbs[10]
             val rightBlankProb = rightProbs?.get(10) ?: 0f
             var bestD = -1
@@ -318,7 +338,7 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
             if (bestD in 1..9 &&
                 bestP >= MIN_PARTIAL_DIGIT_PROB &&
                 bestP > leftBlankProb * PARTIAL_BLANK_MARGIN &&
-                (rightBlankProb >= MIN_BLANK_COMPANION_PROB || legibilityProb < 0.55f) &&
+                (rightBlankProb >= MIN_BLANK_COMPANION_PROB || legibilityProb < 0.65f) &&
                 numProbs[bestD] < 0.25f
             ) {
                 partialLeft = ('0' + bestD) to bestP
@@ -326,7 +346,10 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
         }
 
         var partialRight: Pair<Char, Float>? = null
-        if (rightProbs != null && legibilityProb >= MIN_PARTIAL_LEGIBILITY_PROB) {
+        if (rightProbs != null &&
+            legibilityProb >= MIN_PARTIAL_LEGIBILITY_PROB &&
+            backProb >= MIN_PARTIAL_BACK_PROB
+        ) {
             val rightBlankProb = rightProbs[10]
             val leftBlankProb = leftProbs?.get(10) ?: 0f
             var bestD = -1
@@ -341,7 +364,7 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
             if (bestD in 0..9 &&
                 bestP >= MIN_PARTIAL_DIGIT_PROB &&
                 bestP > rightBlankProb * PARTIAL_BLANK_MARGIN &&
-                (leftBlankProb >= MIN_BLANK_COMPANION_PROB || legibilityProb < 0.60f)
+                (leftBlankProb >= MIN_BLANK_COMPANION_PROB || legibilityProb < 0.65f)
             ) {
                 partialRight = ('0' + bestD) to bestP
             }
@@ -388,13 +411,19 @@ class JerseyStrOnnxRecognizer(context: Context) : Closeable {
         private const val MODEL_ASSET = "coach_jersey_str.onnx"
         private const val INPUT_SIZE = 96
         private const val PAD_GREY = 114
+        private const val MIN_CROP_WIDTH_PX = 12
+        private const val MIN_CROP_HEIGHT_PX = 18
+        private const val MIN_LAPLACIAN_SHARPNESS = 18.0f
         private const val MIN_CANDIDATE_PROB = 0.02f
-        private const val MAX_ILLEGIBLE_PROB = 0.60f
-        private const val MIN_CANDIDATE_LEGIBILITY_PROB = 0.55f
-        private const val MIN_PARTIAL_LEGIBILITY_PROB = 0.30f
-        private const val MIN_PARTIAL_DIGIT_PROB = 0.45f
-        private const val PARTIAL_BLANK_MARGIN = 1.15f
-        private const val MIN_BLANK_COMPANION_PROB = 0.28f
+        private const val MIN_TOP_CANDIDATE_PROB = 0.34f
+        private const val MAX_ILLEGIBLE_PROB = 0.48f
+        private const val MIN_CANDIDATE_LEGIBILITY_PROB = 0.68f
+        private const val MIN_CANDIDATE_BACK_PROB = 0.58f
+        private const val MIN_PARTIAL_LEGIBILITY_PROB = 0.55f
+        private const val MIN_PARTIAL_BACK_PROB = 0.60f
+        private const val MIN_PARTIAL_DIGIT_PROB = 0.55f
+        private const val PARTIAL_BLANK_MARGIN = 1.25f
+        private const val MIN_BLANK_COMPANION_PROB = 0.32f
         private val DEFAULT_WB = floatArrayOf(1f, 1f, 1f)
 
         fun load(context: Context): JerseyStrOnnxRecognizer? =

@@ -641,9 +641,35 @@ class MultiTeamPlayerTrackerSotaTest {
         )
 
         // Now give real #77 a corroborated read -> real #77 cleanly claims #77 without being blocked!
-        tracker.recordJerseyDistribution(real77TrackId, 0.20, listOf("77" to 0.88f), source = JerseyReadSource.ONNX_STR)
+        tracker.recordJerseyDistribution(real77TrackId, 0.20, listOf("77" to 0.92f), source = JerseyReadSource.ONNX_STR)
         val afterReal = tracker.annotateHistory(history).last().players
         assertEquals("77", afterReal.first { it.trackId == real77TrackId }.jerseyNumber)
+
+        // Single-bin ONNX_STR below 0.90f (e.g. 0.84f) must remain tentative (null), while GEMINI_NANO single-bin #28 commits!
+        val singleBinInputs = listOf(
+            ChainNumberInput(
+                chainId = 501,
+                firstSeenSec = 0.0,
+                lastSeenSec = 2.0,
+                observations = listOf(
+                    JerseyReadObservation(0.40, null, 0.84f, JerseyReadKind.FULL, 1f, JerseyReadSource.ONNX_STR, listOf("92" to 0.84f))
+                ),
+                bestConfidenceByNumber = mapOf("92" to 0.84f)
+            ),
+            ChainNumberInput(
+                chainId = 502,
+                firstSeenSec = 0.0,
+                lastSeenSec = 2.0,
+                observations = listOf(
+                    JerseyReadObservation(0.50, "28", 0.86f, JerseyReadKind.FULL, 1f, JerseyReadSource.GEMINI_NANO)
+                ),
+                nanoVerifiedNumbers = setOf("28"),
+                bestConfidenceByNumber = mapOf("28" to 0.86f)
+            )
+        )
+        val singleBinRes = JerseyNumberPosterior.assignNumbersJointly(singleBinInputs)
+        assertNull(singleBinRes[501]?.number, "Single-bin ONNX_STR at 0.84f (< 0.90f) must stay tentative (null)")
+        assertEquals("28", singleBinRes[502]?.number, "Single-bin GEMINI_NANO at 0.86f must cleanly commit #28")
 
         // Meanwhile, on an independent track, 2 reads of #97 at conf=0.55f across 2 distinct 1.0s bins (t=0.20s, t=1.40s) DOES commit #97!
         val twoBinInputs = listOf(
@@ -660,5 +686,74 @@ class MultiTeamPlayerTrackerSotaTest {
         )
         val twoBinRes = JerseyNumberPosterior.assignNumbersJointly(twoBinInputs)
         assertEquals("97", twoBinRes[401]?.number, "Two distinct 1.0s bins at 0.55f ONNX_STR must commit #97")
+    }
+
+    @Test
+    fun `crested and dark-yoke white jerseys separate cleanly using torsoUpperLabL even when belly luma is dark`() {
+        val tracker = MultiTeamPlayerTracker()
+        val darkRgb = listOf(38, 50, 62)
+        val darkKit = floatArrayOf(18f, 4f, -3f, 42f, 3f, -2f, 28f)
+        val crestedWhiteRgb = listOf(105, 108, 112)
+        val crestedWhiteKit = floatArrayOf(26f, 2f, 1f, 58f, 1f, 2f, 46f)
+
+        lateinit var lastFrame: FrameMarkSample
+        for (f in 0 until 8) {
+            val dets = listOf(
+                RawDetection(boxAt(0.15f, 0.45f), darkRgb, stripeScore = 0.02f, kitSummaryLab7 = darkKit, lowerBellyLuma = 65f, torsoUpperLabL = 34f),
+                RawDetection(boxAt(0.28f, 0.48f), darkRgb, stripeScore = 0.04f, kitSummaryLab7 = darkKit, lowerBellyLuma = 68f, torsoUpperLabL = 36f),
+                RawDetection(boxAt(0.41f, 0.52f), darkRgb, stripeScore = 0.03f, kitSummaryLab7 = darkKit, lowerBellyLuma = 70f, torsoUpperLabL = 35f),
+                RawDetection(boxAt(0.55f, 0.46f), darkRgb, stripeScore = 0.02f, kitSummaryLab7 = darkKit, lowerBellyLuma = 62f, torsoUpperLabL = 33f),
+                // Crested white away jerseys: dark logo/shadow belly luma (62..72) would swap without torsoUpperLabL (58..63)!
+                RawDetection(boxAt(0.62f, 0.58f), crestedWhiteRgb, stripeScore = 0.05f, kitSummaryLab7 = crestedWhiteKit, lowerBellyLuma = 66f, torsoUpperLabL = 61f),
+                RawDetection(boxAt(0.71f, 0.50f), crestedWhiteRgb, stripeScore = 0.04f, kitSummaryLab7 = crestedWhiteKit, lowerBellyLuma = 64f, torsoUpperLabL = 59f),
+                RawDetection(boxAt(0.80f, 0.54f), crestedWhiteRgb, stripeScore = 0.03f, kitSummaryLab7 = crestedWhiteKit, lowerBellyLuma = 70f, torsoUpperLabL = 63f),
+                RawDetection(boxAt(0.89f, 0.44f), crestedWhiteRgb, stripeScore = 0.06f, kitSummaryLab7 = crestedWhiteKit, lowerBellyLuma = 68f, torsoUpperLabL = 60f)
+            )
+            lastFrame = tracker.updateFrame(f * 0.25, dets, 0.95f)
+        }
+
+        for (i in 0..3) assertEquals(TeamId.TEAM_A, lastFrame.players[i].team, "Dark skater $i must remain TEAM_A")
+        for (i in 4..7) assertEquals(TeamId.TEAM_B, lastFrame.players[i].team, "Crested white skater $i must remain TEAM_B")
+    }
+
+    @Test
+    fun `glass-post false stripes are blocked by pants darkness while transient crisp and shadowed blurred refs lock REFEREE`() {
+        val tracker = MultiTeamPlayerTracker()
+        val darkRgb = listOf(22, 34, 52)
+        val darkKit = floatArrayOf(12f, 4f, -2f, 36f, 3f, -1f, 26f)
+        val whiteRgb = listOf(148, 152, 156)
+        val whiteKit = floatArrayOf(24f, 1f, 2f, 58f, 1f, 2f, 52f)
+        val glassPostWhiteRgb = listOf(115, 117, 120)
+        val glassPostKit = floatArrayOf(25f, 1f, 0f, 55f, 1f, 1f, 45f)
+        val crispRefRgb = listOf(92, 93, 95)
+        val crispRefKit = floatArrayOf(31f, -1f, -2f, 48f, -1f, -1f, 28f)
+        val shadowedBlurredRefRgb = listOf(82, 86, 90)
+        val shadowedBlurredRefKit = floatArrayOf(14f, -1f, 1f, 41f, 1f, 2f, 75f)
+
+        lateinit var frame: FrameMarkSample
+        for (f in 0 until 10) {
+            val refStripeNow = if (f < 3) 0.60f else 0.05f
+            val dets = listOf(
+                RawDetection(boxAt(0.12f, 0.50f), darkRgb, 0.02f, darkKit, 40f, pantsDarkness = 0.48f, torsoUpperLabL = 28f),
+                RawDetection(boxAt(0.20f, 0.52f), darkRgb, 0.03f, darkKit, 42f, pantsDarkness = 0.50f, torsoUpperLabL = 29f),
+                RawDetection(boxAt(0.28f, 0.48f), darkRgb, 0.04f, darkKit, 38f, pantsDarkness = 0.52f, torsoUpperLabL = 27f),
+                RawDetection(boxAt(0.36f, 0.54f), darkRgb, 0.02f, darkKit, 44f, pantsDarkness = 0.46f, torsoUpperLabL = 30f),
+                RawDetection(boxAt(0.50f, 0.50f), whiteRgb, 0.05f, whiteKit, 110f, pantsDarkness = 0.32f, torsoUpperLabL = 62f),
+                RawDetection(boxAt(0.58f, 0.52f), whiteRgb, 0.04f, whiteKit, 108f, pantsDarkness = 0.34f, torsoUpperLabL = 60f),
+                RawDetection(boxAt(0.66f, 0.48f), whiteRgb, 0.03f, whiteKit, 112f, pantsDarkness = 0.30f, torsoUpperLabL = 61f),
+                // Skater passing glass post: high stripeScore 0.52f but light pants (0.12f) -> MUST NOT trigger REFEREE.
+                RawDetection(boxAt(0.74f, 0.60f), glassPostWhiteRgb, 0.52f, glassPostKit, 84f, pantsDarkness = 0.12f, torsoUpperLabL = 57f),
+                // Crisp ref seen for 3 frames then turning away (stripe drops to 0.05f): must remain REFEREE!
+                RawDetection(boxAt(0.22f, 0.66f), crispRefRgb, refStripeNow, crispRefKit, 92f, pantsDarkness = 0.55f, torsoUpperLabL = 44f),
+                // Shadowed far-board official (L*=37, share=75%, dark pants=0.88f): must classify REFEREE!
+                RawDetection(boxAt(0.67f, 0.34f), shadowedBlurredRefRgb, 0.02f, shadowedBlurredRefKit, 78f, pantsDarkness = 0.88f, torsoUpperLabL = 45f)
+            )
+            frame = tracker.updateFrame(f * 0.25, dets, 0.94f)
+        }
+
+        assertEquals(TeamId.TEAM_B, frame.players[7].team, "Glass-post white skater with pantsDarkness=0.12f must stay TEAM_B")
+        assertEquals(TeamId.REFEREE, frame.players[8].team, "Transient crisp striped official must remain REFEREE")
+        assertEquals(TeamId.REFEREE, frame.players[9].team, "Shadowed blurred far-board official must classify REFEREE")
+        assertEquals(2, frame.players.count { it.team == TeamId.REFEREE }, "Only the 2 officials may be REFEREE")
     }
 }

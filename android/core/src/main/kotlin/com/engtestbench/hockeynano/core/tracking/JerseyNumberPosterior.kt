@@ -76,7 +76,9 @@ object JerseyNumberPosterior {
     const val MIN_EVIDENCE_WEIGHT = 0.90f
     const val EVIDENCE_BIN_SEC = 1.0
     const val SAME_BIN_MARGINAL_WEIGHT = 0.15f
-    const val SINGLE_BIN_COMMIT_MIN_CONF = 0.80f
+    const val SINGLE_BIN_COMMIT_MIN_CONF = 0.90f
+    const val NANO_SINGLE_BIN_MIN_CONF = 0.80f
+    const val COMPLEMENTARY_PARTIAL_MIN_CONF = 0.80f
     const val DEFAULT_MIN_MOVE_PROB = 0.05f
     const val STRONG_MIN_CONF = 0.85f
     const val STRONG_BIN_SEC = 10.0
@@ -410,7 +412,10 @@ object JerseyNumberPosterior {
         if (candidateNumber == null) return false
         if (isNanoVerified) return true
         val supportingBins = HashSet<Long>()
-        var maxConf = 0f
+        var maxNonNanoConf = 0f
+        var maxNanoConf = 0f
+        var hasStrongLeftPartial = false
+        var hasStrongRightPartial = false
         for (obs in observations) {
             val safeT = if (obs.timestampSec.isFinite()) obs.timestampSec else 0.0
             val bin = floor(safeT / EVIDENCE_BIN_SEC).toLong()
@@ -424,7 +429,12 @@ object JerseyNumberPosterior {
                 }
                 if (candProb >= 0.25f) {
                     supportingBins.add(bin)
-                    maxConf = max(maxConf, candProb.coerceIn(0f, 1f))
+                    val cleanP = candProb.coerceIn(0f, 1f)
+                    if (obs.source == JerseyReadSource.GEMINI_NANO) {
+                        maxNanoConf = max(maxNanoConf, cleanP)
+                    } else {
+                        maxNonNanoConf = max(maxNonNanoConf, cleanP)
+                    }
                 }
             } else if (obs.number != null && obs.confidence.isFinite() && obs.confidence > 0f) {
                 val matches = when (obs.kind) {
@@ -435,11 +445,24 @@ object JerseyNumberPosterior {
                 }
                 if (matches) {
                     supportingBins.add(bin)
-                    maxConf = max(maxConf, obs.confidence.coerceIn(0f, 1f))
+                    val cleanConf = obs.confidence.coerceIn(0f, 1f)
+                    if (obs.kind == JerseyReadKind.LEFT_PARTIAL && cleanConf >= COMPLEMENTARY_PARTIAL_MIN_CONF) {
+                        hasStrongLeftPartial = true
+                    } else if (obs.kind == JerseyReadKind.RIGHT_PARTIAL && cleanConf >= COMPLEMENTARY_PARTIAL_MIN_CONF) {
+                        hasStrongRightPartial = true
+                    }
+                    if (obs.source == JerseyReadSource.GEMINI_NANO) {
+                        maxNanoConf = max(maxNanoConf, cleanConf)
+                    } else {
+                        maxNonNanoConf = max(maxNonNanoConf, cleanConf)
+                    }
                 }
             }
         }
-        return supportingBins.size >= 2 || maxConf >= SINGLE_BIN_COMMIT_MIN_CONF
+        return supportingBins.size >= 2 ||
+            (hasStrongLeftPartial && hasStrongRightPartial) ||
+            maxNonNanoConf >= SINGLE_BIN_COMMIT_MIN_CONF ||
+            maxNanoConf >= NANO_SINGLE_BIN_MIN_CONF
     }
 
     /** Softmax probabilities over `"1".."99"` excluding [excludeNumbers]. */

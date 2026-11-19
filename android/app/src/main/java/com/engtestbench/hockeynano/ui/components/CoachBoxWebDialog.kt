@@ -1,6 +1,7 @@
 package com.engtestbench.hockeynano.ui.components
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -11,6 +12,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -31,6 +34,8 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SportsHockey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -66,33 +71,94 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.util.Locale
 
+private const val LEONXZHAO_GAMES_URL = "https://coach.leonxzhao.com/games"
 private const val COACHBOX_GAMES_URL = "https://coachbox.tvbdhockey.com/games"
 private const val EXTRACT_VIDEO_JS =
-    "(function(){var v=document.querySelector('video'); return JSON.stringify({src:(v?(v.currentSrc||v.src):''), title:document.title||''});})();"
+    "(function(){try{" +
+        "var isHttp=function(u){return /^https?:\\/\\//i.test((u||'').trim());};" +
+        "var pickVideoSrc=function(v){" +
+            "var c=[];" +
+            "if(v.currentSrc){c.push(v.currentSrc);}" +
+            "if(v.src){c.push(v.src);}" +
+            "var ss=v.querySelectorAll('source');" +
+            "for(var i=0;i<ss.length;i++){" +
+                "var su=ss[i].src||ss[i].getAttribute('src')||'';" +
+                "if(su){c.push(su);}" +
+            "}" +
+            "for(var j=0;j<c.length;j++){if(isHttp(c[j])){return c[j];}}" +
+            "return c.length?c[0]:'';" +
+        "};" +
+        "var vs=document.querySelectorAll('video');" +
+        "var best='';" +
+        "for(var k=0;k<vs.length;k++){" +
+            "var v=vs[k];" +
+            "var cand=pickVideoSrc(v);" +
+            "if(!cand){continue;}" +
+            "if(!best||(isHttp(cand)&&!isHttp(best))){best=cand;}" +
+            "if(isHttp(cand)&&(!v.paused||v.readyState>0)){best=cand;break;}" +
+        "}" +
+        "if(!isHttp(best)){" +
+            "var ifs=document.querySelectorAll('iframe[src]');" +
+            "for(var m=0;m<ifs.length;m++){" +
+                "var fs=ifs[m].src||ifs[m].getAttribute('src')||'';" +
+                "if(/^https?:\\/\\/([^\\/]+\\.)?(youtube\\.com|youtube-nocookie\\.com|youtu\\.be)\\//i.test(fs)){best=fs;break;}" +
+            "}" +
+        "}" +
+        "return JSON.stringify({src:(best||''),title:(document.title||'')});" +
+    "}catch(e){return JSON.stringify({src:'',title:(document.title||'')});}})();"
 private const val COACHBOX_HINT_TEXT =
     "Open a CoachBox game and tap Play first so the <video> stream loads."
+private const val COACHBOX_BLOB_HINT_TEXT =
+    "This video is playing via a browser blob stream; open a direct MP4/GCS or YouTube embed stream."
+
+private data class CoachBoxHostPreset(
+    val label: String,
+    val host: String,
+    val url: String
+)
+
+private val COACHBOX_HOST_PRESETS = listOf(
+    CoachBoxHostPreset(
+        label = "LeonxZhao (5 Games)",
+        host = "coach.leonxzhao.com",
+        url = LEONXZHAO_GAMES_URL
+    ),
+    CoachBoxHostPreset(
+        label = "TVBD CoachBox",
+        host = "coachbox.tvbdhockey.com",
+        url = COACHBOX_GAMES_URL
+    )
+)
 
 /**
- * Full-screen WebView connector for CoachBox (`coachbox.tvbdhockey.com/games`) allowing
- * the user to browse/sign in, play any game video, and send its active `<video>` stream URL
- * directly into the on-device Nano Hockey analyzer.
+ * Full-screen WebView connector for CoachBox hosts (`coach.leonxzhao.com/games` and
+ * `coachbox.tvbdhockey.com/games`) allowing the user to browse/sign in, play any game
+ * video, and send its active `<video>` stream URL directly into the on-device Nano Hockey analyzer.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun CoachBoxWebDialog(
-    initialUrl: String = COACHBOX_GAMES_URL,
+    initialUrl: String = LEONXZHAO_GAMES_URL,
     onVideoSelected: (title: String, streamUrl: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var pageProgress by remember { mutableIntStateOf(0) }
-    var currentPageTitle by remember { mutableStateOf("CoachBox · tvbdhockey.com") }
-    var currentPageUrl by remember { mutableStateOf(initialUrl) }
+    var currentPageUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var currentPageTitle by remember(initialUrl) { mutableStateOf(formatCoachBoxHeader(initialUrl)) }
     var inlineHint by remember { mutableStateOf<String?>(null) }
+
+    val activeHost = remember(currentPageUrl) {
+        extractCoachBoxHost(currentPageUrl).lowercase(Locale.US)
+    }
+    val activeHeaderTitle = remember(currentPageUrl) {
+        formatCoachBoxHeader(currentPageUrl)
+    }
 
     DisposableEffect(Unit) {
         onDispose {
+            runCatching { CookieManager.getInstance().flush() }
             webViewRef?.let { wv ->
                 wv.stopLoading()
                 wv.destroy()
@@ -114,7 +180,7 @@ fun CoachBoxWebDialog(
             color = ObsidianBg
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top navigation + CoachBox title bar
+                // Top navigation + active CoachBox host title bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -144,7 +210,7 @@ fun CoachBoxWebDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "CoachBox · tvbdhockey.com",
+                            text = activeHeaderTitle,
                             color = TextPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
@@ -194,6 +260,53 @@ fun CoachBoxWebDialog(
                     }
                 }
 
+                // Compact 1-tap host switcher chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(PanelBg)
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    COACHBOX_HOST_PRESETS.forEach { preset ->
+                        val isSelected = activeHost == preset.host || activeHost.endsWith(".${preset.host}")
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                inlineHint = null
+                                currentPageUrl = preset.url
+                                currentPageTitle = formatCoachBoxHeader(preset.url)
+                                webViewRef?.loadUrl(preset.url)
+                            },
+                            label = {
+                                Text(
+                                    text = preset.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BenchGreen.copy(alpha = 0.22f),
+                                selectedLabelColor = BenchGreen,
+                                containerColor = PanelBgElevated,
+                                labelColor = TextMuted
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = BorderSubtle,
+                                selectedBorderColor = BenchGreen.copy(alpha = 0.75f)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(30.dp)
+                        )
+                    }
+                }
+
                 // Action strip with bright "Analyze Active Video" trigger
                 Row(
                     modifier = Modifier
@@ -228,11 +341,14 @@ fun CoachBoxWebDialog(
                                 val title = parsed?.second.orEmpty()
                                 if (isCoachBoxHttpMp4Url(src)) {
                                     inlineHint = null
+                                    runCatching { CookieManager.getInstance().flush() }
                                     val cleanTitle = title
                                         .ifBlank { currentPageTitle }
                                         .ifBlank { "CoachBox Hockey" }
                                     onVideoSelected(cleanTitle, src)
                                     onDismiss()
+                                } else if (src.startsWith("blob:", ignoreCase = true)) {
+                                    inlineHint = COACHBOX_BLOB_HINT_TEXT
                                 } else {
                                     inlineHint = COACHBOX_HINT_TEXT
                                 }
@@ -335,16 +451,28 @@ fun CoachBoxWebDialog(
                                 }
                             }
                             webViewClient = object : WebViewClient() {
+                                private fun syncNavState(view: WebView?, url: String?) {
+                                    canGoBack = view?.canGoBack() == true
+                                    if (!url.isNullOrBlank()) {
+                                        currentPageUrl = url
+                                    }
+                                }
+
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView?,
                                     request: WebResourceRequest?
                                 ): Boolean = false
 
+                                override fun onPageStarted(
+                                    view: WebView?,
+                                    url: String?,
+                                    favicon: Bitmap?
+                                ) {
+                                    syncNavState(view, url)
+                                }
+
                                 override fun onPageFinished(view: WebView?, url: String?) {
-                                    canGoBack = view?.canGoBack() == true
-                                    if (!url.isNullOrBlank()) {
-                                        currentPageUrl = url
-                                    }
+                                    syncNavState(view, url)
                                 }
 
                                 override fun doUpdateVisitedHistory(
@@ -352,10 +480,7 @@ fun CoachBoxWebDialog(
                                     url: String?,
                                     isReload: Boolean
                                 ) {
-                                    canGoBack = view?.canGoBack() == true
-                                    if (!url.isNullOrBlank()) {
-                                        currentPageUrl = url
-                                    }
+                                    syncNavState(view, url)
                                 }
                             }
                             webViewRef = this
@@ -373,6 +498,14 @@ fun CoachBoxWebDialog(
             }
         }
     }
+}
+
+private fun extractCoachBoxHost(url: String): String =
+    runCatching { Uri.parse(url).host?.trim().orEmpty() }.getOrDefault("")
+
+private fun formatCoachBoxHeader(url: String): String {
+    val host = extractCoachBoxHost(url)
+    return if (host.isNotBlank()) "CoachBox · $host" else "CoachBox"
 }
 
 private fun parseCoachBoxVideoJson(rawResult: String?): Pair<String, String>? {

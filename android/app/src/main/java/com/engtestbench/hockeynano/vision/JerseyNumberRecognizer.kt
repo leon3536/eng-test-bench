@@ -47,7 +47,7 @@ class JerseyNumberRecognizer : Closeable {
         val y1 = ((box.y1 + 0.68f * bh) * h).toInt().coerceIn(y0 + 1, h)
         val cw = x1 - x0
         val ch = y1 - y0
-        if (cw < 10 || ch < 14) return null
+        if (cw < 12 || ch < 18) return null
 
         return Bitmap.createBitmap(highResBitmap, x0, y0, cw, ch)
     }
@@ -69,7 +69,7 @@ class JerseyNumberRecognizer : Closeable {
         torsoCrop: Bitmap,
         iceWb: FloatArray = DEFAULT_WB,
     ): JerseyOcrResult? {
-        if (torsoCrop.isRecycled || torsoCrop.width < 10 || torsoCrop.height < 14) return null
+        if (torsoCrop.isRecycled || torsoCrop.width < 12 || torsoCrop.height < 18) return null
 
         val targetH = max(torsoCrop.height, MIN_UPSCALED_HEIGHT).coerceAtMost(340)
         val scale = targetH.toFloat() / torsoCrop.height.toFloat()
@@ -285,7 +285,7 @@ class JerseyNumberRecognizer : Closeable {
     companion object {
         private const val MIN_UPSCALED_HEIGHT = 220
         private const val QUIET_BORDER_PX = 24
-        private const val MIN_CONFIDENCE = 0.36f
+        private const val MIN_CONFIDENCE = 0.44f
         private val DEFAULT_WB = floatArrayOf(1f, 1f, 1f)
         private val LINE_FALLBACK_REGEX = Regex("(?<![\\d.])#?0?([1-9]\\d?)(?![\\d.])")
         private val CONFUSION_CHARS = setOf('O', 'o', 'I', 'l', '|', 'Z', 'z', 'S', 's', 'B')

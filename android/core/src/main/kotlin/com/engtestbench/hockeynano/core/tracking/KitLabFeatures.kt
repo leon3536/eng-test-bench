@@ -22,6 +22,8 @@ object KitLabFeatures {
     const val WEIGHT_AB = 1.0f
     const val WEIGHT_SHARE = 0.55f
     const val DEFAULT_BELLY_WEIGHT = 1.25f
+    const val DEFAULT_UPPER_L_WEIGHT = 1.75f
+    const val DEFAULT_SECONDARY_BELLY_WEIGHT = 0.40f
     const val HUBER_AB_DELTA = 22f
 
     private const val LAB_DELTA = 6.0 / 29.0
@@ -176,13 +178,25 @@ object KitLabFeatures {
      * Computes perceptual lightness (`0..100`) of a kit summary combined with optional
      * `lowerBellyLuma` (`0..255`), keeping dark-yoke white jerseys brighter than dark jerseys.
      */
-    fun kitEffectiveLightness(summary7: FloatArray, lowerBellyLuma: Float = Float.NaN): Float {
+    fun kitEffectiveLightness(summary7: FloatArray, lowerBellyLuma: Float = Float.NaN): Float =
+        kitEffectiveLightness(summary7, lowerBellyLuma, Float.NaN)
+
+    /**
+     * Effective lightness preferring the 80th-percentile non-ice torso Lab `L*` ([torsoUpperLabL])
+     * when finite so crested or dark-yoked white jerseys retain bright lightness, falling back
+     * to [lowerBellyLuma] and finally the share-weighted kit mean.
+     */
+    fun kitEffectiveLightness(
+        summary7: FloatArray,
+        lowerBellyLuma: Float,
+        torsoUpperLabL: Float,
+    ): Float {
         val shareFrac = (summary7[6] / 100f).coerceIn(0f, 1f)
         val kitMeanL = (1f - shareFrac) * summary7[0] + shareFrac * summary7[3]
-        return if (lowerBellyLuma.isFinite()) {
-            0.55f * kitMeanL + 0.45f * lumaToLabL(lowerBellyLuma)
-        } else {
-            kitMeanL
+        return when {
+            torsoUpperLabL.isFinite() -> 0.45f * kitMeanL + 0.55f * torsoUpperLabL
+            lowerBellyLuma.isFinite() -> 0.55f * kitMeanL + 0.45f * lumaToLabL(lowerBellyLuma)
+            else -> kitMeanL
         }
     }
 
@@ -196,9 +210,30 @@ object KitLabFeatures {
         kitC: FloatArray,
         bellyC: Float,
         bellyWeight: Float = DEFAULT_BELLY_WEIGHT
+    ): Float = kitAndBellyOrUpperDistSq(kitX, bellyX, Float.NaN, kitC, bellyC, Float.NaN, bellyWeight)
+
+    /**
+     * Order-free kit distance prioritizing upper-quantile non-ice torso `L*` ([upperX], [upperC])
+     * with gentle secondary lower-belly agreement when finite.
+     */
+    fun kitAndBellyOrUpperDistSq(
+        kitX: FloatArray,
+        bellyX: Float,
+        upperX: Float,
+        kitC: FloatArray,
+        bellyC: Float,
+        upperC: Float,
+        bellyWeight: Float = DEFAULT_BELLY_WEIGHT,
     ): Float {
         var dist = orderFreeKitDistSq(kitX, kitC)
-        if (bellyX.isFinite() && bellyC.isFinite()) {
+        if (upperX.isFinite() && upperC.isFinite()) {
+            val dUpper = (upperX - upperC) * DEFAULT_UPPER_L_WEIGHT
+            dist += dUpper * dUpper
+            if (bellyX.isFinite() && bellyC.isFinite()) {
+                val dBelly = (lumaToLabL(bellyX) - lumaToLabL(bellyC)) * DEFAULT_SECONDARY_BELLY_WEIGHT
+                dist += dBelly * dBelly
+            }
+        } else if (bellyX.isFinite() && bellyC.isFinite()) {
             val dBelly = (lumaToLabL(bellyX) - lumaToLabL(bellyC)) * bellyWeight
             dist += dBelly * dBelly
         }
@@ -258,9 +293,28 @@ object KitLabFeatures {
         bellyC: Float,
         bellyWeight: Float = DEFAULT_BELLY_WEIGHT,
         abDelta: Float = HUBER_AB_DELTA
+    ): Float = robustKitAndBellyOrUpperDistSq(kitX, bellyX, Float.NaN, kitC, bellyC, Float.NaN, bellyWeight, abDelta)
+
+    /** Huberized order-free kit distance prioritizing upper-quantile non-ice torso `L*`. */
+    fun robustKitAndBellyOrUpperDistSq(
+        kitX: FloatArray,
+        bellyX: Float,
+        upperX: Float,
+        kitC: FloatArray,
+        bellyC: Float,
+        upperC: Float,
+        bellyWeight: Float = DEFAULT_BELLY_WEIGHT,
+        abDelta: Float = HUBER_AB_DELTA,
     ): Float {
         var dist = robustOrderFreeKitDistSq(kitX, kitC, abDelta)
-        if (bellyX.isFinite() && bellyC.isFinite()) {
+        if (upperX.isFinite() && upperC.isFinite()) {
+            val dUpper = (upperX - upperC) * DEFAULT_UPPER_L_WEIGHT
+            dist += dUpper * dUpper
+            if (bellyX.isFinite() && bellyC.isFinite()) {
+                val dBelly = (lumaToLabL(bellyX) - lumaToLabL(bellyC)) * DEFAULT_SECONDARY_BELLY_WEIGHT
+                dist += dBelly * dBelly
+            }
+        } else if (bellyX.isFinite() && bellyC.isFinite()) {
             val dBelly = (lumaToLabL(bellyX) - lumaToLabL(bellyC)) * bellyWeight
             dist += dBelly * dBelly
         }
