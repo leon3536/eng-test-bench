@@ -22,6 +22,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import multiprocessing as mp
+import pickle
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -771,21 +773,24 @@ def extract_torso_features(
 
 
 # ---------------------------------------------------------------------------
-# ONNX STR Recognizer (JerseyStrOnnxRecognizer.kt Round 2 mirror)
+# ONNX STR Recognizer (JerseyStrOnnxRecognizer.kt v5 + v4-compat mirror)
 # ---------------------------------------------------------------------------
 
 class JerseyStrRecognizer:
     MIN_CROP_WIDTH_PX = 12
     MIN_CROP_HEIGHT_PX = 18
-    MIN_LAPLACIAN_SHARPNESS = 18.0
+    MIN_LAPLACIAN_SHARPNESS = 5.5
+    DEROTATE_MIN_ANGLE_DEG = 16.0
+    DEROTATE_MIN_LEGIBILITY_PROB = 0.25
+    DEROTATE_MIN_BACK_PROB = 0.45
     MIN_CANDIDATE_PROB = 0.02
-    MIN_TOP_CANDIDATE_PROB = 0.34
+    MIN_TOP_CANDIDATE_PROB = 0.32
     MAX_ILLEGIBLE_PROB = 0.48
-    MIN_CANDIDATE_LEGIBILITY_PROB = 0.68
-    MIN_CANDIDATE_BACK_PROB = 0.58
+    MIN_CANDIDATE_LEGIBILITY_PROB = 0.64
+    MIN_CANDIDATE_BACK_PROB = 0.56
     MIN_PARTIAL_LEGIBILITY_PROB = 0.55
     MIN_PARTIAL_BACK_PROB = 0.60
-    MIN_PARTIAL_DIGIT_PROB = 0.55
+    MIN_PARTIAL_DIGIT_PROB = 0.65
     PARTIAL_BLANK_MARGIN = 1.25
     MIN_BLANK_COMPANION_PROB = 0.32
 
@@ -793,35 +798,148 @@ class JerseyStrRecognizer:
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 2
         self.sess = ort.InferenceSession(str(onnx_path), opts, providers=["CPUExecutionProvider"])
+        inp = self.sess.get_inputs()[0]
+        self.input_name = inp.name
+        shape = inp.shape
+        self.input_size = int(shape[2]) if (len(shape) >= 4 and isinstance(shape[2], int) and 64 <= shape[2] <= 256) else 96
+        out_names = {o.name for o in self.sess.get_outputs()}
+        self.has_orientation = "orientation_deg" in out_names
 
-    def crop_upper_torso(self, rgb: np.ndarray, box: Tuple[float, float, float, float]) -> Optional[np.ndarray]:
+    @staticmethod
+    def _sample_median_border_color(crop: np.ndarray) -> Tuple[int, int, int]:
+        h, w = crop.shape[:2]
+        if w < 2 or h < 2:
+            return (114, 114, 114)
+        xs = np.clip(((np.arange(8) + 0.5) * w / 8.0).astype(int), 0, w - 1)
+        ys = np.clip(((np.arange(8) + 0.5) * h / 8.0).astype(int), 0, h - 1)
+        pts = np.concatenate([crop[0, xs], crop[h - 1, xs], crop[ys, 0], crop[ys, w - 1]], axis=0)
+        med = np.median(pts, axis=0)
+        return int(med[0]), int(med[1]), int(med[2])
+
+    @classmethod
+    def _derotate_upright(cls, crop: np.ndarray, ccw_orient_deg: float) -> np.ndarray:
+        """Rotate OpenCV CCW +ccw_orient_deg back to upright via -ccw_orient_deg (CW), matching TorsoCropHelper."""
+        ch, cw = crop.shape[:2]
+        deg = float(np.clip(ccw_orient_deg, -60.0, 60.0))
+        rad = abs(deg) * math.pi / 180.0
+        abs_cos, abs_sin = abs(math.cos(rad)), abs(math.sin(rad))
+        rot_w = int(round(cw * abs_cos + ch * abs_sin))
+        rot_h = int(round(cw * abs_sin + ch * abs_cos))
+        out_w = max(cw, min(rot_w, int(round(cw * 1.25))))
+        out_h = max(ch, min(rot_h, int(round(ch * 1.25))))
+        M = cv2.getRotationMatrix2D((cw * 0.5, ch * 0.5), -deg, 1.0)
+        M[0, 2] += (out_w - cw) * 0.5
+        M[1, 2] += (out_h - ch) * 0.5
+        bg = cls._sample_median_border_color(crop)
+        return cv2.warpAffine(crop, M, (out_w, out_h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=bg)
+
+    def crop_upper_torso(
+        self,
+        rgb: np.ndarray,
+        box: Tuple[float, float, float, float],
+        ice_wb: Optional[np.ndarray] = None,
+    ) -> Optional[np.ndarray]:
+        """Stick-immune torso-centered crop (y: 4%..58%), exact mirror of JerseyCropGeometry.kt."""
         h, w = rgb.shape[:2]
+        if w <= 1 or h <= 1:
+            return None
         x1, y1, x2, y2 = box
         bw, bh = x2 - x1, y2 - y1
+        cy0 = max(0, min(h - 1, int((y1 + 0.04 * bh) * h)))
+        cy1 = max(cy0 + 1, min(h, int((y1 + 0.58 * bh) * h)))
+
+        bx0 = max(0, min(w - 1, int(x1 * w)))
+        bx1 = max(bx0 + 1, min(w, int(x2 * w)))
+        by0 = max(0, min(h - 1, int(y1 * h)))
+        by1 = max(by0 + 1, min(h, int(y2 * h)))
+        bw_px = float(bx1 - bx0)
+        bh_px = float(by1 - by0)
+
         cx0 = max(0, min(w - 1, int((x1 - 0.06 * bw) * w)))
         cx1 = max(cx0 + 1, min(w, int((x2 + 0.06 * bw) * w)))
-        cy0 = max(0, min(h - 1, int((y1 + 0.10 * bh) * h)))
-        cy1 = max(cy0 + 1, min(h, int((y1 + 0.62 * bh) * h)))
+
+        if bw_px > 0.58 * bh_px and (bx1 - bx0) >= 4:
+            sy0 = max(0, min(h - 1, int((y1 + 0.16 * bh) * h)))
+            sy1 = max(sy0 + 1, min(h, int((y1 + 0.56 * bh) * h)))
+            if (sy1 - sy0) >= 2:
+                wb = np.ones(3, dtype=np.float32) if ice_wb is None else np.clip(ice_wb.astype(np.float32), 0.6, 1.6)
+                strip = rgb[sy0:sy1, bx0:bx1]
+                wb_s = np.clip(strip.astype(np.float32) * wb[None, None, :], 0.0, 255.0)
+                lab = srgb_to_lab(wb_s)
+                chroma = np.hypot(lab[..., 1], lab[..., 2])
+                non_ice = ~((lab[..., 0] >= 62.0) & (chroma < 18.0))
+                col_frac = non_ice.mean(axis=0)
+                scan_w = len(col_frac)
+                win_w = max(2, min(scan_w, int(round(0.36 * bh_px))))
+                best_start = 0
+                best_score = -1e18
+                win_sum = float(col_frac[:win_w].sum())
+                for start in range(0, scan_w - win_w + 1):
+                    if start > 0:
+                        win_sum += float(col_frac[start + win_w - 1] - col_frac[start - 1])
+                    c_frac = (start + 0.5 * win_w) / float(scan_w)
+                    sc = win_sum - 0.15 * win_w * abs(c_frac - 0.5)
+                    if sc > best_score:
+                        best_score = sc
+                        best_start = start
+                mid_win = best_start + 0.5 * (win_w - 1)
+                peak_col = best_start
+                local_peak = -1.0
+                for c in range(best_start, best_start + win_w):
+                    f = float(col_frac[c])
+                    if f > local_peak + 1e-4 or (abs(f - local_peak) <= 1e-4 and abs(c - mid_win) < abs(peak_col - mid_win)):
+                        local_peak = f
+                        peak_col = c
+                if local_peak >= 0.14:
+                    act_thresh = max(0.14, local_peak * 0.28)
+                    max_gap = max(2, int(round(0.06 * bh_px)))
+                    span_left = peak_col
+                    gap = 0
+                    for c in range(peak_col - 1, -1, -1):
+                        if col_frac[c] >= act_thresh:
+                            span_left = c
+                            gap = 0
+                        else:
+                            gap += 1
+                            if gap > max_gap:
+                                break
+                    span_right = peak_col
+                    gap = 0
+                    for c in range(peak_col + 1, scan_w):
+                        if col_frac[c] >= act_thresh:
+                            span_right = c
+                            gap = 0
+                        else:
+                            gap += 1
+                            if gap > max_gap:
+                                break
+                    non_ice_span = float(span_right - span_left + 1)
+                    torso_center = bx0 + (span_left + span_right + 1) * 0.5 * (bw_px / float(scan_w))
+                    target_w = min(bw_px * 1.08, max(0.46 * bh_px, non_ice_span * (bw_px / float(scan_w)) * 1.28))
+                    cx0 = max(0, min(w - 1, int(round(torso_center - 0.5 * target_w))))
+                    cx1 = max(cx0 + 1, min(w, int(round(torso_center + 0.5 * target_w))))
+
         crop = rgb[cy0:cy1, cx0:cx1]
         if crop.shape[0] < self.MIN_CROP_HEIGHT_PX or crop.shape[1] < self.MIN_CROP_WIDTH_PX:
             return None
         return crop
 
-    def infer_from_crop(self, crop: np.ndarray, ice_wb: np.ndarray) -> Dict[str, Any]:
+    @staticmethod
+    def _sm(v: np.ndarray) -> np.ndarray:
+        e = np.exp(np.clip(v - v.max(), -40.0, 0.0))
+        return e / e.sum()
+
+    def _run_single_pass(self, crop: np.ndarray, ice_wb: np.ndarray) -> Tuple[float, float, float, float, np.ndarray, np.ndarray, np.ndarray]:
+        sz = self.input_size
         ch, cw = crop.shape[:2]
-        scale = min(96.0 / cw, 96.0 / ch)
-        nw, nh = max(1, min(96, int(round(cw * scale)))), max(1, min(96, int(round(ch * scale))))
-        pad_x, pad_y = (96 - nw) // 2, (96 - nh) // 2
-        resized = cv2.resize(crop, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        scale = min(float(sz) / cw, float(sz) / ch)
+        nw, nh = max(1, min(sz, int(round(cw * scale)))), max(1, min(sz, int(round(ch * scale))))
+        pad_x, pad_y = (sz - nw) // 2, (sz - nh) // 2
+        interp = cv2.INTER_CUBIC if sz >= 128 else cv2.INTER_LINEAR
+        resized = cv2.resize(crop, (nw, nh), interpolation=interp)
 
         wb_content = np.clip(resized.astype(np.float32) * ice_wb[None, None, :], 0.0, 255.0)
         luma = np.clip(0.299 * wb_content[..., 0] + 0.587 * wb_content[..., 1] + 0.114 * wb_content[..., 2], 0.0, 255.0)
-        p_low, p_high = np.percentile(luma, [2.0, 98.0])
-        raw_span = max(32.0, float(p_high - p_low))
-        gain = min(max(1.0 + 0.12 * min(max(220.0 / raw_span, 0.8), 2.0), 1.05), 1.25)
-        mid = 0.5 * float(p_low + p_high)
-
-        # Exact interior 4-neighbor discrete Laplacian variance matching Kotlin computeContentLaplacianVariance
         if nw >= 4 and nh >= 4:
             lap_arr = (
                 4.0 * luma[1:-1, 1:-1]
@@ -833,26 +951,44 @@ class JerseyStrRecognizer:
             sharpness = float(min(max(float(lap_arr.var()) if lap_arr.size >= 4 else 1.0, 1.0), 2500.0))
         else:
             sharpness = 1.0
+
         if sharpness < self.MIN_LAPLACIAN_SHARPNESS:
-            return {"legibility": 0.0, "back": 0.0, "sharpness": sharpness, "candidates": [], "partial_left": None, "partial_right": None}
+            z_num = np.zeros(101, dtype=np.float64)
+            z_num[0] = 1.0
+            z_d = np.zeros(11, dtype=np.float64)
+            z_d[10] = 1.0
+            return 0.0, 0.0, sharpness, 0.0, z_num, z_d, z_d
+
+        p_low, p_high = np.percentile(luma, [2.0, 98.0])
+        raw_span = max(32.0, float(p_high - p_low))
+        gain = min(max(1.0 + 0.12 * min(max(220.0 / raw_span, 0.8), 2.0), 1.05), 1.25)
+        mid = 0.5 * float(p_low + p_high)
 
         adj = np.clip((wb_content - mid) * gain + mid, 0.0, 255.0) / 255.0
-        canvas = np.full((96, 96, 3), 114.0 / 255.0, dtype=np.float32)
+        canvas = np.full((sz, sz, 3), 114.0 / 255.0, dtype=np.float32)
         canvas[pad_y:pad_y + nh, pad_x:pad_x + nw] = adj
-        leg_l, back_l, num_l, ld_l, rd_l = self.sess.run(None, {"images": canvas.transpose(2, 0, 1)[None]})
 
+        outs = self.sess.run(None, {self.input_name: canvas.transpose(2, 0, 1)[None]})
+        leg_l, back_l, num_l, ld_l, rd_l = outs[:5]
+        orient_deg = float(np.clip(float(outs[5][0, 0]), -60.0, 60.0)) if (self.has_orientation and len(outs) >= 6) else 0.0
         leg_p = float(1.0 / (1.0 + math.exp(-min(max(float(leg_l[0, 0]), -20.0), 20.0))))
         back_p = float(1.0 / (1.0 + math.exp(-min(max(float(back_l[0, 0]), -20.0), 20.0))))
+        return leg_p, back_p, sharpness, orient_deg, self._sm(num_l[0]), self._sm(ld_l[0]), self._sm(rd_l[0])
 
-        def _sm(v: np.ndarray) -> np.ndarray:
-            e = np.exp(np.clip(v - v.max(), -40.0, 0.0))
-            return e / e.sum()
-
-        num_p, ld_p, rd_p = _sm(num_l[0]), _sm(ld_l[0]), _sm(rd_l[0])
-
+    def decode_raw_pass(
+        self,
+        leg_p: float,
+        back_p: float,
+        sharpness: float,
+        orient_deg: float,
+        num_p: np.ndarray,
+        ld_p: np.ndarray,
+        rd_p: np.ndarray,
+    ) -> Dict[str, Any]:
         cands: List[Tuple[str, float]] = []
         if (
-            float(num_p[0]) < self.MAX_ILLEGIBLE_PROB
+            sharpness >= self.MIN_LAPLACIAN_SHARPNESS
+            and float(num_p[0]) < self.MAX_ILLEGIBLE_PROB
             and leg_p >= self.MIN_CANDIDATE_LEGIBILITY_PROB
             and back_p >= self.MIN_CANDIDATE_BACK_PROB
         ):
@@ -862,7 +998,7 @@ class JerseyStrRecognizer:
                 cands = [(str(n), p) for n, p in indexed[:5]]
 
         p_left, p_right = None, None
-        if leg_p >= self.MIN_PARTIAL_LEGIBILITY_PROB and back_p >= self.MIN_PARTIAL_BACK_PROB:
+        if sharpness >= self.MIN_LAPLACIAN_SHARPNESS and leg_p >= self.MIN_PARTIAL_LEGIBILITY_PROB and back_p >= self.MIN_PARTIAL_BACK_PROB:
             l_best = int(1 + np.argmax(ld_p[1:10]))
             l_best_p = float(ld_p[l_best])
             if (
@@ -886,15 +1022,52 @@ class JerseyStrRecognizer:
             "legibility": leg_p,
             "back": back_p,
             "sharpness": sharpness,
+            "orientation_deg": orient_deg,
             "candidates": cands,
             "partial_left": p_left,
             "partial_right": p_right,
         }
 
+    def infer_from_crop(self, crop: np.ndarray, ice_wb: np.ndarray, return_raw: bool = False) -> Dict[str, Any]:
+        leg1, back1, sharp1, orient1, num1, ld1, rd1 = self._run_single_pass(crop, ice_wb)
+        if sharp1 < self.MIN_LAPLACIAN_SHARPNESS:
+            res = {"legibility": 0.0, "back": 0.0, "sharpness": sharp1, "orientation_deg": 0.0, "candidates": [], "partial_left": None, "partial_right": None}
+            if return_raw:
+                res["_raw"] = (0.0, 0.0, sharp1, 0.0, num1, ld1, rd1, False, None)
+            return res
+
+        leg_f, back_f, num_f, ld_f, rd_f = leg1, back1, num1, ld1, rd1
+        did_derot = False
+        upright_crop = None
+        if (
+            self.has_orientation
+            and abs(orient1) >= self.DEROTATE_MIN_ANGLE_DEG
+            and (leg1 >= self.DEROTATE_MIN_LEGIBILITY_PROB or back1 >= self.DEROTATE_MIN_BACK_PROB)
+        ):
+            upright_crop = self._derotate_upright(crop, orient1)
+            leg2, back2, sharp2, _, num2, ld2, rd2 = self._run_single_pass(upright_crop, ice_wb)
+            if sharp2 >= self.MIN_LAPLACIAN_SHARPNESS:
+                did_derot = True
+                w1 = max(0.02, leg1 * leg1)
+                w2 = max(0.02, leg2 * leg2)
+                w_sum = w1 + w2
+                a1, a2 = w1 / w_sum, w2 / w_sum
+                leg_f = min(max(a1 * leg1 + a2 * leg2, 0.0), 1.0)
+                back_f = min(max(a1 * back1 + a2 * back2, 0.0), 1.0)
+                num_f = a1 * num1 + a2 * num2
+                ld_f = a1 * ld1 + a2 * ld2
+                rd_f = a1 * rd1 + a2 * rd2
+
+        res = self.decode_raw_pass(leg_f, back_f, sharp1, orient1, num_f, ld_f, rd_f)
+        res["derotated"] = did_derot
+        if return_raw:
+            res["_raw"] = (leg_f, back_f, sharp1, orient1, num_f, ld_f, rd_f, did_derot, upright_crop)
+        return res
+
     def infer(self, rgb: np.ndarray, ice_wb: np.ndarray, box: Tuple[float, float, float, float]) -> Dict[str, Any]:
-        crop = self.crop_upper_torso(rgb, box)
+        crop = self.crop_upper_torso(rgb, box, ice_wb)
         if crop is None:
-            return {"legibility": 0.0, "back": 0.0, "sharpness": 1.0, "candidates": [], "partial_left": None, "partial_right": None}
+            return {"legibility": 0.0, "back": 0.0, "sharpness": 1.0, "orientation_deg": 0.0, "candidates": [], "partial_left": None, "partial_right": None}
         return self.infer_from_crop(crop, ice_wb)
 
 
@@ -1071,6 +1244,7 @@ def _meets_bin_or_conf_gate(
     observations: List[Dict[str, Any]],
     candidate_num: Optional[str],
     is_nano_verified: bool = False,
+    single_bin_min_conf: float = SINGLE_BIN_COMMIT_MIN_CONF,
 ) -> bool:
     if candidate_num is None:
         return False
@@ -1119,12 +1293,15 @@ def _meets_bin_or_conf_gate(
     return (
         len(bins) >= 2
         or (has_strong_left and has_strong_right)
-        or max_non_nano_conf >= SINGLE_BIN_COMMIT_MIN_CONF
+        or max_non_nano_conf >= single_bin_min_conf
         or max_nano_conf >= NANO_SINGLE_BIN_MIN_CONF
     )
 
 
-def solve_team_numbers_bayesian_hungarian(chains: List[Dict[str, Any]]) -> Dict[int, Tuple[Optional[str], float]]:
+def solve_team_numbers_bayesian_hungarian(
+    chains: List[Dict[str, Any]],
+    single_bin_min_conf: float = SINGLE_BIN_COMMIT_MIN_CONF,
+) -> Dict[int, Tuple[Optional[str], float]]:
     if not chains:
         return {}
     log_ps: Dict[int, np.ndarray] = {}
@@ -1143,7 +1320,7 @@ def solve_team_numbers_bayesian_hungarian(chains: List[Dict[str, Any]]) -> Dict[
         best_p, best_num = float(p[best_i]), ALL_NUMS[best_i]
         if (
             ch["observations"] and best_p >= MIN_POSTERIOR_PROB and ev_w >= MIN_EVIDENCE_WEIGHT
-            and _meets_bin_or_conf_gate(ch["observations"], best_num)
+            and _meets_bin_or_conf_gate(ch["observations"], best_num, single_bin_min_conf=single_bin_min_conf)
         ):
             assigned[cid] = best_num
             bins = set()
@@ -1931,8 +2108,13 @@ class MobileTracker:
                 return True
         return False
 
-    def select_priority_skaters(self, emitted: List[Dict[str, Any]], limit: int = 6) -> List[Dict[str, Any]]:
-        """Exact Round 3 mirror of RealtimeHockeyProcessor.selectPrioritySkaters (min_h=0.085)."""
+    def select_priority_skaters(
+        self,
+        emitted: List[Dict[str, Any]],
+        limit: int = 6,
+        min_height: float = 0.085,
+    ) -> List[Dict[str, Any]]:
+        """Mirror of RealtimeHockeyProcessor.selectPrioritySkaters."""
         cands = []
         for item in emitted:
             tid = item["track_id"]
@@ -1940,7 +2122,7 @@ class MobileTracker:
                 continue
             x1, y1, x2, y2 = item["box"]
             bw, bh = x2 - x1, y2 - y1
-            if bh < 0.085 or bw < 0.015:
+            if bh < min_height or bw < 0.015:
                 continue
             area = bw * bh
             st = self.last_str_score.get(tid, {})
@@ -2099,7 +2281,7 @@ class MobileTracker:
             nodes = merged
         return [nd["tids"] for nd in nodes]
 
-    def resolve_all(self) -> Dict[int, Tuple[str, Optional[str], float]]:
+    def resolve_all(self, single_bin_min_conf: float = SINGLE_BIN_COMMIT_MIN_CONF) -> Dict[int, Tuple[str, Optional[str], float]]:
         chains = self.build_stitched_chains()
         by_team: Dict[str, List[Dict[str, Any]]] = {"TEAM_A": [], "TEAM_B": [], "REFEREE": [], "UNKNOWN": []}
         for c_tids in chains:
@@ -2115,13 +2297,13 @@ class MobileTracker:
 
         out: Dict[int, Tuple[str, Optional[str], float]] = {}
         for team in ("TEAM_A", "TEAM_B"):
-            sol = solve_team_numbers_bayesian_hungarian(by_team[team])
+            sol = solve_team_numbers_bayesian_hungarian(by_team[team], single_bin_min_conf=single_bin_min_conf)
             for m in by_team[team]:
                 num, conf = sol.get(m["chain_id"], (None, 0.0))
                 for tid in m["tids"]:
                     out[tid] = (team, num, conf)
         for m in by_team["UNKNOWN"]:
-            sol = solve_team_numbers_bayesian_hungarian([m])
+            sol = solve_team_numbers_bayesian_hungarian([m], single_bin_min_conf=single_bin_min_conf)
             num, conf = sol.get(m["chain_id"], (None, 0.0))
             for tid in m["tids"]:
                 out[tid] = ("UNKNOWN", num, conf)
@@ -2456,6 +2638,35 @@ DISTANT_STR_MIN_SHARPNESS = 28.0
 UNCHANGED_CROP_ANCHOR_WINDOW_SEC = 2.5
 UNCHANGED_CROP_LUMA_DIFF_MAX = 3.5
 
+V5_DEFAULT_CFG: Dict[str, Any] = {
+    "min_ocr_box_height": 0.085,
+    "distant_str_full_box_height": 0.115,
+    "distant_str_partial_box_height": 0.105,
+    "distant_str_min_top_prob": 0.58,
+    "distant_str_min_legibility_prob": 0.75,
+    "distant_str_min_sharpness": 12.0,
+    "min_laplacian_sharpness": 5.5,
+    "min_top_candidate_prob": 0.32,
+    "max_illegible_prob": 0.48,
+    "min_candidate_legibility_prob": 0.64,
+    "min_candidate_back_prob": 0.56,
+    "min_partial_legibility_prob": 0.55,
+    "min_partial_back_prob": 0.60,
+    "min_partial_digit_prob": 0.65,
+    "single_bin_commit_min_conf": 0.90,
+}
+
+
+def apply_str_cfg(str_rec: JerseyStrRecognizer, cfg: Dict[str, Any]) -> None:
+    str_rec.MIN_LAPLACIAN_SHARPNESS = float(cfg["min_laplacian_sharpness"])
+    str_rec.MIN_TOP_CANDIDATE_PROB = float(cfg["min_top_candidate_prob"])
+    str_rec.MAX_ILLEGIBLE_PROB = float(cfg["max_illegible_prob"])
+    str_rec.MIN_CANDIDATE_LEGIBILITY_PROB = float(cfg["min_candidate_legibility_prob"])
+    str_rec.MIN_CANDIDATE_BACK_PROB = float(cfg["min_candidate_back_prob"])
+    str_rec.MIN_PARTIAL_LEGIBILITY_PROB = float(cfg["min_partial_legibility_prob"])
+    str_rec.MIN_PARTIAL_BACK_PROB = float(cfg["min_partial_back_prob"])
+    str_rec.MIN_PARTIAL_DIGIT_PROB = float(cfg["min_partial_digit_prob"])
+
 
 def _compute_crop_luma_grid_4x4(crop: np.ndarray) -> np.ndarray:
     h, w = max(1, crop.shape[0]), max(1, crop.shape[1])
@@ -2497,8 +2708,15 @@ def run_mobile_on_mp4(
     input_wh: Tuple[int, int] = (960, 540),
     sample_dt_sec: float = 0.25,
     top_k_str_per_step: Optional[int] = 6,
+    cfg: Optional[Dict[str, Any]] = None,
+    collect_diag: bool = False,
 ) -> Dict[str, Any]:
-    """Run exact Round 3 Mobile pipeline on an MP4 at input_wh and sample_dt_sec (~4 fps)."""
+    """Run v5 Mobile pipeline on an MP4 at input_wh and sample_dt_sec (~4 fps)."""
+    c = dict(V5_DEFAULT_CFG)
+    if cfg:
+        c.update(cfg)
+    apply_str_cfg(str_rec, c)
+
     cap = cv2.VideoCapture(str(mp4_path))
     fps = float(cap.get(cv2.CAP_PROP_FPS)) or 30.0
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -2511,6 +2729,7 @@ def run_mobile_on_mp4(
     best_t_diff = 1e9
     det_counts, raw_det_counts = [], []
     str_calls = 0
+    best_diag_by_tid: Dict[int, Dict[str, Any]] = {}
 
     for fi in range(0, n_frames, step):
         cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
@@ -2534,38 +2753,55 @@ def run_mobile_on_mp4(
         emitted = tracker.update(ts, dets)
 
         if top_k_str_per_step is not None:
-            str_targets = tracker.select_priority_skaters(emitted, limit=top_k_str_per_step)
+            str_targets = tracker.select_priority_skaters(emitted, limit=top_k_str_per_step, min_height=c["min_ocr_box_height"])
         else:
             str_targets = [
                 it for it in emitted
                 if not tracker.is_likely_official_track(it["track_id"])
-                and (it["box"][3] - it["box"][1]) >= MIN_OCR_BOX_HEIGHT
+                and (it["box"][3] - it["box"][1]) >= c["min_ocr_box_height"]
                 and (it["box"][2] - it["box"][0]) >= 0.015
             ]
 
         for item in str_targets:
             tid = item["track_id"]
-            crop = str_rec.crop_upper_torso(rgb, item["box"])
+            crop = str_rec.crop_upper_torso(rgb, item["box"], wb)
             if crop is None:
                 continue
             tracker.str_attempts[tid] = tracker.str_attempts.get(tid, 0) + 1
-            res = str_rec.infer_from_crop(crop, wb)
+            res = str_rec.infer_from_crop(crop, wb, return_raw=collect_diag)
             str_calls += 1
             effective_ts = _resolve_effective_read_timestamp(tid, crop, ts, track_str_signatures)
             tracker.last_str_score[tid] = {"legibility": res["legibility"], "back": res["back"], "sharpness": res["sharpness"]}
-            raw_cands = res["candidates"] if (res["legibility"] >= 0.68 and res["back"] >= 0.58) else []
+            raw_cands = res["candidates"] if (res["legibility"] >= c["min_candidate_legibility_prob"] and res["back"] >= c["min_candidate_back_prob"]) else []
             raw_top_p = raw_cands[0][1] if raw_cands else 0.0
             box_h = item["box"][3] - item["box"][1]
-            if box_h < DISTANT_STR_FULL_BOX_HEIGHT and (
-                raw_top_p < DISTANT_STR_MIN_TOP_PROB
-                or res["legibility"] < DISTANT_STR_MIN_LEGIBILITY_PROB
-                or res["sharpness"] < DISTANT_STR_MIN_SHARPNESS
+            if box_h < c["distant_str_full_box_height"] and (
+                raw_top_p < c["distant_str_min_top_prob"]
+                or res["legibility"] < c["distant_str_min_legibility_prob"]
+                or res["sharpness"] < c["distant_str_min_sharpness"]
             ):
                 cands = []
             else:
                 cands = raw_cands
-            p_left = res["partial_left"] if box_h >= DISTANT_STR_PARTIAL_BOX_HEIGHT else None
-            p_right = res["partial_right"] if box_h >= DISTANT_STR_PARTIAL_BOX_HEIGHT else None
+            p_left = res["partial_left"] if box_h >= c["distant_str_partial_box_height"] else None
+            p_right = res["partial_right"] if box_h >= c["distant_str_partial_box_height"] else None
+            if collect_diag:
+                raw_tuple = res.get("_raw")
+                score_d = (raw_top_p if cands else 0.0) + 0.3 * res["legibility"]
+                prev_d = best_diag_by_tid.get(tid)
+                if prev_d is None or score_d > prev_d["score"]:
+                    best_diag_by_tid[tid] = {
+                        "score": score_d,
+                        "ts": ts,
+                        "crop": crop.copy(),
+                        "derot_crop": raw_tuple[8].copy() if (raw_tuple and raw_tuple[8] is not None) else None,
+                        "orient": res.get("orientation_deg", 0.0),
+                        "leg": res["legibility"],
+                        "back": res["back"],
+                        "sharp": res["sharpness"],
+                        "cands": cands,
+                        "box_h": box_h,
+                    }
             if cands or p_left or p_right:
                 qw = min(max((0.35 + 0.65 * res["legibility"]) * (0.50 + 0.50 * res["back"]), 0.05), 1.25) if cands else min(max(0.40 + 0.60 * res["back"], 0.10), 1.0)
                 rec = tracker.records[tid]
@@ -2591,7 +2827,7 @@ def run_mobile_on_mp4(
             eval_rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
     cap.release()
-    resolved = tracker.resolve_all()
+    resolved = tracker.resolve_all(single_bin_min_conf=c["single_bin_commit_min_conf"])
     for p in eval_emitted:
         team, num, conf = resolved.get(p["track_id"], (p["team"], None, 0.0))
         p["team"] = team
@@ -2619,6 +2855,19 @@ def run_mobile_on_mp4(
         "_eval_emitted": eval_emitted,
         "_eval_rgb": eval_rgb,
     }
+    if collect_diag:
+        chains = tracker.build_stitched_chains()
+        tid_to_chain_diag = {}
+        for ch_tids in chains:
+            best_ch_diag = None
+            for tid in ch_tids:
+                d = best_diag_by_tid.get(tid)
+                if d is not None and (best_ch_diag is None or d["score"] > best_ch_diag["score"]):
+                    best_ch_diag = d
+            if best_ch_diag is not None:
+                for tid in ch_tids:
+                    tid_to_chain_diag[tid] = best_ch_diag
+        out["_diag_by_tid"] = tid_to_chain_diag
 
     if gt_items is not None:
         matched_rows, unmatched = _match_predictions_to_gt(gt_items, eval_emitted)
@@ -2632,6 +2881,7 @@ def run_mobile_on_mp4(
         ref_tp, ref_fp, ref_fn = 0, 0, 0
         num_hits, num_preds, leg_tot = 0, 0, 0
         misses, team_errs, num_details = [], [], []
+        wrong_preds = 0
 
         for m in matched_rows:
             g, p = m["gt"], m["pred"]
@@ -2662,6 +2912,8 @@ def run_mobile_on_mp4(
                     num_preds += 1
                     if g.get("legible_num") and p["number"] == g["legible_num"]:
                         num_hits += 1
+                    elif g.get("legible_num") and p["number"] != g["legible_num"]:
+                        wrong_preds += 1
                     num_details.append(f"{g['id']}:pred=#{p['number']}(gt={g.get('legible_num')},c={p['conf']})")
 
         out.update({
@@ -2681,6 +2933,7 @@ def run_mobile_on_mp4(
             "ref_recall": round(ref_tp / max(1, ref_tp + ref_fn), 3),
             "ref_tp_fp_fn": [ref_tp, ref_fp, ref_fn],
             "legible_num_hits": f"{num_hits}/{leg_tot}",
+            "legible_wrong_num_preds": wrong_preds,
             "num_predictions_at_teval": num_preds,
             "num_details": num_details,
             "_eval_emitted": eval_emitted,
@@ -2688,6 +2941,213 @@ def run_mobile_on_mp4(
             "_eval_rgb": eval_rgb,
         })
     return out
+
+
+def extract_sweep_cache(
+    detector: YoloDetector,
+    str_rec: JerseyStrRecognizer,
+    eval_dir: Path,
+    min_box_h: float = 0.055,
+) -> List[Dict[str, Any]]:
+    """Run YOLO + raw v5 STR once across Games 1-5 + CoachBox Cleanhold (960x540 & 1920x1080) for fast threshold sweep."""
+    videos: List[Tuple[str, Path, float, List[Dict[str, Any]]]] = []
+    for g in range(1, 6):
+        spec = GAMES_SPEC[g]
+        videos.append((f"game_{g}", eval_dir / f"lz_game{g}_30s.mp4", spec["eval_t_sec"], spec["visual_gt"]))
+    cleanhold_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/coachbox_tvbd_cougars_cleanhold_30s.mp4")
+    videos.append(("coachbox_cleanhold", cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08))
+
+    apply_str_cfg(str_rec, {**V5_DEFAULT_CFG, "min_laplacian_sharpness": 1.0})
+    cached_runs = []
+    for vname, mp4_path, eval_t, gt_items in videos:
+        for input_wh in ((960, 540), (1920, 1080)):
+            cap = cv2.VideoCapture(str(mp4_path))
+            fps = float(cap.get(cv2.CAP_PROP_FPS)) or 30.0
+            n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            step = max(1, int(round(fps * 0.25)))
+            frames = []
+            best_t_diff = 1e9
+            eval_fi = -1
+            for fi in range(0, n_frames, step):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
+                ok, bgr = cap.read()
+                if not ok:
+                    break
+                ts = fi / fps
+                bgr_in = cv2.resize(bgr, input_wh, interpolation=cv2.INTER_AREA) if (bgr.shape[1], bgr.shape[0]) != input_wh else bgr
+                rgb = cv2.cvtColor(bgr_in, cv2.COLOR_BGR2RGB)
+                aspect = rgb.shape[1] / max(1.0, float(rgb.shape[0]))
+                feat_rgb = make_feature_rgb(rgb)
+                wb = compute_ice_wb(feat_rgb)
+                raw_boxes = detector.detect(rgb, panoramic_tiling=True, apply_on_ice=False, wb=wb, feat_rgb=feat_rgb)
+                boxes = [b for b in raw_boxes if is_on_ice(b[:4], aspect, ice_context=b[5])]
+                dets = []
+                for b in boxes:
+                    feat = extract_torso_features(feat_rgb, rgb, wb, b[:4])
+                    feat["box"] = b[:4]
+                    bh = b[3] - b[1]
+                    bw = b[2] - b[0]
+                    raw_str = None
+                    luma_grid = None
+                    if bh >= min_box_h and bw >= 0.015:
+                        crop = str_rec.crop_upper_torso(rgb, b[:4], wb)
+                        if crop is not None:
+                            res = str_rec.infer_from_crop(crop, wb, return_raw=True)
+                            rt = res["_raw"]
+                            raw_str = (rt[0], rt[1], rt[2], rt[3], rt[4], rt[5], rt[6])
+                            luma_grid = _compute_crop_luma_grid_4x4(crop)
+                    dets.append((feat, raw_str, luma_grid))
+                if abs(ts - eval_t) < best_t_diff:
+                    best_t_diff = abs(ts - eval_t)
+                    eval_fi = len(frames)
+                frames.append((ts, dets))
+            cap.release()
+            cached_runs.append({
+                "name": vname,
+                "wh": input_wh,
+                "gt": gt_items,
+                "frames": frames,
+                "eval_fi": eval_fi,
+            })
+            print(f"[sweep_cache] {vname} {input_wh[0]}x{input_wh[1]}: {len(frames)} frames cached", flush=True)
+    return cached_runs
+
+
+def replay_sweep_config(cached_runs: List[Dict[str, Any]], str_rec: JerseyStrRecognizer, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    apply_str_cfg(str_rec, cfg)
+    lz_hits = {960: [0, 0, 0, 0], 1920: [0, 0, 0, 0]}  # hits, gt_tot, wrong_on_legible, total_num_preds
+    cb_hits = {960: [0, 0, 0, 0], 1920: [0, 0, 0, 0]}
+
+    for run in cached_runs:
+        tracker = MobileTracker()
+        sigs: Dict[int, Tuple[np.ndarray, float]] = {}
+        eval_emitted: List[Dict[str, Any]] = []
+        for f_idx, (ts, frame_dets) in enumerate(run["frames"]):
+            dets = [fd[0] for fd in frame_dets]
+            emitted = tracker.update(ts, dets)
+            box_to_raw = {fd[0]["box"]: (fd[1], fd[2]) for fd in frame_dets}
+            targets = tracker.select_priority_skaters(emitted, limit=6, min_height=cfg["min_ocr_box_height"])
+            for item in targets:
+                tid = item["track_id"]
+                raw_str, luma_grid = box_to_raw.get(item["box"], (None, None))
+                if raw_str is None or luma_grid is None:
+                    continue
+                tracker.str_attempts[tid] = tracker.str_attempts.get(tid, 0) + 1
+                leg_f, back_f, sharp1, orient1, num_f, ld_f, rd_f = raw_str
+                res = str_rec.decode_raw_pass(leg_f, back_f, sharp1, orient1, num_f, ld_f, rd_f)
+                prev = sigs.get(tid)
+                if prev is not None and abs(ts - prev[1]) <= UNCHANGED_CROP_ANCHOR_WINDOW_SEC and float(np.abs(luma_grid - prev[0]).mean()) < UNCHANGED_CROP_LUMA_DIFF_MAX:
+                    eff_ts = prev[1]
+                else:
+                    sigs[tid] = (luma_grid, ts)
+                    eff_ts = ts
+                tracker.last_str_score[tid] = {"legibility": res["legibility"], "back": res["back"], "sharpness": res["sharpness"]}
+                raw_cands = res["candidates"] if (res["legibility"] >= cfg["min_candidate_legibility_prob"] and res["back"] >= cfg["min_candidate_back_prob"]) else []
+                raw_top_p = raw_cands[0][1] if raw_cands else 0.0
+                box_h = item["box"][3] - item["box"][1]
+                if box_h < cfg["distant_str_full_box_height"] and (
+                    raw_top_p < cfg["distant_str_min_top_prob"]
+                    or res["legibility"] < cfg["distant_str_min_legibility_prob"]
+                    or res["sharpness"] < cfg["distant_str_min_sharpness"]
+                ):
+                    cands = []
+                else:
+                    cands = raw_cands
+                p_left = res["partial_left"] if box_h >= cfg["distant_str_partial_box_height"] else None
+                p_right = res["partial_right"] if box_h >= cfg["distant_str_partial_box_height"] else None
+                if cands or p_left or p_right:
+                    qw = min(max((0.35 + 0.65 * res["legibility"]) * (0.50 + 0.50 * res["back"]), 0.05), 1.25) if cands else min(max(0.40 + 0.60 * res["back"], 0.10), 1.0)
+                    rec = tracker.records[tid]
+                    if cands:
+                        rec["observations"].append({"timestamp_sec": eff_ts, "candidates": cands, "weight": qw, "source_weight": 1.6})
+                    top_p = cands[0][1] if cands else 0.0
+                    has_l, has_r = p_left is not None, p_right is not None
+                    pscale = 0.35 if top_p >= 0.15 else (0.65 if (has_l and has_r) else 1.0)
+                    if has_l:
+                        rec["observations"].append({"timestamp_sec": eff_ts, "number": p_left[0], "conf": p_left[1], "kind": "LEFT_PARTIAL", "weight": min(max(qw * pscale, 0.05), 1.5), "source_weight": 1.6})
+                    if has_r:
+                        rec["observations"].append({"timestamp_sec": eff_ts, "number": p_right[0], "conf": p_right[1], "kind": "RIGHT_PARTIAL", "weight": min(max(qw * pscale, 0.05), 1.5), "source_weight": 1.6})
+            if f_idx == run["eval_fi"]:
+                eval_emitted = [dict(x) for x in emitted]
+
+        resolved = tracker.resolve_all(single_bin_min_conf=cfg["single_bin_commit_min_conf"])
+        for p in eval_emitted:
+            team, num, conf = resolved.get(p["track_id"], (p["team"], None, 0.0))
+            p["team"] = team
+            p["number"] = num if team != "REFEREE" else None
+
+        matched_rows, _ = _match_predictions_to_gt(run["gt"], eval_emitted)
+        bucket = cb_hits[run["wh"][0]] if run["name"] == "coachbox_cleanhold" else lz_hits[run["wh"][0]]
+        for m in matched_rows:
+            g, p = m["gt"], m["pred"]
+            if g.get("legible_num"):
+                bucket[1] += 1
+            if p is not None and g["team"] != "REFEREE" and p["number"] is not None:
+                bucket[3] += 1
+                if g.get("legible_num"):
+                    if p["number"] == g["legible_num"]:
+                        bucket[0] += 1
+                    else:
+                        bucket[2] += 1
+
+    return {
+        "lz_960": lz_hits[960],
+        "lz_1920": lz_hits[1920],
+        "cb_960": cb_hits[960],
+        "cb_1920": cb_hits[1920],
+        "total_hits": lz_hits[960][0] + lz_hits[1920][0] + cb_hits[960][0] + cb_hits[1920][0],
+        "total_wrong_leg": lz_hits[960][2] + lz_hits[1920][2] + cb_hits[960][2] + cb_hits[1920][2],
+    }
+
+
+def render_v5_diag_eval(
+    out_png: Path,
+    diag_records: List[Dict[str, Any]],
+) -> None:
+    """Render visual diagnostic sheet of v5 torso crops, derotated crops, orientation_deg, and predictions."""
+    if not diag_records:
+        return
+    cols = 4
+    rows = (len(diag_records) + cols - 1) // cols
+    cell_w, cell_h = 340, 152
+    canvas = np.full((rows * cell_h + 36, cols * cell_w, 3), 22, dtype=np.uint8)
+    cv2.putText(canvas, "v5 STR Diagnostic Eval (Torso Crop | Derotated Crop | Pred vs GT)", (14, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (235, 240, 245), 2, cv2.LINE_AA)
+
+    for idx, rec in enumerate(diag_records):
+        r, c = idx // cols, idx % cols
+        x0, y0 = c * cell_w, 36 + r * cell_h
+        cv2.rectangle(canvas, (x0 + 4, y0 + 4), (x0 + cell_w - 4, y0 + cell_h - 4), (45, 52, 66), 1)
+        crop_bgr = cv2.cvtColor(rec["crop"], cv2.COLOR_RGB2BGR)
+        ch, cw = crop_bgr.shape[:2]
+        sc = min(96.0 / max(1, cw), 96.0 / max(1, ch))
+        dw, dh = max(1, int(round(cw * sc))), max(1, int(round(ch * sc)))
+        px, py = x0 + 10 + (96 - dw) // 2, y0 + 10 + (96 - dh) // 2
+        canvas[py:py + dh, px:px + dw] = cv2.resize(crop_bgr, (dw, dh), interpolation=cv2.INTER_CUBIC)
+
+        if rec.get("derot_crop") is not None:
+            dc_bgr = cv2.cvtColor(rec["derot_crop"], cv2.COLOR_RGB2BGR)
+            dch, dcw = dc_bgr.shape[:2]
+            dsc = min(96.0 / max(1, dcw), 96.0 / max(1, dch))
+            ddw, ddh = max(1, int(round(dcw * dsc))), max(1, int(round(dch * dsc)))
+            dpx, dpy = x0 + 112 + (96 - ddw) // 2, y0 + 10 + (96 - ddh) // 2
+            canvas[dpy:dpy + ddh, dpx:dpx + ddw] = cv2.resize(dc_bgr, (ddw, ddh), interpolation=cv2.INTER_CUBIC)
+
+        hit = rec.get("gt_num") and (rec.get("pred_num") == rec.get("gt_num"))
+        col = (80, 240, 120) if hit else ((0, 195, 255) if rec.get("pred_num") is None else (80, 90, 255))
+        t1 = f"{rec['tag']} gt=#{rec.get('gt_num') or '-'}"
+        t2 = f"pred=#{rec.get('pred_num') or '-'} ({rec.get('conf', 0.0):.2f})"
+        t3 = f"ori={rec.get('orient', 0.0):+.1f}d leg={rec.get('leg', 0.0):.2f}"
+        t4 = f"bk={rec.get('back', 0.0):.2f} lap={rec.get('sharp', 0.0):.0f} bh={rec.get('box_h', 0.0):.3f}"
+        cv2.putText(canvas, t1, (x0 + 214, y0 + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (230, 235, 245), 1, cv2.LINE_AA)
+        cv2.putText(canvas, t2, (x0 + 214, y0 + 52), cv2.FONT_HERSHEY_SIMPLEX, 0.44, col, 1, cv2.LINE_AA)
+        cv2.putText(canvas, t3, (x0 + 214, y0 + 76), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 210, 225), 1, cv2.LINE_AA)
+        cv2.putText(canvas, t4, (x0 + 214, y0 + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 195, 210), 1, cv2.LINE_AA)
+        cands_str = ",".join(f"#{n}:{p:.2f}" for n, p in rec.get("cands", [])[:2])
+        cv2.putText(canvas, f"top: {cands_str}" if cands_str else "top: none", (x0 + 10, y0 + 132), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (190, 210, 230), 1, cv2.LINE_AA)
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(out_png), canvas)
+    print(f"[diag] saved v5 diagnostic sheet ({len(diag_records)} tiles) to {out_png}")
 
 
 def render_eval_compare_sheet(
@@ -2799,32 +3259,149 @@ def _delta_str(prev: Optional[Dict[str, Any]], cur: Dict[str, Any]) -> Optional[
     }
 
 
+_SWEEP_WORKER_CACHE: Optional[List[Dict[str, Any]]] = None
+_SWEEP_WORKER_REC: Optional[JerseyStrRecognizer] = None
+
+
+def _init_sweep_worker(cache_pkl: str) -> None:
+    global _SWEEP_WORKER_CACHE, _SWEEP_WORKER_REC
+    with open(cache_pkl, "rb") as f:
+        payload = pickle.load(f)
+    _SWEEP_WORKER_CACHE = payload["cached"]
+    rec = JerseyStrRecognizer.__new__(JerseyStrRecognizer)
+    _SWEEP_WORKER_REC = rec
+
+
+def _eval_sweep_worker(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    assert _SWEEP_WORKER_CACHE is not None and _SWEEP_WORKER_REC is not None
+    sc = replay_sweep_config(_SWEEP_WORKER_CACHE, _SWEEP_WORKER_REC, cfg)
+    tot_preds = sc["lz_960"][3] + sc["lz_1920"][3] + sc["cb_960"][3] + sc["cb_1920"][3]
+    spurious_est = max(0, tot_preds - sc["total_hits"] - sc["total_wrong_leg"])
+    score = sc["total_hits"] * 3.0 - sc["total_wrong_leg"] * 4.0 - 0.25 * spurious_est
+    return {"score": round(score, 2), "summary": sc, "cfg": cfg}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--assets-dir", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/android/app/src/main/assets"))
     ap.add_argument("--eval-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/leonxzhao_eval"))
+    ap.add_argument("--v5-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/v5_str"))
     ap.add_argument("--report-out", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/research/leonxzhao_5games_report.json"))
+    ap.add_argument("--sweep", action="store_true")
+    ap.add_argument("--cfg-json", type=Path, default=None)
     args = ap.parse_args()
 
     t0 = time.time()
     detector = YoloDetector(args.assets_dir / "coach_person_detector.onnx")
     str_rec = JerseyStrRecognizer(args.assets_dir / "coach_jersey_str.onnx")
 
+    if args.sweep:
+        args.v5_dir.mkdir(parents=True, exist_ok=True)
+        onnx_p = args.assets_dir / "coach_jersey_str.onnx"
+        onnx_sig = (int(onnx_p.stat().st_mtime_ns), int(onnx_p.stat().st_size))
+        cache_pkl = args.v5_dir / "v5_sweep_cache.pkl"
+        cached = None
+        if cache_pkl.exists():
+            try:
+                with open(cache_pkl, "rb") as f:
+                    payload = pickle.load(f)
+                if payload.get("onnx_sig") == onnx_sig:
+                    cached = payload["cached"]
+                    print(f"[sweep_cache] loaded cached frames from {cache_pkl.name}", flush=True)
+            except Exception:
+                cached = None
+        if cached is None:
+            cached = extract_sweep_cache(detector, str_rec, args.eval_dir, min_box_h=0.055)
+            with open(cache_pkl, "wb") as f:
+                pickle.dump({"onnx_sig": onnx_sig, "cached": cached}, f, protocol=pickle.HIGHEST_PROTOCOL)
+            print(f"[sweep_cache] saved cache to {cache_pkl.name}", flush=True)
+
+        cfgs = []
+        for min_h in (0.072, 0.075, 0.082):
+            for dist_h in (0.100, 0.108, 0.115):
+                for dist_top, dist_leg, dist_sh in (
+                    (0.42, 0.68, 8.0),
+                    (0.52, 0.74, 10.0),
+                    (0.58, 0.76, 12.0),
+                    (0.68, 0.80, 14.0),
+                ):
+                    for min_top, min_leg, min_bk, min_sh in (
+                        (0.28, 0.58, 0.52, 4.0),
+                        (0.32, 0.64, 0.56, 5.5),
+                        (0.35, 0.68, 0.60, 7.5),
+                    ):
+                        for sb_conf in (0.85, 0.88, 0.92):
+                            cfgs.append({
+                                **V5_DEFAULT_CFG,
+                                "min_ocr_box_height": min_h,
+                                "distant_str_full_box_height": dist_h,
+                                "distant_str_partial_box_height": max(0.085, dist_h - 0.010),
+                                "distant_str_min_top_prob": dist_top,
+                                "distant_str_min_legibility_prob": dist_leg,
+                                "distant_str_min_sharpness": dist_sh,
+                                "min_top_candidate_prob": min_top,
+                                "min_candidate_legibility_prob": min_leg,
+                                "min_candidate_back_prob": min_bk,
+                                "min_laplacian_sharpness": min_sh,
+                                "single_bin_commit_min_conf": sb_conf,
+                            })
+        grid = []
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(processes=12, initializer=_init_sweep_worker, initargs=(str(cache_pkl),)) as pool:
+            for idx, row in enumerate(pool.imap_unordered(_eval_sweep_worker, cfgs), 1):
+                grid.append(row)
+                if idx % 24 == 0 or idx == len(cfgs):
+                    best_cur = max(grid, key=lambda r: r["score"])
+                    print(f"[sweep] {idx}/{len(cfgs)} ({time.time()-t0:.1f}s) best_score={best_cur['score']} {best_cur['summary']}", flush=True)
+        grid.sort(key=lambda r: -r["score"])
+        out_sweep = args.v5_dir / "v5_sweep_results.json"
+        out_sweep.write_text(json.dumps(grid[:25], indent=2) + "\n")
+        print(f"[sweep] evaluated {len(grid)} configs in {time.time()-t0:.1f}s; top 8:")
+        for row in grid[:8]:
+            print(json.dumps(row["summary"]), "min_h=", row["cfg"]["min_ocr_box_height"], "min_sh=", row["cfg"]["min_laplacian_sharpness"], "dist_sh=", row["cfg"]["distant_str_min_sharpness"], "min_top=", row["cfg"]["min_top_candidate_prob"], "dist_top=", row["cfg"]["distant_str_min_top_prob"], "leg=", row["cfg"]["min_candidate_legibility_prob"], "sb=", row["cfg"]["single_bin_commit_min_conf"])
+        return
+
+    v5_cfg = dict(V5_DEFAULT_CFG)
+    if args.cfg_json and args.cfg_json.exists():
+        v5_cfg.update(json.loads(args.cfg_json.read_text()))
+
     r1_path = args.eval_dir / "leonxzhao_5games_report_r1.json"
     r2_path = args.eval_dir / "leonxzhao_5games_report_r2.json"
+    r3_bak_path = args.v5_dir / "leonxzhao_5games_report_r3_backup.json"
     r1_data = json.loads(r1_path.read_text()) if r1_path.exists() else {}
     r2_data = json.loads(r2_path.read_text()) if r2_path.exists() else {}
+    if r3_bak_path.exists():
+        r3_data = json.loads(r3_bak_path.read_text())
+    elif args.report_out.exists():
+        r3_data = json.loads(args.report_out.read_text())
+    else:
+        r3_data = {}
 
     games_out: Dict[str, Any] = {}
+    diag_records: List[Dict[str, Any]] = []
+
     for g in range(1, 6):
         spec = GAMES_SPEC[g]
         mp4_path = args.eval_dir / f"lz_game{g}_30s.mp4"
         cloud_score = score_cloud_game(spec)
-        res_960 = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6)
-        res_1080 = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6)
-        res_960_allstr = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=None)
+        res_960 = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+        res_1080 = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg, collect_diag=True)
+        res_960_allstr = run_mobile_on_mp4(mp4_path, spec["eval_t_sec"], spec["visual_gt"], detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=None, cfg=v5_cfg)
 
-        render_eval_compare_sheet(g, spec, args.eval_dir, res_960, res_1080)
+        diag_by_tid = res_1080.pop("_diag_by_tid", {})
+        matched_rows, _ = _match_predictions_to_gt(spec["visual_gt"], res_1080.get("_eval_emitted", []))
+        for m in matched_rows:
+            gt_i, pr_i = m["gt"], m["pred"]
+            if pr_i is not None and (gt_i.get("legible_num") or pr_i.get("number") is not None):
+                d = diag_by_tid.get(pr_i["track_id"])
+                if d is not None:
+                    diag_records.append({
+                        **d,
+                        "tag": gt_i["id"],
+                        "gt_num": gt_i.get("legible_num"),
+                        "pred_num": pr_i.get("number"),
+                        "conf": pr_i.get("conf", 0.0),
+                    })
 
         for d in (res_960, res_1080, res_960_allstr):
             d.pop("_eval_emitted", None)
@@ -2833,10 +3410,14 @@ def main() -> None:
 
         r1_game = r1_data.get("games", {}).get(f"game_{g}", {})
         r2_game = r2_data.get("games", {}).get(f"game_{g}", {})
+        r3_game = r3_data.get("games", {}).get(f"game_{g}", {})
         r1_960 = r1_game.get("mobile_960x540")
         r1_1080 = r1_game.get("mobile_1920x1080")
         r2_960 = r2_game.get("mobile_960x540")
         r2_1080 = r2_game.get("mobile_1920x1080")
+        r3_960 = r3_game.get("r3_final", {}).get("mobile_960x540") or r3_game.get("mobile_960x540")
+        r3_1080 = r3_game.get("r3_final", {}).get("mobile_1920x1080") or r3_game.get("mobile_1920x1080")
+        r3_960_allstr = r3_game.get("mobile_960x540_uncapped_str")
 
         games_out[f"game_{g}"] = {
             "name": spec["name"],
@@ -2849,58 +3430,89 @@ def main() -> None:
                 "legible_numbers": [x["legible_num"] for x in spec["visual_gt"] if x["legible_num"]],
             },
             "cloud": cloud_score,
-            "mobile_960x540": res_960,
-            "mobile_1920x1080": res_1080,
-            "mobile_960x540_uncapped_str": res_960_allstr,
+            "mobile_960x540": r3_960,
+            "mobile_1920x1080": r3_1080,
+            "mobile_960x540_uncapped_str": r3_960_allstr,
             "r1_baseline": {"mobile_960x540": r1_960, "mobile_1920x1080": r1_1080},
             "r2_metrics": {"mobile_960x540": r2_960, "mobile_1920x1080": r2_1080},
-            "r3_final": {"mobile_960x540": res_960, "mobile_1920x1080": res_1080},
+            "r3_final": {"mobile_960x540": r3_960, "mobile_1920x1080": r3_1080},
+            "v5_python": {
+                "mobile_960x540": res_960,
+                "mobile_1920x1080": res_1080,
+                "mobile_960x540_uncapped_str": res_960_allstr,
+            },
+            "mobile_960x540_v5_python": res_960,
+            "mobile_1920x1080_v5_python": res_1080,
             "mobile_960x540_r1_baseline": r1_960,
             "mobile_1920x1080_r1_baseline": r1_1080,
             "mobile_960x540_r2_metrics": r2_960,
             "mobile_1920x1080_r2_metrics": r2_1080,
-            "delta_r3_vs_r2_1080": _delta_str(r2_1080, res_1080),
-            "delta_r3_vs_r1_1080": _delta_str(r1_1080, res_1080),
-            "delta_r3_vs_r1_960": _delta_str(r1_960, res_960),
+            "delta_v5_vs_r3_1080": _delta_str(r3_1080, res_1080),
+            "delta_v5_vs_r3_960": _delta_str(r3_960, res_960),
         }
 
     # Regression check: CoachBox cleanhold 30s (960 & 1080) + Game 1 downloaded native MP4 clip
     cleanhold_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/coachbox_tvbd_cougars_cleanhold_30s.mp4")
-    reg_cleanhold_960 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6)
-    reg_cleanhold_1080 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6)
+    reg_cleanhold_960 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+    reg_cleanhold_1080 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg, collect_diag=True)
+
+    cb_diag_by_tid = reg_cleanhold_1080.pop("_diag_by_tid", {})
+    cb_matched, _ = _match_predictions_to_gt(COACHBOX_GT_FRAME08, reg_cleanhold_1080.get("_eval_emitted", []))
+    for m in cb_matched:
+        gt_i, pr_i = m["gt"], m["pred"]
+        if pr_i is not None and (gt_i.get("legible_num") or pr_i.get("number") is not None):
+            d = cb_diag_by_tid.get(pr_i["track_id"])
+            if d is not None:
+                diag_records.append({
+                    **d,
+                    "tag": f"CB_{gt_i['id']}",
+                    "gt_num": gt_i.get("legible_num"),
+                    "pred_num": pr_i.get("number"),
+                    "conf": pr_i.get("conf", 0.0),
+                })
+
     for d in (reg_cleanhold_960, reg_cleanhold_1080):
         for k in ("_eval_emitted", "_unmatched", "_eval_rgb"):
             d.pop(k, None)
 
     native_g1_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/browser_sandbox/downloads/Jr-12AA2-vs-Tri-Valley-Blue-Devils-12AA-2-Nov-9-2026-Penalty-Tripping-28-at-27m53s.mp4")
-    native_g1_960 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6)
-    native_g1_1080 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6)
+    native_g1_960 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+    native_g1_1080 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
     for d in (native_g1_960, native_g1_1080):
         d.pop("_eval_emitted", None)
         d.pop("_eval_rgb", None)
 
+    render_v5_diag_eval(args.v5_dir / "v5_diag_eval.png", diag_records)
+
+    r3_sum = r3_data.get("summary_comparison_5games", {})
     report = {
-        "round": "round3",
+        "round": "v5_python",
         "roster_free_verified": True,
         "elapsed_sec": round(time.time() - t0, 2),
+        "v5_calibrated_constants": v5_cfg,
         "summary_comparison_5games": {
-            "mobile_r1_960x540": _aggregate_5game_mobile(games_out, "mobile_960x540_r1_baseline") if r1_data else None,
-            "mobile_r2_960x540": _aggregate_5game_mobile(games_out, "mobile_960x540_r2_metrics") if r2_data else None,
-            "mobile_r3_960x540": _aggregate_5game_mobile(games_out, "mobile_960x540"),
-            "mobile_r1_1920x1080": _aggregate_5game_mobile(games_out, "mobile_1920x1080_r1_baseline") if r1_data else None,
-            "mobile_r2_1920x1080": _aggregate_5game_mobile(games_out, "mobile_1920x1080_r2_metrics") if r2_data else None,
-            "mobile_r3_1920x1080": _aggregate_5game_mobile(games_out, "mobile_1920x1080"),
+            "mobile_r1_960x540": r3_sum.get("mobile_r1_960x540") or (_aggregate_5game_mobile(games_out, "mobile_960x540_r1_baseline") if r1_data else None),
+            "mobile_r2_960x540": r3_sum.get("mobile_r2_960x540") or (_aggregate_5game_mobile(games_out, "mobile_960x540_r2_metrics") if r2_data else None),
+            "mobile_r3_960x540": r3_sum.get("mobile_r3_960x540") or _aggregate_5game_mobile(games_out, "mobile_960x540"),
+            "mobile_v5_python_960x540": _aggregate_5game_mobile(games_out, "mobile_960x540_v5_python"),
+            "mobile_r1_1920x1080": r3_sum.get("mobile_r1_1920x1080") or (_aggregate_5game_mobile(games_out, "mobile_1920x1080_r1_baseline") if r1_data else None),
+            "mobile_r2_1920x1080": r3_sum.get("mobile_r2_1920x1080") or (_aggregate_5game_mobile(games_out, "mobile_1920x1080_r2_metrics") if r2_data else None),
+            "mobile_r3_1920x1080": r3_sum.get("mobile_r3_1920x1080") or _aggregate_5game_mobile(games_out, "mobile_1920x1080"),
+            "mobile_v5_python_1920x1080": _aggregate_5game_mobile(games_out, "mobile_1920x1080_v5_python"),
         },
         "games": games_out,
-        "regression_coachbox_cleanhold_960x540": reg_cleanhold_960,
-        "regression_coachbox_cleanhold_1920x1080": reg_cleanhold_1080,
+        "regression_coachbox_cleanhold_v5_python_960x540": reg_cleanhold_960,
+        "regression_coachbox_cleanhold_v5_python_1920x1080": reg_cleanhold_1080,
+        "regression_coachbox_cleanhold_960x540": r3_data.get("regression_coachbox_cleanhold_960x540"),
+        "regression_coachbox_cleanhold_1920x1080": r3_data.get("regression_coachbox_cleanhold_1920x1080"),
         "regression_coachbox_cleanhold_960x540_r2_metrics": r2_data.get("regression_coachbox_cleanhold_960x540"),
         "regression_coachbox_cleanhold_960x540_r1_baseline": r1_data.get("regression_coachbox_cleanhold_960x540"),
         "lz_game1_native_clip": {
             "path": str(native_g1_mp4),
-            "r3_final": {"mobile_960x540": native_g1_960, "mobile_1920x1080": native_g1_1080},
-            "mobile_960x540": native_g1_960,
-            "mobile_1920x1080": native_g1_1080,
+            "v5_python": {"mobile_960x540": native_g1_960, "mobile_1920x1080": native_g1_1080},
+            "r3_final": r3_data.get("lz_game1_native_clip", {}).get("r3_final"),
+            "mobile_960x540": r3_data.get("lz_game1_native_clip", {}).get("mobile_960x540"),
+            "mobile_1920x1080": r3_data.get("lz_game1_native_clip", {}).get("mobile_1920x1080"),
             "r2_metrics": {
                 "mobile_960x540": r2_data.get("lz_game1_native_clip", {}).get("mobile_960x540"),
                 "mobile_1920x1080": r2_data.get("lz_game1_native_clip", {}).get("mobile_1920x1080"),
@@ -2909,7 +3521,8 @@ def main() -> None:
         },
     }
     args.report_out.write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps(report, indent=2))
+    print(json.dumps(report["summary_comparison_5games"], indent=2))
+    print(f"[done] wrote report to {args.report_out} in {time.time() - t0:.1f}s")
 
 
 if __name__ == "__main__":

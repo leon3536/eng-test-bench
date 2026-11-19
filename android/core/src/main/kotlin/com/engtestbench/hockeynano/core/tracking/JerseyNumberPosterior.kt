@@ -18,7 +18,7 @@ enum class JerseyReadKind {
 /** Source engine producing a jersey read observation and its calibrated fusion multiplier. */
 enum class JerseyReadSource(val defaultWeight: Float) {
     ONNX_STR(1.6f),
-    GEMINI_NANO(2.5f),
+    GEMINI_NANO(1.6f),
     MLKIT_OCR(1.0f)
 }
 
@@ -77,7 +77,11 @@ object JerseyNumberPosterior {
     const val EVIDENCE_BIN_SEC = 1.0
     const val SAME_BIN_MARGINAL_WEIGHT = 0.15f
     const val SINGLE_BIN_COMMIT_MIN_CONF = 0.90f
+    const val HIGH_QUALITY_SINGLE_BIN_MIN_CONF = 0.86f
+    const val HIGH_QUALITY_MIN_WEIGHT = 1.20f
+    const val HIGH_QUALITY_MIN_AGREEING_FRAMES = 3
     const val NANO_SINGLE_BIN_MIN_CONF = 0.80f
+    const val CROSS_ENGINE_CORROB_MIN_CONF = 0.55f
     const val COMPLEMENTARY_PARTIAL_MIN_CONF = 0.80f
     const val DEFAULT_MIN_MOVE_PROB = 0.05f
     const val STRONG_MIN_CONF = 0.85f
@@ -401,8 +405,10 @@ object JerseyNumberPosterior {
     }
 
     /**
-     * Checks whether [candidateNumber] is corroborated by >= 2 distinct 1.0s time bins OR
-     * a high-confidence single-bin observation (`>= 0.80f`) / Gemini Nano verification.
+     * Checks whether [candidateNumber] is corroborated by >= 2 distinct 1.0s time bins,
+     * >= 2 distinct engines (`bestConf >= 0.55f` across `ONNX_STR` / `GEMINI_NANO` / `MLKIT_OCR`),
+     * OR a high-confidence single-bin observation (`>= 0.90f` non-Nano / `>= 0.80f` Nano) /
+     * Gemini Nano verification.
      */
     fun meetsIndependentBinOrHighConfGate(
         observations: List<JerseyReadObservation>,
@@ -412,7 +418,10 @@ object JerseyNumberPosterior {
         if (candidateNumber == null) return false
         if (isNanoVerified) return true
         val supportingBins = HashSet<Long>()
+        val bestConfBySource = FloatArray(JerseyReadSource.entries.size)
         var maxNonNanoConf = 0f
+        var maxHighQualityConf = 0f
+        var strongAgreeingFrames = 0
         var maxNanoConf = 0f
         var hasStrongLeftPartial = false
         var hasStrongRightPartial = false
@@ -422,23 +431,39 @@ object JerseyNumberPosterior {
             val cands = obs.candidates
             if (!cands.isNullOrEmpty()) {
                 var candProb = 0f
+                var topCandNum: String? = null
+                var topCandProb = -1f
                 for ((raw, p) in cands) {
-                    if (p.isFinite() && p > 0f && normalizeNumber(raw) == candidateNumber) {
+                    if (!p.isFinite() || p <= 0f) continue
+                    val norm = normalizeNumber(raw) ?: continue
+                    if (norm == candidateNumber) {
                         candProb += p
+                    }
+                    if (p > topCandProb) {
+                        topCandProb = p
+                        topCandNum = norm
                     }
                 }
                 if (candProb >= 0.25f) {
                     supportingBins.add(bin)
                     val cleanP = candProb.coerceIn(0f, 1f)
+                    val sIdx = obs.source.ordinal
+                    bestConfBySource[sIdx] = max(bestConfBySource[sIdx], cleanP)
                     if (obs.source == JerseyReadSource.GEMINI_NANO) {
                         maxNanoConf = max(maxNanoConf, cleanP)
                     } else {
                         maxNonNanoConf = max(maxNonNanoConf, cleanP)
+                        if (obs.qualityWeight >= HIGH_QUALITY_MIN_WEIGHT && topCandNum == candidateNumber) {
+                            maxHighQualityConf = max(maxHighQualityConf, cleanP)
+                        }
+                        if (cleanP >= 0.80f && topCandNum == candidateNumber) {
+                            strongAgreeingFrames++
+                        }
                     }
                 }
             } else if (obs.number != null && obs.confidence.isFinite() && obs.confidence > 0f) {
                 val matches = when (obs.kind) {
-                    JerseyReadKind.FULL, JerseyReadKind.SINGLE -> obs.number == candidateNumber
+                    JerseyReadKind.FULL, JerseyReadKind.SINGLE -> normalizeNumber(obs.number) == candidateNumber
                     JerseyReadKind.LEFT_PARTIAL -> candidateNumber.length == 2 && obs.number == candidateNumber[0].toString()
                     JerseyReadKind.RIGHT_PARTIAL -> candidateNumber.length == 2 && obs.number == candidateNumber[1].toString()
                     JerseyReadKind.SLEEVE -> obs.number in candidateNumber
@@ -446,6 +471,11 @@ object JerseyNumberPosterior {
                 if (matches) {
                     supportingBins.add(bin)
                     val cleanConf = obs.confidence.coerceIn(0f, 1f)
+                    val isFullOrSingle = obs.kind == JerseyReadKind.FULL || obs.kind == JerseyReadKind.SINGLE
+                    if (isFullOrSingle) {
+                        val sIdx = obs.source.ordinal
+                        bestConfBySource[sIdx] = max(bestConfBySource[sIdx], cleanConf)
+                    }
                     if (obs.kind == JerseyReadKind.LEFT_PARTIAL && cleanConf >= COMPLEMENTARY_PARTIAL_MIN_CONF) {
                         hasStrongLeftPartial = true
                     } else if (obs.kind == JerseyReadKind.RIGHT_PARTIAL && cleanConf >= COMPLEMENTARY_PARTIAL_MIN_CONF) {
@@ -455,13 +485,23 @@ object JerseyNumberPosterior {
                         maxNanoConf = max(maxNanoConf, cleanConf)
                     } else {
                         maxNonNanoConf = max(maxNonNanoConf, cleanConf)
+                        if (isFullOrSingle && obs.qualityWeight >= HIGH_QUALITY_MIN_WEIGHT) {
+                            maxHighQualityConf = max(maxHighQualityConf, cleanConf)
+                        }
+                        if (isFullOrSingle && cleanConf >= 0.80f) {
+                            strongAgreeingFrames++
+                        }
                     }
                 }
             }
         }
+        val corroboratingEngines = bestConfBySource.count { it >= CROSS_ENGINE_CORROB_MIN_CONF }
         return supportingBins.size >= 2 ||
+            corroboratingEngines >= 2 ||
             (hasStrongLeftPartial && hasStrongRightPartial) ||
             maxNonNanoConf >= SINGLE_BIN_COMMIT_MIN_CONF ||
+            (maxHighQualityConf >= HIGH_QUALITY_SINGLE_BIN_MIN_CONF &&
+                strongAgreeingFrames >= HIGH_QUALITY_MIN_AGREEING_FRAMES) ||
             maxNanoConf >= NANO_SINGLE_BIN_MIN_CONF
     }
 

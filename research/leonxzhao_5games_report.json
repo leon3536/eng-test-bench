@@ -1,7 +1,24 @@
 {
-  "round": "round3",
+  "round": "v5_python",
   "roster_free_verified": true,
-  "elapsed_sec": 164.08,
+  "elapsed_sec": 167.49,
+  "v5_calibrated_constants": {
+    "min_ocr_box_height": 0.085,
+    "distant_str_full_box_height": 0.115,
+    "distant_str_partial_box_height": 0.105,
+    "distant_str_min_top_prob": 0.58,
+    "distant_str_min_legibility_prob": 0.75,
+    "distant_str_min_sharpness": 12.0,
+    "min_laplacian_sharpness": 5.5,
+    "min_top_candidate_prob": 0.32,
+    "max_illegible_prob": 0.48,
+    "min_candidate_legibility_prob": 0.64,
+    "min_candidate_back_prob": 0.56,
+    "min_partial_legibility_prob": 0.55,
+    "min_partial_back_prob": 0.6,
+    "min_partial_digit_prob": 0.65,
+    "single_bin_commit_min_conf": 0.9
+  },
   "summary_comparison_5games": {
     "mobile_r1_960x540": {
       "detected": "49/61",
@@ -54,6 +71,23 @@
       "legible_num_hits": "1/10",
       "num_predictions_at_teval": 2
     },
+    "mobile_v5_python_960x540": {
+      "detected": "55/61",
+      "detection_precision": 1.0,
+      "detection_recall": 0.902,
+      "detection_f1": 0.948,
+      "off_ice_fp": 0,
+      "skater_team_acc": "49/50 (98.0%)",
+      "ref_tp_fp_fn": [
+        3,
+        0,
+        3
+      ],
+      "ref_precision": 1.0,
+      "ref_recall": 0.5,
+      "legible_num_hits": "0/10",
+      "num_predictions_at_teval": 2
+    },
     "mobile_r1_1920x1080": {
       "detected": "47/61",
       "detection_precision": 0.701,
@@ -104,6 +138,23 @@
       "ref_recall": 0.333,
       "legible_num_hits": "1/10",
       "num_predictions_at_teval": 5
+    },
+    "mobile_v5_python_1920x1080": {
+      "detected": "52/61",
+      "detection_precision": 0.981,
+      "detection_recall": 0.852,
+      "detection_f1": 0.912,
+      "off_ice_fp": 1,
+      "skater_team_acc": "47/48 (97.9%)",
+      "ref_tp_fp_fn": [
+        2,
+        0,
+        4
+      ],
+      "ref_precision": 1.0,
+      "ref_recall": 0.333,
+      "legible_num_hits": "1/10",
+      "num_predictions_at_teval": 4
     }
   },
   "games": {
@@ -763,6 +814,240 @@
           ]
         }
       },
+      "v5_python": {
+        "mobile_960x540": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 362,
+          "mean_raw_det": 16.27,
+          "mean_on_ice_det": 10.48,
+          "max_on_ice_det": 12,
+          "track_team_counts": {
+            "TEAM_A": 23,
+            "TEAM_B": 23,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_B:#22(T16)",
+            "TEAM_B:#22(T22)",
+            "TEAM_B:#22(T37)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.9,
+          "detection_f1": 0.947,
+          "detected_count": "9/10",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G1_Goalie_L"
+          ],
+          "skater_team_acc": "8/8 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/3",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 1,
+          "num_details": [
+            "G1_Wht_C:pred=#22(gt=None,c=0.998)"
+          ]
+        },
+        "mobile_1920x1080": {
+          "input_wh": [
+            1920,
+            1080
+          ],
+          "frames_sampled": 96,
+          "str_calls": 373,
+          "mean_raw_det": 16.48,
+          "mean_on_ice_det": 10.59,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 22,
+            "TEAM_B": 26,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [],
+          "detection_precision": 0.9,
+          "detection_recall": 0.9,
+          "detection_f1": 0.9,
+          "detected_count": "9/10",
+          "off_ice_fp_at_teval": 1,
+          "off_ice_fp_boxes": [
+            {
+              "cx": 0.752,
+              "fy": 0.267,
+              "team": "TEAM_A",
+              "tid": 31
+            }
+          ],
+          "missed_gt": [
+            "G1_Goalie_L"
+          ],
+          "skater_team_acc": "8/8 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/3",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_960x540_uncapped_str": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 377,
+          "mean_raw_det": 16.27,
+          "mean_on_ice_det": 10.48,
+          "max_on_ice_det": 12,
+          "track_team_counts": {
+            "TEAM_A": 23,
+            "TEAM_B": 23,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_B:#22(T16)",
+            "TEAM_B:#22(T22)",
+            "TEAM_B:#22(T37)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.9,
+          "detection_f1": 0.947,
+          "detected_count": "9/10",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G1_Goalie_L"
+          ],
+          "skater_team_acc": "8/8 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/3",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 1,
+          "num_details": [
+            "G1_Wht_C:pred=#22(gt=None,c=0.998)"
+          ]
+        }
+      },
+      "mobile_960x540_v5_python": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 96,
+        "str_calls": 362,
+        "mean_raw_det": 16.27,
+        "mean_on_ice_det": 10.48,
+        "max_on_ice_det": 12,
+        "track_team_counts": {
+          "TEAM_A": 23,
+          "TEAM_B": 23,
+          "REFEREE": 1,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_B:#22(T16)",
+          "TEAM_B:#22(T22)",
+          "TEAM_B:#22(T37)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.9,
+        "detection_f1": 0.947,
+        "detected_count": "9/10",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G1_Goalie_L"
+        ],
+        "skater_team_acc": "8/8 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 1.0,
+        "ref_recall": 1.0,
+        "ref_tp_fp_fn": [
+          1,
+          0,
+          0
+        ],
+        "legible_num_hits": "0/3",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 1,
+        "num_details": [
+          "G1_Wht_C:pred=#22(gt=None,c=0.998)"
+        ]
+      },
+      "mobile_1920x1080_v5_python": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 96,
+        "str_calls": 373,
+        "mean_raw_det": 16.48,
+        "mean_on_ice_det": 10.59,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 22,
+          "TEAM_B": 26,
+          "REFEREE": 2,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [],
+        "detection_precision": 0.9,
+        "detection_recall": 0.9,
+        "detection_f1": 0.9,
+        "detected_count": "9/10",
+        "off_ice_fp_at_teval": 1,
+        "off_ice_fp_boxes": [
+          {
+            "cx": 0.752,
+            "fy": 0.267,
+            "team": "TEAM_A",
+            "tid": 31
+          }
+        ],
+        "missed_gt": [
+          "G1_Goalie_L"
+        ],
+        "skater_team_acc": "8/8 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 1.0,
+        "ref_recall": 1.0,
+        "ref_tp_fp_fn": [
+          1,
+          0,
+          0
+        ],
+        "legible_num_hits": "0/3",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
       "mobile_960x540_r1_baseline": {
         "input_wh": [
           960,
@@ -1121,29 +1406,21 @@
           "G1_Wht_R:pred=#65(gt=None,c=0.995)"
         ]
       },
-      "delta_r3_vs_r2_1080": {
+      "delta_v5_vs_r3_1080": {
         "detected_count": "9/10 -> 9/10",
         "off_ice_fp_at_teval": "1 -> 1",
-        "skater_team_acc": "7/8 (87.5%) -> 8/8 (100.0%)",
+        "skater_team_acc": "8/8 (100.0%) -> 8/8 (100.0%)",
         "ref_tp_fp_fn": "[1, 0, 0] -> [1, 0, 0]",
         "legible_num_hits": "0/3 -> 0/3",
-        "num_predictions_at_teval": "3 -> 2"
+        "num_predictions_at_teval": "2 -> 0"
       },
-      "delta_r3_vs_r1_1080": {
+      "delta_v5_vs_r3_960": {
         "detected_count": "9/10 -> 9/10",
-        "off_ice_fp_at_teval": "8 -> 1",
-        "skater_team_acc": "5/8 (62.5%) -> 8/8 (100.0%)",
-        "ref_tp_fp_fn": "[0, 0, 1] -> [1, 0, 0]",
+        "off_ice_fp_at_teval": "0 -> 0",
+        "skater_team_acc": "8/8 (100.0%) -> 8/8 (100.0%)",
+        "ref_tp_fp_fn": "[1, 0, 0] -> [1, 0, 0]",
         "legible_num_hits": "0/3 -> 0/3",
-        "num_predictions_at_teval": "7 -> 2"
-      },
-      "delta_r3_vs_r1_960": {
-        "detected_count": "9/10 -> 9/10",
-        "off_ice_fp_at_teval": "6 -> 0",
-        "skater_team_acc": "5/8 (62.5%) -> 8/8 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 1] -> [1, 0, 0]",
-        "legible_num_hits": "0/3 -> 0/3",
-        "num_predictions_at_teval": "4 -> 1"
+        "num_predictions_at_teval": "1 -> 1"
       }
     },
     "game_2": {
@@ -1708,6 +1985,292 @@
           ]
         }
       },
+      "v5_python": {
+        "mobile_960x540": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 275,
+          "mean_raw_det": 13.51,
+          "mean_on_ice_det": 11.36,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 26,
+            "TEAM_B": 31,
+            "REFEREE": 3,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T19)",
+            "TEAM_A:#12(T7)",
+            "TEAM_A:#4(T12)",
+            "TEAM_A:#4(T36)",
+            "TEAM_A:#4(T50)",
+            "TEAM_B:#12(T2)",
+            "TEAM_B:#12(T20)",
+            "TEAM_B:#43(T11)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.833,
+          "detection_f1": 0.909,
+          "detected_count": "10/12",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G2_Wht_Pair",
+            "G2_Ref_R"
+          ],
+          "skater_team_acc": "10/10 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            1
+          ],
+          "legible_num_hits": "0/2",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 1,
+          "num_details": [
+            "G2_Nav_Fg:pred=#4(gt=None,c=0.899)"
+          ]
+        },
+        "mobile_1920x1080": {
+          "input_wh": [
+            1920,
+            1080
+          ],
+          "frames_sampled": 96,
+          "str_calls": 288,
+          "mean_raw_det": 13.52,
+          "mean_on_ice_det": 11.31,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 28,
+            "TEAM_B": 31,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T19)",
+            "TEAM_A:#12(T6)",
+            "TEAM_A:#4(T12)",
+            "TEAM_A:#4(T35)",
+            "TEAM_A:#4(T53)",
+            "TEAM_A:#42(T17)",
+            "TEAM_A:#42(T29)",
+            "TEAM_A:#42(T36)",
+            "TEAM_A:#42(T59)",
+            "TEAM_B:#12(T23)",
+            "TEAM_B:#12(T8)",
+            "TEAM_B:#43(T10)",
+            "TEAM_B:#61(T11)",
+            "TEAM_B:#61(T21)",
+            "TEAM_B:#61(T25)",
+            "TEAM_B:#61(T47)",
+            "TEAM_B:#61(T60)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.75,
+          "detection_f1": 0.857,
+          "detected_count": "9/12",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G2_Wht_Pair",
+            "G2_Goalie",
+            "G2_Ref_R"
+          ],
+          "skater_team_acc": "9/9 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            1
+          ],
+          "legible_num_hits": "0/2",
+          "legible_wrong_num_preds": 1,
+          "num_predictions_at_teval": 3,
+          "num_details": [
+            "G2_Wht_L:pred=#61(gt=43,c=0.986)",
+            "G2_Nav_C:pred=#42(gt=None,c=1.0)",
+            "G2_Nav_Fg:pred=#4(gt=None,c=0.983)"
+          ]
+        },
+        "mobile_960x540_uncapped_str": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 275,
+          "mean_raw_det": 13.51,
+          "mean_on_ice_det": 11.36,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 26,
+            "TEAM_B": 31,
+            "REFEREE": 3,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T19)",
+            "TEAM_A:#12(T7)",
+            "TEAM_A:#4(T12)",
+            "TEAM_A:#4(T36)",
+            "TEAM_A:#4(T50)",
+            "TEAM_B:#12(T2)",
+            "TEAM_B:#12(T20)",
+            "TEAM_B:#43(T11)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.833,
+          "detection_f1": 0.909,
+          "detected_count": "10/12",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G2_Wht_Pair",
+            "G2_Ref_R"
+          ],
+          "skater_team_acc": "10/10 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            1
+          ],
+          "legible_num_hits": "0/2",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 1,
+          "num_details": [
+            "G2_Nav_Fg:pred=#4(gt=None,c=0.899)"
+          ]
+        }
+      },
+      "mobile_960x540_v5_python": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 96,
+        "str_calls": 275,
+        "mean_raw_det": 13.51,
+        "mean_on_ice_det": 11.36,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 26,
+          "TEAM_B": 31,
+          "REFEREE": 3,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#12(T19)",
+          "TEAM_A:#12(T7)",
+          "TEAM_A:#4(T12)",
+          "TEAM_A:#4(T36)",
+          "TEAM_A:#4(T50)",
+          "TEAM_B:#12(T2)",
+          "TEAM_B:#12(T20)",
+          "TEAM_B:#43(T11)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.833,
+        "detection_f1": 0.909,
+        "detected_count": "10/12",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G2_Wht_Pair",
+          "G2_Ref_R"
+        ],
+        "skater_team_acc": "10/10 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 0.0,
+        "ref_recall": 0.0,
+        "ref_tp_fp_fn": [
+          0,
+          0,
+          1
+        ],
+        "legible_num_hits": "0/2",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 1,
+        "num_details": [
+          "G2_Nav_Fg:pred=#4(gt=None,c=0.899)"
+        ]
+      },
+      "mobile_1920x1080_v5_python": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 96,
+        "str_calls": 288,
+        "mean_raw_det": 13.52,
+        "mean_on_ice_det": 11.31,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 28,
+          "TEAM_B": 31,
+          "REFEREE": 2,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#12(T19)",
+          "TEAM_A:#12(T6)",
+          "TEAM_A:#4(T12)",
+          "TEAM_A:#4(T35)",
+          "TEAM_A:#4(T53)",
+          "TEAM_A:#42(T17)",
+          "TEAM_A:#42(T29)",
+          "TEAM_A:#42(T36)",
+          "TEAM_A:#42(T59)",
+          "TEAM_B:#12(T23)",
+          "TEAM_B:#12(T8)",
+          "TEAM_B:#43(T10)",
+          "TEAM_B:#61(T11)",
+          "TEAM_B:#61(T21)",
+          "TEAM_B:#61(T25)",
+          "TEAM_B:#61(T47)",
+          "TEAM_B:#61(T60)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.75,
+        "detection_f1": 0.857,
+        "detected_count": "9/12",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G2_Wht_Pair",
+          "G2_Goalie",
+          "G2_Ref_R"
+        ],
+        "skater_team_acc": "9/9 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 0.0,
+        "ref_recall": 0.0,
+        "ref_tp_fp_fn": [
+          0,
+          0,
+          1
+        ],
+        "legible_num_hits": "0/2",
+        "legible_wrong_num_preds": 1,
+        "num_predictions_at_teval": 3,
+        "num_details": [
+          "G2_Wht_L:pred=#61(gt=43,c=0.986)",
+          "G2_Nav_C:pred=#42(gt=None,c=1.0)",
+          "G2_Nav_Fg:pred=#4(gt=None,c=0.983)"
+        ]
+      },
       "mobile_960x540_r1_baseline": {
         "input_wh": [
           960,
@@ -2010,29 +2573,21 @@
           "G2_Wht_19:pred=#15(gt=19,c=0.983)"
         ]
       },
-      "delta_r3_vs_r2_1080": {
+      "delta_v5_vs_r3_1080": {
         "detected_count": "9/12 -> 9/12",
         "off_ice_fp_at_teval": "0 -> 0",
         "skater_team_acc": "9/9 (100.0%) -> 9/9 (100.0%)",
         "ref_tp_fp_fn": "[0, 0, 1] -> [0, 0, 1]",
         "legible_num_hits": "0/2 -> 0/2",
-        "num_predictions_at_teval": "2 -> 1"
+        "num_predictions_at_teval": "1 -> 3"
       },
-      "delta_r3_vs_r1_1080": {
-        "detected_count": "8/12 -> 9/12",
-        "off_ice_fp_at_teval": "1 -> 0",
-        "skater_team_acc": "6/8 (75.0%) -> 9/9 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 1] -> [0, 0, 1]",
+      "delta_v5_vs_r3_960": {
+        "detected_count": "10/12 -> 10/12",
+        "off_ice_fp_at_teval": "0 -> 0",
+        "skater_team_acc": "10/10 (100.0%) -> 10/10 (100.0%)",
+        "ref_tp_fp_fn": "[0, 0, 1] -> [0, 0, 1]",
         "legible_num_hits": "0/2 -> 0/2",
-        "num_predictions_at_teval": "5 -> 1"
-      },
-      "delta_r3_vs_r1_960": {
-        "detected_count": "9/12 -> 10/12",
-        "off_ice_fp_at_teval": "1 -> 0",
-        "skater_team_acc": "8/9 (88.9%) -> 10/10 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 1] -> [0, 0, 1]",
-        "legible_num_hits": "0/2 -> 0/2",
-        "num_predictions_at_teval": "4 -> 0"
+        "num_predictions_at_teval": "0 -> 1"
       }
     },
     "game_3": {
@@ -2653,6 +3208,233 @@
           "num_details": []
         }
       },
+      "v5_python": {
+        "mobile_960x540": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 339,
+          "mean_raw_det": 15.75,
+          "mean_on_ice_det": 10.0,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 24,
+            "TEAM_B": 30,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T17)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.846,
+          "detection_f1": 0.917,
+          "detected_count": "11/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G3_Wht_Net",
+            "G3_Wht_Fg"
+          ],
+          "skater_team_acc": "9/10 (90.0%)",
+          "team_errors": [
+            "G3_Goalie(TEAM_B->TEAM_A)"
+          ],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/1",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_1920x1080": {
+          "input_wh": [
+            1920,
+            1080
+          ],
+          "frames_sampled": 96,
+          "str_calls": 327,
+          "mean_raw_det": 15.69,
+          "mean_on_ice_det": 9.91,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 21,
+            "TEAM_B": 28,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T15)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.846,
+          "detection_f1": 0.917,
+          "detected_count": "11/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G3_Wht_Net",
+            "G3_Wht_Fg"
+          ],
+          "skater_team_acc": "9/10 (90.0%)",
+          "team_errors": [
+            "G3_Goalie(TEAM_B->TEAM_A)"
+          ],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/1",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_960x540_uncapped_str": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 356,
+          "mean_raw_det": 15.75,
+          "mean_on_ice_det": 10.0,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 24,
+            "TEAM_B": 30,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#12(T17)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.846,
+          "detection_f1": 0.917,
+          "detected_count": "11/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G3_Wht_Net",
+            "G3_Wht_Fg"
+          ],
+          "skater_team_acc": "9/10 (90.0%)",
+          "team_errors": [
+            "G3_Goalie(TEAM_B->TEAM_A)"
+          ],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/1",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        }
+      },
+      "mobile_960x540_v5_python": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 96,
+        "str_calls": 339,
+        "mean_raw_det": 15.75,
+        "mean_on_ice_det": 10.0,
+        "max_on_ice_det": 15,
+        "track_team_counts": {
+          "TEAM_A": 24,
+          "TEAM_B": 30,
+          "REFEREE": 1,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#12(T17)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.846,
+        "detection_f1": 0.917,
+        "detected_count": "11/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G3_Wht_Net",
+          "G3_Wht_Fg"
+        ],
+        "skater_team_acc": "9/10 (90.0%)",
+        "team_errors": [
+          "G3_Goalie(TEAM_B->TEAM_A)"
+        ],
+        "ref_precision": 1.0,
+        "ref_recall": 1.0,
+        "ref_tp_fp_fn": [
+          1,
+          0,
+          0
+        ],
+        "legible_num_hits": "0/1",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
+      "mobile_1920x1080_v5_python": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 96,
+        "str_calls": 327,
+        "mean_raw_det": 15.69,
+        "mean_on_ice_det": 9.91,
+        "max_on_ice_det": 15,
+        "track_team_counts": {
+          "TEAM_A": 21,
+          "TEAM_B": 28,
+          "REFEREE": 2,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#12(T15)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.846,
+        "detection_f1": 0.917,
+        "detected_count": "11/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G3_Wht_Net",
+          "G3_Wht_Fg"
+        ],
+        "skater_team_acc": "9/10 (90.0%)",
+        "team_errors": [
+          "G3_Goalie(TEAM_B->TEAM_A)"
+        ],
+        "ref_precision": 1.0,
+        "ref_recall": 1.0,
+        "ref_tp_fp_fn": [
+          1,
+          0,
+          0
+        ],
+        "legible_num_hits": "0/1",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
       "mobile_960x540_r1_baseline": {
         "input_wh": [
           960,
@@ -3009,29 +3791,21 @@
           "G3_Wht_Blue:pred=#88(gt=None,c=0.998)"
         ]
       },
-      "delta_r3_vs_r2_1080": {
+      "delta_v5_vs_r3_1080": {
         "detected_count": "11/13 -> 11/13",
         "off_ice_fp_at_teval": "0 -> 0",
         "skater_team_acc": "9/10 (90.0%) -> 9/10 (90.0%)",
         "ref_tp_fp_fn": "[1, 0, 0] -> [1, 0, 0]",
         "legible_num_hits": "0/1 -> 0/1",
-        "num_predictions_at_teval": "5 -> 0"
+        "num_predictions_at_teval": "0 -> 0"
       },
-      "delta_r3_vs_r1_1080": {
-        "detected_count": "8/13 -> 11/13",
-        "off_ice_fp_at_teval": "5 -> 0",
-        "skater_team_acc": "4/8 (50.0%) -> 9/10 (90.0%)",
-        "ref_tp_fp_fn": "[0, 2, 1] -> [1, 0, 0]",
+      "delta_v5_vs_r3_960": {
+        "detected_count": "11/13 -> 11/13",
+        "off_ice_fp_at_teval": "0 -> 0",
+        "skater_team_acc": "9/10 (90.0%) -> 9/10 (90.0%)",
+        "ref_tp_fp_fn": "[1, 0, 0] -> [1, 0, 0]",
         "legible_num_hits": "0/1 -> 0/1",
-        "num_predictions_at_teval": "3 -> 0"
-      },
-      "delta_r3_vs_r1_960": {
-        "detected_count": "8/13 -> 11/13",
-        "off_ice_fp_at_teval": "4 -> 0",
-        "skater_team_acc": "6/8 (75.0%) -> 9/10 (90.0%)",
-        "ref_tp_fp_fn": "[0, 0, 1] -> [1, 0, 0]",
-        "legible_num_hits": "0/1 -> 0/1",
-        "num_predictions_at_teval": "2 -> 0"
+        "num_predictions_at_teval": "0 -> 0"
       }
     },
     "game_4": {
@@ -3607,6 +4381,243 @@
           "num_details": []
         }
       },
+      "v5_python": {
+        "mobile_960x540": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 333,
+          "mean_raw_det": 15.16,
+          "mean_on_ice_det": 10.06,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 29,
+            "TEAM_B": 31,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#14(T18)",
+            "TEAM_A:#14(T24)",
+            "TEAM_B:#29(T12)",
+            "TEAM_B:#29(T26)",
+            "TEAM_B:#29(T4)",
+            "TEAM_B:#29(T41)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.923,
+          "detection_f1": 0.96,
+          "detected_count": "12/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G4_Wht_BotClip"
+          ],
+          "skater_team_acc": "11/11 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/0",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_1920x1080": {
+          "input_wh": [
+            1920,
+            1080
+          ],
+          "frames_sampled": 96,
+          "str_calls": 341,
+          "mean_raw_det": 15.66,
+          "mean_on_ice_det": 10.05,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 29,
+            "TEAM_B": 28,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#14(T17)",
+            "TEAM_A:#14(T23)",
+            "TEAM_A:#14(T38)",
+            "TEAM_A:#14(T39)",
+            "TEAM_A:#14(T53)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.846,
+          "detection_f1": 0.917,
+          "detected_count": "11/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G4_Ref_L_Clip",
+            "G4_Wht_BotClip"
+          ],
+          "skater_team_acc": "11/11 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            1
+          ],
+          "legible_num_hits": "0/0",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_960x540_uncapped_str": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 353,
+          "mean_raw_det": 15.16,
+          "mean_on_ice_det": 10.06,
+          "max_on_ice_det": 15,
+          "track_team_counts": {
+            "TEAM_A": 29,
+            "TEAM_B": 31,
+            "REFEREE": 1,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_A:#14(T18)",
+            "TEAM_A:#14(T24)",
+            "TEAM_B:#29(T12)",
+            "TEAM_B:#29(T26)",
+            "TEAM_B:#29(T4)",
+            "TEAM_B:#29(T41)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.923,
+          "detection_f1": 0.96,
+          "detected_count": "12/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G4_Wht_BotClip"
+          ],
+          "skater_team_acc": "11/11 (100.0%)",
+          "team_errors": [],
+          "ref_precision": 1.0,
+          "ref_recall": 1.0,
+          "ref_tp_fp_fn": [
+            1,
+            0,
+            0
+          ],
+          "legible_num_hits": "0/0",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        }
+      },
+      "mobile_960x540_v5_python": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 96,
+        "str_calls": 333,
+        "mean_raw_det": 15.16,
+        "mean_on_ice_det": 10.06,
+        "max_on_ice_det": 15,
+        "track_team_counts": {
+          "TEAM_A": 29,
+          "TEAM_B": 31,
+          "REFEREE": 1,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#14(T18)",
+          "TEAM_A:#14(T24)",
+          "TEAM_B:#29(T12)",
+          "TEAM_B:#29(T26)",
+          "TEAM_B:#29(T4)",
+          "TEAM_B:#29(T41)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.923,
+        "detection_f1": 0.96,
+        "detected_count": "12/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G4_Wht_BotClip"
+        ],
+        "skater_team_acc": "11/11 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 1.0,
+        "ref_recall": 1.0,
+        "ref_tp_fp_fn": [
+          1,
+          0,
+          0
+        ],
+        "legible_num_hits": "0/0",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
+      "mobile_1920x1080_v5_python": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 96,
+        "str_calls": 341,
+        "mean_raw_det": 15.66,
+        "mean_on_ice_det": 10.05,
+        "max_on_ice_det": 15,
+        "track_team_counts": {
+          "TEAM_A": 29,
+          "TEAM_B": 28,
+          "REFEREE": 1,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#14(T17)",
+          "TEAM_A:#14(T23)",
+          "TEAM_A:#14(T38)",
+          "TEAM_A:#14(T39)",
+          "TEAM_A:#14(T53)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.846,
+        "detection_f1": 0.917,
+        "detected_count": "11/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G4_Ref_L_Clip",
+          "G4_Wht_BotClip"
+        ],
+        "skater_team_acc": "11/11 (100.0%)",
+        "team_errors": [],
+        "ref_precision": 0.0,
+        "ref_recall": 0.0,
+        "ref_tp_fp_fn": [
+          0,
+          0,
+          1
+        ],
+        "legible_num_hits": "0/0",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
       "mobile_960x540_r1_baseline": {
         "input_wh": [
           960,
@@ -3953,29 +4964,21 @@
           "G4_Nav_Fg:pred=#64(gt=None,c=0.998)"
         ]
       },
-      "delta_r3_vs_r2_1080": {
+      "delta_v5_vs_r3_1080": {
         "detected_count": "11/13 -> 11/13",
         "off_ice_fp_at_teval": "0 -> 0",
-        "skater_team_acc": "10/11 (90.9%) -> 11/11 (100.0%)",
+        "skater_team_acc": "11/11 (100.0%) -> 11/11 (100.0%)",
         "ref_tp_fp_fn": "[0, 0, 1] -> [0, 0, 1]",
         "legible_num_hits": "0/0 -> 0/0",
-        "num_predictions_at_teval": "3 -> 0"
+        "num_predictions_at_teval": "0 -> 0"
       },
-      "delta_r3_vs_r1_1080": {
-        "detected_count": "10/13 -> 11/13",
-        "off_ice_fp_at_teval": "5 -> 0",
-        "skater_team_acc": "3/10 (30.0%) -> 11/11 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 1] -> [0, 0, 1]",
+      "delta_v5_vs_r3_960": {
+        "detected_count": "12/13 -> 12/13",
+        "off_ice_fp_at_teval": "0 -> 0",
+        "skater_team_acc": "11/11 (100.0%) -> 11/11 (100.0%)",
+        "ref_tp_fp_fn": "[1, 0, 0] -> [1, 0, 0]",
         "legible_num_hits": "0/0 -> 0/0",
-        "num_predictions_at_teval": "2 -> 0"
-      },
-      "delta_r3_vs_r1_960": {
-        "detected_count": "10/13 -> 12/13",
-        "off_ice_fp_at_teval": "6 -> 0",
-        "skater_team_acc": "3/10 (30.0%) -> 11/11 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 1] -> [1, 0, 0]",
-        "legible_num_hits": "0/0 -> 0/0",
-        "num_predictions_at_teval": "3 -> 0"
+        "num_predictions_at_teval": "0 -> 0"
       }
     },
     "game_5": {
@@ -4543,6 +5546,233 @@
           ]
         }
       },
+      "v5_python": {
+        "mobile_960x540": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 321,
+          "mean_raw_det": 13.55,
+          "mean_on_ice_det": 11.44,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 19,
+            "TEAM_B": 30,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_B:#12(T2)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 1.0,
+          "detection_f1": 1.0,
+          "detected_count": "13/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [],
+          "skater_team_acc": "11/11 (100.0%)",
+          "team_errors": [
+            "G5_Ref_M(REF->TEAM_B)",
+            "G5_Ref_R(REF->TEAM_B)"
+          ],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            2
+          ],
+          "legible_num_hits": "0/4",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        },
+        "mobile_1920x1080": {
+          "input_wh": [
+            1920,
+            1080
+          ],
+          "frames_sampled": 96,
+          "str_calls": 326,
+          "mean_raw_det": 13.5,
+          "mean_on_ice_det": 11.31,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 16,
+            "TEAM_B": 28,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_B:#11(T7)",
+            "TEAM_B:#12(T2)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 0.923,
+          "detection_f1": 0.96,
+          "detected_count": "12/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [
+            "G5_Goalie_1"
+          ],
+          "skater_team_acc": "10/10 (100.0%)",
+          "team_errors": [
+            "G5_Ref_M(REF->TEAM_B)",
+            "G5_Ref_R(REF->TEAM_B)"
+          ],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            2
+          ],
+          "legible_num_hits": "1/4",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 1,
+          "num_details": [
+            "G5_Wht_11:pred=#11(gt=11,c=0.999)"
+          ]
+        },
+        "mobile_960x540_uncapped_str": {
+          "input_wh": [
+            960,
+            540
+          ],
+          "frames_sampled": 96,
+          "str_calls": 332,
+          "mean_raw_det": 13.55,
+          "mean_on_ice_det": 11.44,
+          "max_on_ice_det": 14,
+          "track_team_counts": {
+            "TEAM_A": 19,
+            "TEAM_B": 30,
+            "REFEREE": 2,
+            "UNKNOWN": 0
+          },
+          "all_resolved_numbers": [
+            "TEAM_B:#12(T2)"
+          ],
+          "detection_precision": 1.0,
+          "detection_recall": 1.0,
+          "detection_f1": 1.0,
+          "detected_count": "13/13",
+          "off_ice_fp_at_teval": 0,
+          "off_ice_fp_boxes": [],
+          "missed_gt": [],
+          "skater_team_acc": "11/11 (100.0%)",
+          "team_errors": [
+            "G5_Ref_M(REF->TEAM_B)",
+            "G5_Ref_R(REF->TEAM_B)"
+          ],
+          "ref_precision": 0.0,
+          "ref_recall": 0.0,
+          "ref_tp_fp_fn": [
+            0,
+            0,
+            2
+          ],
+          "legible_num_hits": "0/4",
+          "legible_wrong_num_preds": 0,
+          "num_predictions_at_teval": 0,
+          "num_details": []
+        }
+      },
+      "mobile_960x540_v5_python": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 96,
+        "str_calls": 321,
+        "mean_raw_det": 13.55,
+        "mean_on_ice_det": 11.44,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 19,
+          "TEAM_B": 30,
+          "REFEREE": 2,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_B:#12(T2)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 1.0,
+        "detection_f1": 1.0,
+        "detected_count": "13/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [],
+        "skater_team_acc": "11/11 (100.0%)",
+        "team_errors": [
+          "G5_Ref_M(REF->TEAM_B)",
+          "G5_Ref_R(REF->TEAM_B)"
+        ],
+        "ref_precision": 0.0,
+        "ref_recall": 0.0,
+        "ref_tp_fp_fn": [
+          0,
+          0,
+          2
+        ],
+        "legible_num_hits": "0/4",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 0,
+        "num_details": []
+      },
+      "mobile_1920x1080_v5_python": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 96,
+        "str_calls": 326,
+        "mean_raw_det": 13.5,
+        "mean_on_ice_det": 11.31,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 16,
+          "TEAM_B": 28,
+          "REFEREE": 2,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_B:#11(T7)",
+          "TEAM_B:#12(T2)"
+        ],
+        "detection_precision": 1.0,
+        "detection_recall": 0.923,
+        "detection_f1": 0.96,
+        "detected_count": "12/13",
+        "off_ice_fp_at_teval": 0,
+        "off_ice_fp_boxes": [],
+        "missed_gt": [
+          "G5_Goalie_1"
+        ],
+        "skater_team_acc": "10/10 (100.0%)",
+        "team_errors": [
+          "G5_Ref_M(REF->TEAM_B)",
+          "G5_Ref_R(REF->TEAM_B)"
+        ],
+        "ref_precision": 0.0,
+        "ref_recall": 0.0,
+        "ref_tp_fp_fn": [
+          0,
+          0,
+          2
+        ],
+        "legible_num_hits": "1/4",
+        "legible_wrong_num_preds": 0,
+        "num_predictions_at_teval": 1,
+        "num_details": [
+          "G5_Wht_11:pred=#11(gt=11,c=0.999)"
+        ]
+      },
       "mobile_960x540_r1_baseline": {
         "input_wh": [
           960,
@@ -4832,31 +6062,110 @@
           "G5_Nav_R:pred=#25(gt=None,c=1.0)"
         ]
       },
-      "delta_r3_vs_r2_1080": {
+      "delta_v5_vs_r3_1080": {
         "detected_count": "12/13 -> 12/13",
         "off_ice_fp_at_teval": "0 -> 0",
         "skater_team_acc": "10/10 (100.0%) -> 10/10 (100.0%)",
-        "ref_tp_fp_fn": "[2, 0, 0] -> [0, 0, 2]",
-        "legible_num_hits": "1/4 -> 1/4",
-        "num_predictions_at_teval": "4 -> 2"
-      },
-      "delta_r3_vs_r1_1080": {
-        "detected_count": "12/13 -> 12/13",
-        "off_ice_fp_at_teval": "1 -> 0",
-        "skater_team_acc": "8/10 (80.0%) -> 10/10 (100.0%)",
-        "ref_tp_fp_fn": "[0, 1, 2] -> [0, 0, 2]",
-        "legible_num_hits": "0/4 -> 1/4",
-        "num_predictions_at_teval": "7 -> 2"
-      },
-      "delta_r3_vs_r1_960": {
-        "detected_count": "13/13 -> 13/13",
-        "off_ice_fp_at_teval": "1 -> 0",
-        "skater_team_acc": "9/11 (81.8%) -> 11/11 (100.0%)",
         "ref_tp_fp_fn": "[0, 0, 2] -> [0, 0, 2]",
         "legible_num_hits": "1/4 -> 1/4",
-        "num_predictions_at_teval": "7 -> 1"
+        "num_predictions_at_teval": "2 -> 1"
+      },
+      "delta_v5_vs_r3_960": {
+        "detected_count": "13/13 -> 13/13",
+        "off_ice_fp_at_teval": "0 -> 0",
+        "skater_team_acc": "11/11 (100.0%) -> 11/11 (100.0%)",
+        "ref_tp_fp_fn": "[0, 0, 2] -> [0, 0, 2]",
+        "legible_num_hits": "1/4 -> 0/4",
+        "num_predictions_at_teval": "1 -> 0"
       }
     }
+  },
+  "regression_coachbox_cleanhold_v5_python_960x540": {
+    "input_wh": [
+      960,
+      540
+    ],
+    "frames_sampled": 120,
+    "str_calls": 351,
+    "mean_raw_det": 12.07,
+    "mean_on_ice_det": 11.88,
+    "max_on_ice_det": 14,
+    "track_team_counts": {
+      "TEAM_A": 16,
+      "TEAM_B": 20,
+      "REFEREE": 3,
+      "UNKNOWN": 0
+    },
+    "all_resolved_numbers": [],
+    "detection_precision": 1.0,
+    "detection_recall": 0.917,
+    "detection_f1": 0.957,
+    "detected_count": "11/12",
+    "off_ice_fp_at_teval": 0,
+    "off_ice_fp_boxes": [],
+    "missed_gt": [
+      "#43"
+    ],
+    "skater_team_acc": "9/9 (100.0%)",
+    "team_errors": [
+      "REF_C(REF->TEAM_B)"
+    ],
+    "ref_precision": 1.0,
+    "ref_recall": 0.5,
+    "ref_tp_fp_fn": [
+      1,
+      0,
+      1
+    ],
+    "legible_num_hits": "0/9",
+    "legible_wrong_num_preds": 0,
+    "num_predictions_at_teval": 0,
+    "num_details": []
+  },
+  "regression_coachbox_cleanhold_v5_python_1920x1080": {
+    "input_wh": [
+      1920,
+      1080
+    ],
+    "frames_sampled": 120,
+    "str_calls": 316,
+    "mean_raw_det": 12.12,
+    "mean_on_ice_det": 12.0,
+    "max_on_ice_det": 14,
+    "track_team_counts": {
+      "TEAM_A": 16,
+      "TEAM_B": 19,
+      "REFEREE": 3,
+      "UNKNOWN": 0
+    },
+    "all_resolved_numbers": [
+      "TEAM_A:#67(T3)"
+    ],
+    "detection_precision": 1.0,
+    "detection_recall": 1.0,
+    "detection_f1": 1.0,
+    "detected_count": "12/12",
+    "off_ice_fp_at_teval": 0,
+    "off_ice_fp_boxes": [],
+    "missed_gt": [],
+    "skater_team_acc": "9/10 (90.0%)",
+    "team_errors": [
+      "REF_C(REF->TEAM_B)",
+      "#43(TEAM_A->TEAM_B)"
+    ],
+    "ref_precision": 1.0,
+    "ref_recall": 0.5,
+    "ref_tp_fp_fn": [
+      1,
+      0,
+      1
+    ],
+    "legible_num_hits": "1/9",
+    "legible_wrong_num_preds": 0,
+    "num_predictions_at_teval": 1,
+    "num_details": [
+      "#67:pred=#67(gt=67,c=1.0)"
+    ]
   },
   "regression_coachbox_cleanhold_960x540": {
     "input_wh": [
@@ -5050,6 +6359,51 @@
   },
   "lz_game1_native_clip": {
     "path": "/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/browser_sandbox/downloads/Jr-12AA2-vs-Tri-Valley-Blue-Devils-12AA-2-Nov-9-2026-Penalty-Tripping-28-at-27m53s.mp4",
+    "v5_python": {
+      "mobile_960x540": {
+        "input_wh": [
+          960,
+          540
+        ],
+        "frames_sampled": 57,
+        "str_calls": 44,
+        "mean_raw_det": 20.0,
+        "mean_on_ice_det": 10.47,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 26,
+          "TEAM_B": 21,
+          "REFEREE": 3,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_B:#61(T22)",
+          "TEAM_B:#61(T8)"
+        ]
+      },
+      "mobile_1920x1080": {
+        "input_wh": [
+          1920,
+          1080
+        ],
+        "frames_sampled": 57,
+        "str_calls": 41,
+        "mean_raw_det": 20.07,
+        "mean_on_ice_det": 10.49,
+        "max_on_ice_det": 14,
+        "track_team_counts": {
+          "TEAM_A": 23,
+          "TEAM_B": 27,
+          "REFEREE": 4,
+          "UNKNOWN": 0
+        },
+        "all_resolved_numbers": [
+          "TEAM_A:#11(T24)",
+          "TEAM_B:#66(T3)",
+          "TEAM_B:#66(T53)"
+        ]
+      }
+    },
     "r3_final": {
       "mobile_960x540": {
         "input_wh": [

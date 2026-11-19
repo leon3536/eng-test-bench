@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.Log
 import com.engtestbench.hockeynano.core.model.TeamId
+import com.engtestbench.hockeynano.core.tracking.JerseyCropGeometry
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
@@ -31,8 +32,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.Closeable
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 data class TeamKitLabels(
     val teamALabel: String,
@@ -52,6 +55,7 @@ data class MultiViewGridCropItem(
     val trackId: Int,
     val team: TeamId,
     val views: List<Bitmap>,
+    val orientationDeg: Float = 0f,
 )
 
 data class NanoJerseyRead(
@@ -221,7 +225,7 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
         val slotTemplate = slotLetters.joinToString(" ") { "$it:#<num or NONE>" }
         val prompt =
             "This $gridDesc ice hockey analytics sheet shows ${batch.size} skater track cells labeled $slotList. " +
-                "Each cell shows 1 or 2 views of the same ice hockey player. " +
+                "Each cell shows one upright ice hockey player. " +
                 "Read any clearly visible 1 or 2 digit jersey number (1-99) printed on the jersey in each cell. " +
                 "If only one digit of a two-digit number is legible, use ? for the hidden digit (for example #9? or #?7). " +
                 "If a number is blurry, tiny, or unreadable, output NONE. " +
@@ -484,10 +488,6 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             style = Paint.Style.STROKE
             strokeWidth = 3f
         }
-        val innerSplitPaint = Paint().apply {
-            color = Color.rgb(60, 74, 92)
-            strokeWidth = 2f
-        }
         val headerBg = Paint().apply { color = Color.rgb(13, 18, 27) }
         val pillBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(235, 10, 12, 16) }
         val pillBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -505,11 +505,6 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             textSize = 15f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        val viewTagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(210, 220, 232, 244)
-            textSize = 14f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
 
         items.take(4).forEachIndexed { idx, item ->
             val col = idx % 2
@@ -517,30 +512,73 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             val cellX = col * 384f
             val cellY = row * 384f
             canvas.drawRect(cellX, cellY, cellX + 384f, cellY + 384f, borderPaint)
-            canvas.drawRect(cellX + 2f, cellY + 2f, cellX + 382f, cellY + 46f, headerBg)
+            canvas.drawRect(cellX + 2f, cellY + 2f, cellX + 382f, cellY + 42f, headerBg)
 
-            val validViews = item.views.filter { !it.isRecycled }.take(2)
-            if (validViews.size == 1) {
-                val target = RectF(cellX + 10f, cellY + 50f, cellX + 374f, cellY + 374f)
-                drawAspectFitCrop(canvas, validViews[0], target, bmpPaint)
-            } else if (validViews.size >= 2) {
-                val leftTarget = RectF(cellX + 10f, cellY + 50f, cellX + 188f, cellY + 374f)
-                val rightTarget = RectF(cellX + 196f, cellY + 50f, cellX + 374f, cellY + 374f)
-                drawAspectFitCrop(canvas, validViews[0], leftTarget, bmpPaint)
-                drawAspectFitCrop(canvas, validViews[1], rightTarget, bmpPaint)
-                canvas.drawLine(cellX + 192f, cellY + 50f, cellX + 192f, cellY + 374f, innerSplitPaint)
-                canvas.drawText("V1", cellX + 16f, cellY + 68f, viewTagPaint)
-                canvas.drawText("V2", cellX + 202f, cellY + 68f, viewTagPaint)
+            val view = item.views.firstOrNull { !it.isRecycled }
+            if (view != null) {
+                val target = RectF(cellX + 8f, cellY + 44f, cellX + 376f, cellY + 380f)
+                val derotated = if (abs(item.orientationDeg) >= JerseyCropGeometry.DEROTATE_MIN_ANGLE_DEG) {
+                    TorsoCropHelper.derotateBitmapUpright(
+                        src = view,
+                        ccwOrientationDeg = item.orientationDeg,
+                        expandBounds = true,
+                    )
+                } else {
+                    null
+                }
+                val working = derotated ?: view
+                try {
+                    drawCrispAspectFitCrop(canvas, working, target, bmpPaint)
+                } finally {
+                    if (derotated != null && !derotated.isRecycled) derotated.recycle()
+                }
             }
 
-            val badgeRect = RectF(cellX + 10f, cellY + 8f, cellX + 66f, cellY + 40f)
+            val badgeRect = RectF(cellX + 10f, cellY + 6f, cellX + 66f, cellY + 38f)
             canvas.drawRoundRect(badgeRect, 7f, 7f, pillBg)
             canvas.drawRoundRect(badgeRect, 7f, 7f, pillBorder)
             val slotLetter = SLOT_LETTERS[idx]
-            canvas.drawText("[$slotLetter]", cellX + 16f, cellY + 33f, labelPaint)
-            canvas.drawText("ICE HOCKEY PLAYER", cellX + 76f, cellY + 30f, cardTagPaint)
+            canvas.drawText("[$slotLetter]", cellX + 16f, cellY + 31f, labelPaint)
+            canvas.drawText("ICE HOCKEY PLAYER", cellX + 76f, cellY + 28f, cardTagPaint)
         }
         return out
+    }
+
+    private fun drawCrispAspectFitCrop(canvas: Canvas, crop: Bitmap, bounds: RectF, paint: Paint) {
+        val cw = crop.width.coerceAtLeast(1)
+        val ch = crop.height.coerceAtLeast(1)
+        val scale = min(bounds.width() / cw.toFloat(), bounds.height() / ch.toFloat())
+        val dw = (cw * scale).roundToInt().coerceAtLeast(1)
+        val dh = (ch * scale).roundToInt().coerceAtLeast(1)
+        val left = bounds.left + (bounds.width() - dw) / 2f
+        val top = bounds.top + (bounds.height() - dh) / 2f
+
+        if (dw > cw || dh > ch) {
+            val srcPixels = IntArray(cw * ch)
+            crop.getPixels(srcPixels, 0, cw, 0, 0, cw, ch)
+            val sharpPixels = JerseyCropGeometry.upscaleBicubicAndUnsharp(
+                srcPixels = srcPixels,
+                srcW = cw,
+                srcH = ch,
+                dstW = dw,
+                dstH = dh,
+                wbR = 1f,
+                wbG = 1f,
+                wbB = 1f,
+                contrastAlpha = 1f,
+                unsharpAmount = 0.55f,
+            )
+            if (sharpPixels.size >= dw * dh) {
+                val sharpBmp = Bitmap.createBitmap(sharpPixels, dw, dh, Bitmap.Config.ARGB_8888)
+                try {
+                    canvas.drawBitmap(sharpBmp, left, top, paint)
+                } finally {
+                    if (!sharpBmp.isRecycled) sharpBmp.recycle()
+                }
+                return
+            }
+        }
+        canvas.drawBitmap(crop, Rect(0, 0, cw, ch), RectF(left, top, left + dw, top + dh), paint)
     }
 
     private fun drawAspectFitCrop(canvas: Canvas, crop: Bitmap, bounds: RectF, paint: Paint) {

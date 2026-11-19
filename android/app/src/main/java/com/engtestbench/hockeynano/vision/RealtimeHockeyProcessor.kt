@@ -13,6 +13,7 @@ import com.engtestbench.hockeynano.core.model.PipelineTelemetry
 import com.engtestbench.hockeynano.core.model.RectNorm
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.model.TrackedPlayer
+import com.engtestbench.hockeynano.core.tracking.JerseyCropGeometry
 import com.engtestbench.hockeynano.core.tracking.JerseyReadKind
 import com.engtestbench.hockeynano.core.tracking.JerseyReadSource
 import com.engtestbench.hockeynano.core.tracking.KitLabFeatures
@@ -98,6 +99,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private val nanoGridAttempts = ConcurrentHashMap<Int, Int>()
     private val trackHitCounts = ConcurrentHashMap<Int, Int>()
     private val lastStrByTrack = ConcurrentHashMap<Int, TrackStrScore>()
+    val lastOrientationByTrack = ConcurrentHashMap<Int, Pair<Float, Double>>()
     private val strongStrTwoDigitByTrack = ConcurrentHashMap<Int, Pair<String, Float>>()
     private val trackOfficialHints = ConcurrentHashMap<Int, OfficialCueEma>()
     private val trackStrSignatures = ConcurrentHashMap<Int, TrackCropSignature>()
@@ -130,7 +132,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         val timestampSec: Double,
         val score: Float,
         val bitmap: Bitmap,
-    )
+        val orientationDeg: Float = 0f,
+    ) {
+        fun recycle() {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
 
     private val ocrReadsTotal = AtomicInteger(0)
     private val nanoCallsTotal = AtomicInteger(0)
@@ -230,6 +237,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             nanoGridAttempts.clear()
             trackHitCounts.clear()
             lastStrByTrack.clear()
+            lastOrientationByTrack.clear()
             strongStrTwoDigitByTrack.clear()
             trackOfficialHints.clear()
             trackStrSignatures.clear()
@@ -615,7 +623,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
         val tasks = ArrayList<StrCropTask>(priorityPlayers.size)
         for (player in priorityPlayers) {
-            val crop = strRecognizer.cropUpperTorso(highResBitmap, player.box) ?: continue
+            val crop = strRecognizer.cropUpperTorso(highResBitmap, player.box, iceWb) ?: continue
             strAttempts[player.trackId] = (strAttempts[player.trackId] ?: 0) + 1
             tasks.add(StrCropTask(player.trackId, player.box.height, crop))
         }
@@ -638,16 +646,33 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                             sharpness = res.sharpness,
                             timestampSec = timestampSec,
                         )
-                        val rawCandidates = if (res.legibilityProb >= 0.68f && res.backProb >= 0.58f) {
+                        val minOriSharpness = if (strRecognizer.modelInputSize >= 128) {
+                            MIN_ORIENTATION_SHARPNESS_V5
+                        } else {
+                            MIN_ORIENTATION_SHARPNESS_V4
+                        }
+                        if (res.sharpness >= minOriSharpness &&
+                            (res.legibilityProb >= 0.18f || res.backProb >= 0.35f)
+                        ) {
+                            lastOrientationByTrack[trackId] = res.orientationDeg to timestampSec
+                        }
+                        val rawCandidates = if (res.legibilityProb >= JerseyStrOnnxRecognizer.MIN_CANDIDATE_LEGIBILITY_PROB &&
+                            res.backProb >= JerseyStrOnnxRecognizer.MIN_CANDIDATE_BACK_PROB
+                        ) {
                             res.topCandidates
                         } else {
                             emptyList()
                         }
                         val rawTopProb = rawCandidates.firstOrNull()?.second ?: 0f
+                        val distMinSharpness = if (strRecognizer.modelInputSize >= 128) {
+                            DISTANT_STR_MIN_SHARPNESS_V5
+                        } else {
+                            DISTANT_STR_MIN_SHARPNESS_V4
+                        }
                         val candidates = if (boxHeight < DISTANT_STR_FULL_BOX_HEIGHT &&
                             (rawTopProb < DISTANT_STR_MIN_TOP_PROB ||
                                 res.legibilityProb < DISTANT_STR_MIN_LEGIBILITY_PROB ||
-                                res.sharpness < DISTANT_STR_MIN_SHARPNESS)
+                                res.sharpness < distMinSharpness)
                         ) {
                             emptyList()
                         } else {
@@ -658,19 +683,27 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
                         if (candidates.isNotEmpty() || partialLeft != null || partialRight != null) {
                             candidates.firstOrNull()?.let { (num, p) ->
-                                if (num.length == 2 && p >= 0.60f && res.legibilityProb >= 0.68f && res.backProb >= 0.58f) {
+                                if (num.length == 2 &&
+                                    p >= 0.60f &&
+                                    res.legibilityProb >= JerseyStrOnnxRecognizer.MIN_CANDIDATE_LEGIBILITY_PROB &&
+                                    res.backProb >= JerseyStrOnnxRecognizer.MIN_CANDIDATE_BACK_PROB
+                                ) {
                                     val prev = strongStrTwoDigitByTrack[trackId]
                                     if (prev == null || p > prev.second) {
                                         strongStrTwoDigitByTrack[trackId] = num to p
                                     }
                                 }
                             }
+                            val topProb = candidates.firstOrNull()?.second ?: 0f
                             val qualityWeight = if (candidates.isNotEmpty()) {
-                                ((0.35f + 0.65f * res.legibilityProb) * (0.50f + 0.50f * res.backProb)).coerceIn(0.05f, 1.25f)
+                                if (res.legibilityProb >= 0.94f && res.backProb >= 0.94f && topProb >= 0.86f) {
+                                    1.25f
+                                } else {
+                                    ((0.35f + 0.65f * res.legibilityProb) * (0.50f + 0.50f * res.backProb)).coerceIn(0.05f, 1.25f)
+                                }
                             } else {
                                 (0.40f + 0.60f * res.backProb).coerceIn(0.10f, 1.0f)
                             }
-                            val topProb = candidates.firstOrNull()?.second ?: 0f
                             if (topProb >= 0.30f) {
                                 ocrReadsTotal.incrementAndGet()
                                 anyStrongRead = true
@@ -681,8 +714,18 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                                 partialLeft?.let { "${it.first}?:${"%.2f".format(Locale.US, it.second)}" },
                                 partialRight?.let { "?${it.first}:${"%.2f".format(Locale.US, it.second)}" },
                             ).joinToString("+")
+                            val angTag = if (abs(res.orientationDeg) >= 8f) {
+                                val p2Tag = if (abs(res.orientationDeg) >= JerseyCropGeometry.DEROTATE_MIN_ANGLE_DEG) {
+                                    if (res.usedDerotationPass2) ",p2=1" else ",p2=0"
+                                } else {
+                                    ""
+                                }
+                                ",ang=${res.orientationDeg.roundToInt()}$p2Tag"
+                            } else {
+                                ""
+                            }
                             strLogParts.add(
-                                "T$trackId:$topTag(leg=${"%.2f".format(Locale.US, res.legibilityProb)},bk=${"%.2f".format(Locale.US, res.backProb)})",
+                                "T$trackId:$topTag(leg=${"%.2f".format(Locale.US, res.legibilityProb)},bk=${"%.2f".format(Locale.US, res.backProb)}$angTag)",
                             )
                             synchronized(stateLock) {
                                 if (sessionGen.get() == gen) {
@@ -733,7 +776,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
         val tasks = ArrayList<Pair<Int, Bitmap>>(priorityPlayers.size)
         for (player in priorityPlayers) {
-            val crop = jerseyRecognizer.cropUpperTorso(highResBitmap, player.box) ?: continue
+            val crop = jerseyRecognizer.cropUpperTorso(highResBitmap, player.box, iceWb) ?: continue
             ocrAttempts[player.trackId] = (ocrAttempts[player.trackId] ?: 0) + 1
             tasks.add(player.trackId to crop)
         }
@@ -808,7 +851,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         val needsTeamCrops = synchronized(stateLock) { shouldCollectTeamCropsLocked() }
         val confirmedIds = sample.players.filter { it.nanoVerified }.map { it.trackId }.toSet()
 
-        // Accumulate full upper-skater hockey figure crops (x: -14%..114%, y: -6%..86%) outside cropLock first.
+        // Accumulate crisp upper-skater context (x: -12%..112%, y: -6%..86%) + orientation metadata;
+        // upright derotation & unsharp sharpening happen inside buildJerseyGridComposite only for selected grid slots.
         val unconfirmed = selectPrioritySkaters(
             sample = sample,
             limit = MAX_VIEW_CANDIDATES_PER_FRAME,
@@ -816,25 +860,28 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             unconfirmedOnly = true,
             minHeight = MIN_NANO_BOX_HEIGHT,
         )
-        val capturedViews = ArrayList<Triple<TrackedPlayer, Float, Bitmap>>(unconfirmed.size)
+        val capturedViews = ArrayList<Pair<TrackedPlayer, TrackViewSnapshot>>(unconfirmed.size)
         for (p in unconfirmed) {
             val crop = cropWhiteBalancedRegion(
                 highResBitmap = highResBitmap,
                 box = p.box,
                 iceWb = iceWb,
-                xStartFrac = -0.14f,
-                xEndFrac = 1.14f,
+                xStartFrac = -0.12f,
+                xEndFrac = 1.12f,
                 yStartFrac = -0.06f,
                 yEndFrac = 0.86f,
                 maxHeight = 260,
                 contrastAlpha = 1.15f,
             ) ?: continue
+            val orientDeg = lastOrientationByTrack[p.trackId]
+                ?.takeIf { abs(timestampSec - it.second) <= 1.0 }
+                ?.first ?: 0f
             val str = lastStrByTrack[p.trackId]?.takeIf { abs(timestampSec - it.timestampSec) <= 0.6 }
             val strLeg = str?.legibilityProb ?: 0.5f
             val strBack = str?.backProb ?: 0.5f
             val sharpness = str?.sharpness ?: JerseyStrOnnxRecognizer.computeLaplacianSharpness(crop)
             val score = (0.3f + 0.7f * strLeg) * (0.5f + 0.5f * strBack) * sharpness * p.box.height
-            capturedViews.add(Triple(p, score, crop))
+            capturedViews.add(p to TrackViewSnapshot(timestampSec, score, crop, orientDeg))
         }
 
         synchronized(cropLock) {
@@ -849,40 +896,38 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                 val (tid, snaps) = poolIter.next()
                 val lastSeen = trackLastSeenSec[tid] ?: timestampSec
                 if (tid in confirmedIds || abs(timestampSec - lastSeen) > VIEW_POOL_TTL_SEC) {
-                    snaps.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+                    snaps.forEach { it.recycle() }
                     poolIter.remove()
                     trackLastSeenSec.remove(tid)
                 }
             }
 
-            for ((p, score, crop) in capturedViews) {
+            for ((p, snap) in capturedViews) {
                 trackLastSeenSec[p.trackId] = timestampSec
                 val list = trackViewPool.getOrPut(p.trackId) { ArrayList(MAX_VIEWS_PER_TRACK) }
                 val nearbyIdx = list.indexOfFirst { abs(it.timestampSec - timestampSec) < 0.22 }
                 if (nearbyIdx >= 0) {
-                    if (score > list[nearbyIdx].score) {
-                        val old = list[nearbyIdx].bitmap
-                        if (!old.isRecycled) old.recycle()
-                        list[nearbyIdx] = TrackViewSnapshot(timestampSec, score, crop)
+                    if (snap.score > list[nearbyIdx].score) {
+                        list[nearbyIdx].recycle()
+                        list[nearbyIdx] = snap
                     } else {
-                        if (!crop.isRecycled) crop.recycle()
+                        snap.recycle()
                     }
                 } else {
-                    list.add(TrackViewSnapshot(timestampSec, score, crop))
+                    list.add(snap)
                     if (list.size > MAX_VIEWS_PER_TRACK) {
                         var minIdx = 0
                         for (i in 1 until list.size) {
                             if (list[i].score < list[minIdx].score) minIdx = i
                         }
-                        val dropped = list.removeAt(minIdx).bitmap
-                        if (!dropped.isRecycled) dropped.recycle()
+                        list.removeAt(minIdx).recycle()
                     }
                 }
             }
 
             while (trackViewPool.size > MAX_VIEW_POOL_TRACKS) {
                 val oldestKey = trackLastSeenSec.minByOrNull { it.value }?.key ?: break
-                trackViewPool.remove(oldestKey)?.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+                trackViewPool.remove(oldestKey)?.forEach { it.recycle() }
                 trackLastSeenSec.remove(oldestKey)
             }
 
@@ -1435,18 +1480,10 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         for ((trackId, team) in pendingGridTrackQueue) {
             val snaps = trackViewPool[trackId]?.filter { !it.bitmap.isRecycled }.orEmpty()
             if (snaps.isEmpty()) continue
-            val best1 = snaps.maxByOrNull { it.score } ?: continue
-            val best2 = snaps
-                .filter { abs(it.timestampSec - best1.timestampSec) >= 0.45 }
-                .maxByOrNull { it.score }
-            val chosen = listOfNotNull(best1, best2).sortedBy { it.timestampSec }
-            val copies = chosen.mapNotNull { snap ->
-                runCatching { snap.bitmap.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull()
-            }
-            if (copies.isNotEmpty()) {
-                items.add(MultiViewGridCropItem(trackId, team, copies))
-                timestamps[trackId] = chosen.last().timestampSec
-            }
+            val best = snaps.maxByOrNull { it.score } ?: continue
+            val copy = runCatching { best.bitmap.copy(Bitmap.Config.ARGB_8888, false) }.getOrNull() ?: continue
+            items.add(MultiViewGridCropItem(trackId, team, listOf(copy), best.orientationDeg))
+            timestamps[trackId] = best.timestampSec
         }
         pendingGridTrackQueue.clear()
         items to timestamps
@@ -1458,7 +1495,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         pendingTeamBCrops.forEach { (_, bmp) -> if (!bmp.isRecycled) bmp.recycle() }
         pendingTeamBCrops.clear()
         trackViewPool.values.forEach { list ->
-            list.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+            list.forEach { it.recycle() }
         }
         trackViewPool.clear()
         trackLastSeenSec.clear()
@@ -1493,9 +1530,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
         private const val MIN_NANO_BOX_HEIGHT = 0.052f
         private const val DISTANT_STR_FULL_BOX_HEIGHT = 0.115f
         private const val DISTANT_STR_PARTIAL_BOX_HEIGHT = 0.105f
-        private const val DISTANT_STR_MIN_TOP_PROB = 0.72f
-        private const val DISTANT_STR_MIN_LEGIBILITY_PROB = 0.82f
-        private const val DISTANT_STR_MIN_SHARPNESS = 28.0f
+        private const val DISTANT_STR_MIN_TOP_PROB = 0.58f
+        private const val DISTANT_STR_MIN_LEGIBILITY_PROB = 0.75f
+        private const val DISTANT_STR_MIN_SHARPNESS_V5 = 12.0f
+        private const val DISTANT_STR_MIN_SHARPNESS_V4 = 28.0f
+        private const val MIN_ORIENTATION_SHARPNESS_V5 = 5.5f
+        private const val MIN_ORIENTATION_SHARPNESS_V4 = 18.0f
         private const val UNCHANGED_CROP_ANCHOR_WINDOW_SEC = 2.5
         private const val UNCHANGED_CROP_LUMA_DIFF_MAX = 3.5f
         private const val MAX_VIEW_CANDIDATES_PER_FRAME = 10

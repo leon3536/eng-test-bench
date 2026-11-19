@@ -4,6 +4,7 @@ import com.engtestbench.hockeynano.core.model.FrameMarkSample
 import com.engtestbench.hockeynano.core.model.RectNorm
 import com.engtestbench.hockeynano.core.model.TeamId
 import com.engtestbench.hockeynano.core.tracking.ChainNumberInput
+import com.engtestbench.hockeynano.core.tracking.JerseyCropGeometry
 import com.engtestbench.hockeynano.core.tracking.JerseyNumberPosterior
 import com.engtestbench.hockeynano.core.tracking.JerseyReadKind
 import com.engtestbench.hockeynano.core.tracking.JerseyReadObservation
@@ -755,5 +756,237 @@ class MultiTeamPlayerTrackerSotaTest {
         assertEquals(TeamId.REFEREE, frame.players[8].team, "Transient crisp striped official must remain REFEREE")
         assertEquals(TeamId.REFEREE, frame.players[9].team, "Shadowed blurred far-board official must classify REFEREE")
         assertEquals(2, frame.players.count { it.team == TeamId.REFEREE }, "Only the 2 officials may be REFEREE")
+    }
+
+    @Test
+    fun `cross-engine single-bin corroboration commits when two distinct engines agree while lone sub-090 ONNX stays blocked`() {
+        val corrobInputs = listOf(
+            // Chain 601: ONNX_STR 0.62 + GEMINI_NANO 0.65 in same 1.0s bin -> commits cleanly to #27!
+            ChainNumberInput(
+                chainId = 601,
+                firstSeenSec = 0.0,
+                lastSeenSec = 1.5,
+                observations = listOf(
+                    JerseyReadObservation(0.20, null, 0.62f, JerseyReadKind.FULL, 1f, JerseyReadSource.ONNX_STR, listOf("27" to 0.62f)),
+                    JerseyReadObservation(0.45, "27", 0.65f, JerseyReadKind.FULL, 1f, JerseyReadSource.GEMINI_NANO)
+                ),
+                bestConfidenceByNumber = mapOf("27" to 0.65f)
+            ),
+            // Chain 602: lone ONNX_STR 0.78 in single 1.0s bin -> MUST remain uncommitted (null)!
+            ChainNumberInput(
+                chainId = 602,
+                firstSeenSec = 0.0,
+                lastSeenSec = 1.5,
+                observations = listOf(
+                    JerseyReadObservation(0.30, null, 0.78f, JerseyReadKind.FULL, 1f, JerseyReadSource.ONNX_STR, listOf("92" to 0.78f))
+                ),
+                bestConfidenceByNumber = mapOf("92" to 0.78f)
+            ),
+            // Chain 603: ONNX_STR 0.62 + MLKIT_OCR 0.60 in same 1.0s bin -> commits cleanly to #14!
+            ChainNumberInput(
+                chainId = 603,
+                firstSeenSec = 0.0,
+                lastSeenSec = 1.5,
+                observations = listOf(
+                    JerseyReadObservation(0.25, null, 0.62f, JerseyReadKind.FULL, 1f, JerseyReadSource.ONNX_STR, listOf("14" to 0.62f)),
+                    JerseyReadObservation(0.60, "14", 0.60f, JerseyReadKind.FULL, 1f, JerseyReadSource.MLKIT_OCR)
+                ),
+                bestConfidenceByNumber = mapOf("14" to 0.62f)
+            ),
+            // Chain 604: GEMINI_NANO 0.60 + MLKIT_OCR 0.58 in same 1.0s bin -> commits cleanly to #43!
+            ChainNumberInput(
+                chainId = 604,
+                firstSeenSec = 0.0,
+                lastSeenSec = 1.5,
+                observations = listOf(
+                    JerseyReadObservation(0.35, "43", 0.60f, JerseyReadKind.FULL, 1f, JerseyReadSource.GEMINI_NANO),
+                    JerseyReadObservation(0.70, "43", 0.58f, JerseyReadKind.FULL, 1f, JerseyReadSource.MLKIT_OCR)
+                ),
+                bestConfidenceByNumber = mapOf("43" to 0.60f)
+            ),
+            // Chain 605: ONNX_STR 0.62 + weak MLKIT_OCR 0.48 (< 0.55f) in single 1.0s bin -> stays uncommitted (null)!
+            ChainNumberInput(
+                chainId = 605,
+                firstSeenSec = 0.0,
+                lastSeenSec = 1.5,
+                observations = listOf(
+                    JerseyReadObservation(0.25, null, 0.62f, JerseyReadKind.FULL, 1f, JerseyReadSource.ONNX_STR, listOf("88" to 0.62f)),
+                    JerseyReadObservation(0.55, "88", 0.48f, JerseyReadKind.FULL, 1f, JerseyReadSource.MLKIT_OCR)
+                ),
+                bestConfidenceByNumber = mapOf("88" to 0.62f)
+            )
+        )
+
+        val res = JerseyNumberPosterior.assignNumbersJointly(corrobInputs)
+        assertEquals("27", res[601]?.number, "ONNX_STR 0.62 + GEMINI_NANO 0.65 in 1 bin must commit #27")
+        assertNull(res[602]?.number, "Lone single-bin ONNX_STR 0.78 (< 0.90f) must remain uncommitted")
+        assertEquals("14", res[603]?.number, "ONNX_STR 0.62 + MLKIT_OCR 0.60 in 1 bin must commit #14")
+        assertEquals("43", res[604]?.number, "GEMINI_NANO 0.60 + MLKIT_OCR 0.58 in 1 bin must commit #43")
+        assertNull(res[605]?.number, "Single-bin ONNX_STR 0.62 + weak MLKIT_OCR 0.48 (< 0.55f) must stay uncommitted")
+    }
+
+    @Test
+    fun `equal Nano weight prevents stray #1 from overriding high-conf ONNX #9 while 3-frame 087 high-quality ONNX commits`() {
+        val inputs = listOf(
+            // Chain 701: Strong ONNX_STR #9:0.93 (qw=1.25f) beats stray GEMINI_NANO #1:0.88!
+            ChainNumberInput(
+                chainId = 701,
+                firstSeenSec = 0.0,
+                lastSeenSec = 2.0,
+                observations = listOf(
+                    JerseyReadObservation(0.25, null, 0.93f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("9" to 0.93f)),
+                    JerseyReadObservation(0.80, "1", 0.88f, JerseyReadKind.SINGLE, 1f, JerseyReadSource.GEMINI_NANO)
+                ),
+                nanoVerifiedNumbers = setOf("1"),
+                bestConfidenceByNumber = mapOf("9" to 0.93f, "1" to 0.88f)
+            ),
+            // Chain 702: 3 agreeing frames of high-quality ONNX_STR #12:0.87 (qw=1.25f) in 1 bin -> commits #12!
+            ChainNumberInput(
+                chainId = 702,
+                firstSeenSec = 13.7,
+                lastSeenSec = 14.9,
+                observations = listOf(
+                    JerseyReadObservation(13.73, null, 0.87f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("12" to 0.87f)),
+                    JerseyReadObservation(13.73, null, 0.88f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("12" to 0.88f)),
+                    JerseyReadObservation(13.73, null, 0.86f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("12" to 0.86f))
+                ),
+                bestConfidenceByNumber = mapOf("12" to 0.88f)
+            ),
+            // Chain 703: Single high-quality ONNX_STR #12:0.87 (only 1 frame < 3) -> stays uncommitted (null)!
+            ChainNumberInput(
+                chainId = 703,
+                firstSeenSec = 13.7,
+                lastSeenSec = 14.2,
+                observations = listOf(
+                    JerseyReadObservation(13.73, null, 0.87f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("12" to 0.87f))
+                ),
+                bestConfidenceByNumber = mapOf("12" to 0.87f)
+            ),
+            // Chain 704: 3 agreeing frames at 0.84f (< 0.86f) in 1 bin -> stays uncommitted (null)!
+            ChainNumberInput(
+                chainId = 704,
+                firstSeenSec = 13.7,
+                lastSeenSec = 14.9,
+                observations = listOf(
+                    JerseyReadObservation(13.73, null, 0.84f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("15" to 0.84f)),
+                    JerseyReadObservation(13.73, null, 0.84f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("15" to 0.84f)),
+                    JerseyReadObservation(13.73, null, 0.84f, JerseyReadKind.FULL, 1.25f, JerseyReadSource.ONNX_STR, listOf("15" to 0.84f))
+                ),
+                bestConfidenceByNumber = mapOf("15" to 0.84f)
+            )
+        )
+
+        val res = JerseyNumberPosterior.assignNumbersJointly(inputs)
+        assertEquals("9", res[701]?.number, "High-conf ONNX_STR #9 (0.93, qw=1.25) must defeat stray GEMINI_NANO #1 (0.88)")
+        assertEquals("12", res[702]?.number, "3 agreeing frames of high-quality ONNX_STR #12 (0.87, qw=1.25) must commit #12")
+        assertNull(res[703]?.number, "Single 0.87 ONNX_STR frame (< 3 agreeing frames) must remain uncommitted")
+        assertNull(res[704]?.number, "3 agreeing ONNX_STR frames at 0.84 (< 0.86) in 1 bin must remain uncommitted")
+    }
+
+    @Test
+    fun `canonical OpenCV CCW tilt is undone by Android CW postRotate(+orientationDeg) and not inverted sign`() {
+        val w = 64
+        val h = 64
+        val cx = w * 0.5f
+        val cy = h * 0.5f
+
+        // 1) Point-level inverse check across positive and negative tilts:
+        for (theta in listOf(35f, -42f, 18f, -52f)) {
+            val (tx, ty) = JerseyCropGeometry.rotatePointOpenCvCcw(32f, 14f, cx, cy, theta)
+            val derotDeg = JerseyCropGeometry.androidDerotationAngleDeg(theta)
+            val (rx, ry) = JerseyCropGeometry.rotatePointAndroidPostRotateCw(tx, ty, cx, cy, derotDeg)
+            assertEquals(32f, rx, 1e-3f, "Point X round-trip failed for theta=$theta")
+            assertEquals(14f, ry, 1e-3f, "Point Y round-trip failed for theta=$theta")
+        }
+
+        // Verify sign meaning in y-down image coords: +35 deg CCW moves 12-o'clock top (32, 14) LEFT to x < 32.
+        val (ccwTopX, ccwTopY) = JerseyCropGeometry.rotatePointOpenCvCcw(32f, 14f, cx, cy, 35f)
+        assertTrue(ccwTopX < 25f && ccwTopY < cy, "OpenCV +35 deg must tilt top CCW (toward 11 o'clock)")
+
+        // 2) Synthetic asymmetric upright glyph ("7"-like top bar + diagonal stem) raster test:
+        val upright = IntArray(w * h)
+        for (y in 16..20) {
+            for (x in 22..42) upright[y * w + x] = 1
+        }
+        for (y in 21..48) {
+            val xc = (42f - (y - 20) * 0.45f).toInt()
+            for (x in (xc - 2)..(xc + 2)) upright[y * w + x] = 1
+        }
+
+        fun maskIoU(a: IntArray, b: IntArray): Float {
+            var inter = 0
+            var union = 0
+            for (i in a.indices) {
+                val av = a[i] > 0
+                val bv = b[i] > 0
+                if (av && bv) inter++
+                if (av || bv) union++
+            }
+            return if (union == 0) 0f else inter.toFloat() / union.toFloat()
+        }
+
+        for (tiltDeg in listOf(35f, -38f)) {
+            val tiltedCcw = JerseyCropGeometry.warpMaskOpenCvCcw(upright, w, h, tiltDeg)
+            val derotGood = JerseyCropGeometry.warpMaskAndroidPostRotateCw(
+                tiltedCcw,
+                w,
+                h,
+                JerseyCropGeometry.androidDerotationAngleDeg(tiltDeg)
+            )
+            val derotWrong = JerseyCropGeometry.warpMaskAndroidPostRotateCw(tiltedCcw, w, h, -tiltDeg)
+
+            val iouGood = maskIoU(upright, derotGood)
+            val iouWrong = maskIoU(upright, derotWrong)
+            assertTrue(iouGood >= 0.78f, "Correct CW +orientationDeg=$tiltDeg derotation IoU too low: $iouGood")
+            assertTrue(iouWrong <= 0.35f, "Inverted sign -orientationDeg=${-tiltDeg} should double tilt (IoU=$iouWrong)")
+        }
+    }
+
+    @Test
+    fun `stick-immune torso-centered crop trims outstretched hockey stick and bicubic unsharp preserves valid bounds`() {
+        val imgW = 1000
+        val imgH = 600
+        val box = RectNorm(0.20f, 0.30f, 0.32f, 0.48f) // 120px wide x 108px tall (bw=120 > 0.58*108=62.6)
+        val scanBand = JerseyCropGeometry.computeTorsoScanBand(imgW, imgH, box)!!
+        val sw = scanBand.width
+        val sh = scanBand.height
+        val icePx = (0xFF shl 24) or (214 shl 16) or (218 shl 8) or 222
+        val navyPx = (0xFF shl 24) or (24 shl 16) or (38 shl 8) or 76
+        val stickPx = (0xFF shl 24) or (42 shl 16) or (40 shl 8) or 38
+
+        val pixels = IntArray(sw * sh) { icePx }
+        // Dark torso sits on left side of wide box (cols 10..50), thin 2px stick extends right (cols 55..114).
+        for (y in 0 until sh) {
+            for (x in 10..50) {
+                pixels[y * sw + x] = navyPx
+            }
+            if (y == sh / 2 || y == sh / 2 + 1) {
+                for (x in 55 until minOf(sw, 115)) {
+                    pixels[y * sw + x] = stickPx
+                }
+            }
+        }
+
+        val (x0, x1) = JerseyCropGeometry.computeStickImmuneHorizontalBounds(
+            imageWidth = imgW,
+            box = box,
+            boxPxH = 108f,
+            scanPixels = pixels,
+            scanWidth = sw,
+            scanHeight = sh
+        )
+        val cropW = x1 - x0
+        val cropCenter = 0.5f * (x0 + x1)
+        val expectedTorsoCenter = scanBand.x0 + 30.5f
+        assertTrue(kotlin.math.abs(cropCenter - expectedTorsoCenter) <= 6f, "Expected crop centered near torso $expectedTorsoCenter, got $cropCenter")
+        assertTrue(cropW in 46..62, "Expected stick-trimmed width ~52px (max(0.46*108, 41*1.28)), got $cropW")
+
+        // Verify 2.4x bicubic + unsharp upscaler preserves sharp contrast without NaN/wraparound.
+        val srcSmall = IntArray(20 * 20) { idx -> if ((idx % 20) in 7..12) icePx else navyPx }
+        val upscaled = JerseyCropGeometry.upscaleBicubicAndUnsharp(srcSmall, 20, 20, 48, 48)
+        assertEquals(48 * 48, upscaled.size)
+        val darkSample = upscaled[24 * 48 + 4]
+        val brightSample = upscaled[24 * 48 + 24]
+        assertTrue(((brightSample ushr 16) and 0xFF) > ((darkSample ushr 16) and 0xFF) + 120)
     }
 }

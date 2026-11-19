@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import com.engtestbench.hockeynano.core.model.RectNorm
+import com.engtestbench.hockeynano.core.tracking.JerseyCropGeometry
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -25,7 +26,7 @@ data class JerseyOcrResult(
 
 /**
  * Dual-pass on-device jersey number recognizer using ML Kit TextRecognition (16.0.1).
- * Crops upper torso (10%..68% height, -10%..+10% width) from the high-resolution frame,
+ * Crops stick-immune torso-centered upper torso (`y: 4%..58%`) from the high-resolution frame,
  * applies ice white balance, upscales to >= 220px height, normalizes sports-font
  * digit look-alikes (never captain A/C), and returns normalized horizontal position [xRel].
  */
@@ -33,31 +34,27 @@ class JerseyNumberRecognizer : Closeable {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    fun cropUpperTorso(highResBitmap: Bitmap, box: RectNorm): Bitmap? {
-        if (highResBitmap.isRecycled) return null
-        val w = highResBitmap.width
-        val h = highResBitmap.height
-        if (w <= 1 || h <= 1) return null
-
-        val bw = box.width
-        val bh = box.height
-        val x0 = ((box.x1 - 0.10f * bw) * w).toInt().coerceIn(0, w - 1)
-        val x1 = ((box.x2 + 0.10f * bw) * w).toInt().coerceIn(x0 + 1, w)
-        val y0 = ((box.y1 + 0.10f * bh) * h).toInt().coerceIn(0, h - 1)
-        val y1 = ((box.y1 + 0.68f * bh) * h).toInt().coerceIn(y0 + 1, h)
-        val cw = x1 - x0
-        val ch = y1 - y0
-        if (cw < 12 || ch < 18) return null
-
-        return Bitmap.createBitmap(highResBitmap, x0, y0, cw, ch)
-    }
+    fun cropUpperTorso(
+        highResBitmap: Bitmap,
+        box: RectNorm,
+        iceWb: FloatArray = DEFAULT_WB,
+    ): Bitmap? = TorsoCropHelper.cropUpperTorso(
+        highResBitmap = highResBitmap,
+        box = box,
+        iceWb = iceWb,
+        yStartFrac = JerseyCropGeometry.DEFAULT_TORSO_Y_START,
+        yEndFrac = JerseyCropGeometry.DEFAULT_TORSO_Y_END,
+        normalXPadFrac = JerseyCropGeometry.DEFAULT_TORSO_X_PAD_FRAC,
+        minWidthPx = 12,
+        minHeightPx = 18,
+    )
 
     suspend fun recognize(
         highResBitmap: Bitmap,
         box: RectNorm,
         iceWb: FloatArray = DEFAULT_WB,
     ): JerseyOcrResult? {
-        val crop = cropUpperTorso(highResBitmap, box) ?: return null
+        val crop = cropUpperTorso(highResBitmap, box, iceWb) ?: return null
         return try {
             recognizeFromTorsoCrop(crop, iceWb)
         } finally {
@@ -255,12 +252,21 @@ class JerseyNumberRecognizer : Closeable {
                 break
             }
         }
-        val span = max(20, pHigh - pLow)
+        val span = max(20, pHigh - pLow).toFloat()
+        val chromaBoost = min(1.8f, max(1.1f, 255f / span))
 
         val out = IntArray(pixels.size)
         for (i in lum.indices) {
-            val v = (((lum[i] - pLow) * 255) / span).coerceIn(0, 255)
-            out[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+            val p = pixels[i]
+            val r = (p ushr 16) and 0xFF
+            val g = (p ushr 8) and 0xFF
+            val b = p and 0xFF
+            val l = lum[i]
+            val lNew = ((l - pLow) * 255f) / span
+            val rOut = (lNew + (r - l) * chromaBoost).roundToInt().coerceIn(0, 255)
+            val gOut = (lNew + (g - l) * chromaBoost).roundToInt().coerceIn(0, 255)
+            val bOut = (lNew + (b - l) * chromaBoost).roundToInt().coerceIn(0, 255)
+            out[i] = (0xFF shl 24) or (rOut shl 16) or (gOut shl 8) or bOut
         }
         return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
     }
