@@ -18,6 +18,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -42,6 +44,9 @@ from jersey_synth import (
     _apply_cylindrical_warp_and_folds,
     _render_jersey_number_patch,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORK_DIR = Path(os.environ.get("HOCKEY_SCRATCH_DIR", str(REPO_ROOT / "research" / "scratch")))
 
 
 def build_compositional_maps() -> Tuple[torch.Tensor, torch.Tensor]:
@@ -954,10 +959,10 @@ def export_and_verify_onnx(
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--shard-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/v5_str/shards"))
+    ap.add_argument("--shard-dir", type=Path, default=DEFAULT_WORK_DIR / "v5_str" / "shards")
     ap.add_argument("--ckpt", type=Path, default=Path.home() / ".cache/torch/hub/checkpoints/mobilenet_v3_large-5c1a4163.pth")
-    ap.add_argument("--onnx-out", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/android/app/src/main/assets/coach_jersey_str.onnx"))
-    ap.add_argument("--json-out", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/android/app/src/main/assets/coach_jersey_str.json"))
+    ap.add_argument("--onnx-out", type=Path, default=REPO_ROOT / "android" / "app" / "src" / "main" / "assets" / "coach_jersey_str.onnx")
+    ap.add_argument("--json-out", type=Path, default=REPO_ROOT / "android" / "app" / "src" / "main" / "assets" / "coach_jersey_str.json")
     ap.add_argument("--epochs", type=int, default=22)
     ap.add_argument("--batch-size", type=int, default=256)
     ap.add_argument("--lr", type=float, default=1.5e-3)
@@ -977,31 +982,30 @@ def main() -> None:
         print("[smoke] train shapes:", [tuple(o.shape) for o in outs])
         inf_outs = m(x)
         print("[smoke] infer shapes:", [tuple(o.shape) for o in inf_outs])
-        tmp_onnx = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/v5_str/smoke.onnx")
-        tmp_onnx.parent.mkdir(parents=True, exist_ok=True)
-        w = CalibratedStrWrapper(m.cpu(), 1.1, 1.1, 1.1, 1.1).eval()
-        torch.onnx.export(
-            w, torch.rand(1, 3, TARGET_SIZE, TARGET_SIZE), str(tmp_onnx),
-            opset_version=17, dynamo=False, input_names=["images"],
-            output_names=["legibility_logit", "back_logit", "number_logits", "left_digit_logits", "right_digit_logits", "orientation_deg"],
-            do_constant_folding=True,
-        )
-        om = onnx.load(str(tmp_onnx))
-        onnx.checker.check_model(om)
-        ops = sorted({n.op_type for n in om.graph.node})
-        assert "GridSample" not in ops
-        opts = ort.SessionOptions()
-        opts.intra_op_num_threads = 2
-        sess = ort.InferenceSession(str(tmp_onnx), opts, providers=["CPUExecutionProvider"])
-        inp = np.random.rand(1, 3, TARGET_SIZE, TARGET_SIZE).astype(np.float32)
-        for _ in range(20):
-            sess.run(None, {"images": inp})
-        t0 = time.perf_counter()
-        for _ in range(200):
-            sess.run(None, {"images": inp})
-        ms = (time.perf_counter() - t0) / 200.0 * 1000.0
-        print(f"[smoke] size={tmp_onnx.stat().st_size/1e6:.2f} MB, ops={ops}, ORT_CPU_2thread={ms:.3f} ms/crop")
-        tmp_onnx.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_onnx = Path(tmp_dir) / "smoke.onnx"
+            w = CalibratedStrWrapper(m.cpu(), 1.1, 1.1, 1.1, 1.1).eval()
+            torch.onnx.export(
+                w, torch.rand(1, 3, TARGET_SIZE, TARGET_SIZE), str(tmp_onnx),
+                opset_version=17, dynamo=False, input_names=["images"],
+                output_names=["legibility_logit", "back_logit", "number_logits", "left_digit_logits", "right_digit_logits", "orientation_deg"],
+                do_constant_folding=True,
+            )
+            om = onnx.load(str(tmp_onnx))
+            onnx.checker.check_model(om)
+            ops = sorted({n.op_type for n in om.graph.node})
+            assert "GridSample" not in ops
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 2
+            sess = ort.InferenceSession(str(tmp_onnx), opts, providers=["CPUExecutionProvider"])
+            inp = np.random.rand(1, 3, TARGET_SIZE, TARGET_SIZE).astype(np.float32)
+            for _ in range(20):
+                sess.run(None, {"images": inp})
+            t0 = time.perf_counter()
+            for _ in range(200):
+                sess.run(None, {"images": inp})
+            ms = (time.perf_counter() - t0) / 200.0 * 1000.0
+            print(f"[smoke] size={tmp_onnx.stat().st_size/1e6:.2f} MB, ops={ops}, ORT_CPU_2thread={ms:.3f} ms/crop")
         return
 
     train_data = load_shards(args.shard_dir, "train")

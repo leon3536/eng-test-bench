@@ -20,6 +20,7 @@ import com.engtestbench.hockeynano.core.tracking.KitLabFeatures
 import com.engtestbench.hockeynano.core.tracking.MultiTeamPlayerTracker
 import com.engtestbench.hockeynano.core.tracking.OnIceFilter
 import com.engtestbench.hockeynano.core.tracking.RawDetection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -147,7 +148,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
     private var lastFrameWallMs: Long = 0L
     private var lastDetectorMs: Float = 0f
     private var lastNanoLatencyMs: Long = 0L
-    private var lastNanoMessage: String = ""
+    private var lastNanoMessage: String = if (detector == null) MISSING_DETECTOR_ASSETS_MSG else ""
     private var lastLoggedDiscoveredSummary: String = ""
 
     private var strJob: Job? = null
@@ -250,7 +251,7 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
             lastFrameWallMs = 0L
             lastDetectorMs = 0f
             lastNanoLatencyMs = 0L
-            lastNanoMessage = ""
+            lastNanoMessage = if (detector == null) MISSING_DETECTOR_ASSETS_MSG else ""
             lastStrWallMs = 0L
             lastOcrWallMs = 0L
             lastNanoGridWallMs = 0L
@@ -755,9 +756,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                         }
                     }
                 }
+            } catch (ce: CancellationException) {
+                throw ce
             } catch (t: Throwable) {
-                tasks.forEach { if (!it.crop.isRecycled) it.crop.recycle() }
                 Log.w(TAG, "Async STR step failed: ${t.message}")
+            } finally {
+                tasks.forEach { if (!it.crop.isRecycled) it.crop.recycle() }
             }
         }
     }
@@ -833,9 +837,12 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
                         }
                     }
                 }
+            } catch (ce: CancellationException) {
+                throw ce
             } catch (t: Throwable) {
-                tasks.forEach { (_, c) -> if (!c.isRecycled) c.recycle() }
                 Log.w(TAG, "Async OCR step failed: ${t.message}")
+            } finally {
+                tasks.forEach { (_, c) -> if (!c.isRecycled) c.recycle() }
             }
         }
     }
@@ -1521,6 +1528,8 @@ class RealtimeHockeyProcessor(private val context: Context) : Closeable {
 
     companion object {
         private const val TAG = "HockeyNanoBench"
+        private const val MISSING_DETECTOR_ASSETS_MSG =
+            "Missing local detector ONNX assets (coach_person_detector.onnx / coach_live_head.onnx) — see android/DESIGN.md §12.1"
         private const val STR_CADENCE_MS = 220L
         private const val MAX_STR_TRACKS_PER_STEP = 6
         private const val OCR_CADENCE_MS = 400L

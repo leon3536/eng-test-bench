@@ -35,6 +35,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORK_DIR = Path(os.environ.get("HOCKEY_SCRATCH_DIR", str(REPO_ROOT / "research" / "scratch")))
+
 NUM_CLASSES = 101  # 0 = none/illegible, 1..99 = "1".."99", 100 = "00"
 DIGIT_BLANK = 10   # 0..9 = digit, 10 = blank / single-right-blank
 
@@ -1313,7 +1316,7 @@ def save_preview_grid(out_png: Path, seed: int = 42, cols: int = 8, rows: int = 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/v5_str/shards"))
+    ap.add_argument("--out-dir", type=Path, default=DEFAULT_WORK_DIR / "v5_str" / "shards")
     ap.add_argument("--train-samples", type=int, default=200000)
     ap.add_argument("--val-samples", type=int, default=16000)
     ap.add_argument("--seed", type=int, default=20261120)

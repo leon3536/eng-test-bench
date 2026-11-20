@@ -23,6 +23,7 @@ import argparse
 import json
 import math
 import multiprocessing as mp
+import os
 import pickle
 import time
 from pathlib import Path
@@ -32,6 +33,9 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from scipy.optimize import linear_sum_assignment
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORK_DIR = Path(os.environ.get("HOCKEY_SCRATCH_DIR", str(REPO_ROOT / "research" / "scratch")))
 
 # ---------------------------------------------------------------------------
 # Color & CIELAB Utilities (exact mirror of KitLabFeatures.kt Round 2)
@@ -2948,14 +2952,19 @@ def extract_sweep_cache(
     str_rec: JerseyStrRecognizer,
     eval_dir: Path,
     min_box_h: float = 0.055,
+    cleanhold_mp4: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     """Run YOLO + raw v5 STR once across Games 1-5 + CoachBox Cleanhold (960x540 & 1920x1080) for fast threshold sweep."""
     videos: List[Tuple[str, Path, float, List[Dict[str, Any]]]] = []
     for g in range(1, 6):
         spec = GAMES_SPEC[g]
         videos.append((f"game_{g}", eval_dir / f"lz_game{g}_30s.mp4", spec["eval_t_sec"], spec["visual_gt"]))
-    cleanhold_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/coachbox_tvbd_cougars_cleanhold_30s.mp4")
-    videos.append(("coachbox_cleanhold", cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08))
+    if cleanhold_mp4 is None:
+        cleanhold_mp4 = DEFAULT_WORK_DIR / "coachbox_v2" / "coachbox_tvbd_cougars_cleanhold_30s.mp4"
+    if cleanhold_mp4.exists():
+        videos.append(("coachbox_cleanhold", cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08))
+    else:
+        print(f"[sweep_cache] warning: cleanhold mp4 not found at {cleanhold_mp4}; skipping", flush=True)
 
     apply_str_cfg(str_rec, {**V5_DEFAULT_CFG, "min_laplacian_sharpness": 1.0})
     cached_runs = []
@@ -3283,10 +3292,16 @@ def _eval_sweep_worker(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--assets-dir", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/android/app/src/main/assets"))
-    ap.add_argument("--eval-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/leonxzhao_eval"))
-    ap.add_argument("--v5-dir", type=Path, default=Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/v5_str"))
-    ap.add_argument("--report-out", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/research/leonxzhao_5games_report.json"))
+    ap.add_argument("--assets-dir", type=Path, default=REPO_ROOT / "android" / "app" / "src" / "main" / "assets")
+    ap.add_argument("--eval-dir", type=Path, default=DEFAULT_WORK_DIR / "leonxzhao_eval")
+    ap.add_argument("--v5-dir", type=Path, default=DEFAULT_WORK_DIR / "v5_str")
+    ap.add_argument("--report-out", type=Path, default=REPO_ROOT / "research" / "leonxzhao_5games_report.json")
+    ap.add_argument("--cleanhold-mp4", type=Path, default=DEFAULT_WORK_DIR / "coachbox_v2" / "coachbox_tvbd_cougars_cleanhold_30s.mp4")
+    ap.add_argument(
+        "--native-g1-mp4",
+        type=Path,
+        default=DEFAULT_WORK_DIR / "downloads" / "Jr-12AA2-vs-Tri-Valley-Blue-Devils-12AA-2-Nov-9-2026-Penalty-Tripping-28-at-27m53s.mp4",
+    )
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--cfg-json", type=Path, default=None)
     args = ap.parse_args()
@@ -3311,7 +3326,7 @@ def main() -> None:
             except Exception:
                 cached = None
         if cached is None:
-            cached = extract_sweep_cache(detector, str_rec, args.eval_dir, min_box_h=0.055)
+            cached = extract_sweep_cache(detector, str_rec, args.eval_dir, min_box_h=0.055, cleanhold_mp4=args.cleanhold_mp4)
             with open(cache_pkl, "wb") as f:
                 pickle.dump({"onnx_sig": onnx_sig, "cached": cached}, f, protocol=pickle.HIGHEST_PROTOCOL)
             print(f"[sweep_cache] saved cache to {cache_pkl.name}", flush=True)
@@ -3452,35 +3467,48 @@ def main() -> None:
         }
 
     # Regression check: CoachBox cleanhold 30s (960 & 1080) + Game 1 downloaded native MP4 clip
-    cleanhold_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/coachbox_tvbd_cougars_cleanhold_30s.mp4")
-    reg_cleanhold_960 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
-    reg_cleanhold_1080 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg, collect_diag=True)
+    cleanhold_mp4 = args.cleanhold_mp4
+    if cleanhold_mp4.exists():
+        reg_cleanhold_960 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+        reg_cleanhold_1080 = run_mobile_on_mp4(cleanhold_mp4, 16.8, COACHBOX_GT_FRAME08, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg, collect_diag=True)
 
-    cb_diag_by_tid = reg_cleanhold_1080.pop("_diag_by_tid", {})
-    cb_matched, _ = _match_predictions_to_gt(COACHBOX_GT_FRAME08, reg_cleanhold_1080.get("_eval_emitted", []))
-    for m in cb_matched:
-        gt_i, pr_i = m["gt"], m["pred"]
-        if pr_i is not None and (gt_i.get("legible_num") or pr_i.get("number") is not None):
-            d = cb_diag_by_tid.get(pr_i["track_id"])
-            if d is not None:
-                diag_records.append({
-                    **d,
-                    "tag": f"CB_{gt_i['id']}",
-                    "gt_num": gt_i.get("legible_num"),
-                    "pred_num": pr_i.get("number"),
-                    "conf": pr_i.get("conf", 0.0),
-                })
+        cb_diag_by_tid = reg_cleanhold_1080.pop("_diag_by_tid", {})
+        cb_matched, _ = _match_predictions_to_gt(COACHBOX_GT_FRAME08, reg_cleanhold_1080.get("_eval_emitted", []))
+        for m in cb_matched:
+            gt_i, pr_i = m["gt"], m["pred"]
+            if pr_i is not None and (gt_i.get("legible_num") or pr_i.get("number") is not None):
+                d = cb_diag_by_tid.get(pr_i["track_id"])
+                if d is not None:
+                    diag_records.append({
+                        **d,
+                        "tag": f"CB_{gt_i['id']}",
+                        "gt_num": gt_i.get("legible_num"),
+                        "pred_num": pr_i.get("number"),
+                        "conf": pr_i.get("conf", 0.0),
+                    })
 
-    for d in (reg_cleanhold_960, reg_cleanhold_1080):
-        for k in ("_eval_emitted", "_unmatched", "_eval_rgb"):
-            d.pop(k, None)
+        for d in (reg_cleanhold_960, reg_cleanhold_1080):
+            for k in ("_eval_emitted", "_unmatched", "_eval_rgb"):
+                d.pop(k, None)
+    else:
+        reg_cleanhold_960 = {"skipped": True, "reason": "file_not_found", "path": cleanhold_mp4.name}
+        reg_cleanhold_1080 = {"skipped": True, "reason": "file_not_found", "path": cleanhold_mp4.name}
 
-    native_g1_mp4 = Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/browser_sandbox/downloads/Jr-12AA2-vs-Tri-Valley-Blue-Devils-12AA-2-Nov-9-2026-Penalty-Tripping-28-at-27m53s.mp4")
-    native_g1_960 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
-    native_g1_1080 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
-    for d in (native_g1_960, native_g1_1080):
-        d.pop("_eval_emitted", None)
-        d.pop("_eval_rgb", None)
+    native_g1_mp4 = args.native_g1_mp4
+    if native_g1_mp4.exists():
+        native_g1_960 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(960, 540), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+        native_g1_1080 = run_mobile_on_mp4(native_g1_mp4, 7.5, None, detector, str_rec, input_wh=(1920, 1080), sample_dt_sec=0.25, top_k_str_per_step=6, cfg=v5_cfg)
+        for d in (native_g1_960, native_g1_1080):
+            d.pop("_eval_emitted", None)
+            d.pop("_eval_rgb", None)
+    else:
+        native_g1_960 = {"skipped": True, "reason": "file_not_found", "path": native_g1_mp4.name}
+        native_g1_1080 = {"skipped": True, "reason": "file_not_found", "path": native_g1_mp4.name}
+
+    try:
+        native_g1_rel = str(native_g1_mp4.relative_to(DEFAULT_WORK_DIR))
+    except ValueError:
+        native_g1_rel = native_g1_mp4.name
 
     render_v5_diag_eval(args.v5_dir / "v5_diag_eval.png", diag_records)
 
@@ -3508,7 +3536,7 @@ def main() -> None:
         "regression_coachbox_cleanhold_960x540_r2_metrics": r2_data.get("regression_coachbox_cleanhold_960x540"),
         "regression_coachbox_cleanhold_960x540_r1_baseline": r1_data.get("regression_coachbox_cleanhold_960x540"),
         "lz_game1_native_clip": {
-            "path": str(native_g1_mp4),
+            "path": native_g1_rel,
             "v5_python": {"mobile_960x540": native_g1_960, "mobile_1920x1080": native_g1_1080},
             "r3_final": r3_data.get("lz_game1_native_clip", {}).get("r3_final"),
             "mobile_960x540": r3_data.get("lz_game1_native_clip", {}).get("mobile_960x540"),

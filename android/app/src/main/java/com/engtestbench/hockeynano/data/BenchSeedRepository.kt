@@ -2,6 +2,7 @@ package com.engtestbench.hockeynano.data
 
 import android.content.Context
 import com.engtestbench.hockeynano.core.bench.BenchSeedReport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -67,6 +68,8 @@ class BenchSeedRepository(private val context: Context) {
 
             authProtectedResponse?.let { return@runCatching it }
             throw lastError ?: IOException("Failed to reach $cleanBase")
+        }.onFailure {
+            if (it is CancellationException) throw it
         }
     }
 

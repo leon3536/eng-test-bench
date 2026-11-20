@@ -51,6 +51,5 @@ research/*.pth
 research/*.npz
 research/checkpoints*/
 
-# Understand Anything transient dirs
-.ua/.trash-*/
-.ua/tmp/
+# Understand Anything local knowledge graph
+/.ua/

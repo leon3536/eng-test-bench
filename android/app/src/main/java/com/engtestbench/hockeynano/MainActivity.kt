@@ -289,6 +289,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
             val bundledUri = "android.resource://${appContext.packageName}/raw/hockey_sample_30s"
             val found = withContext(Dispatchers.IO) {
                 runCatching { clipLibraryRepository.discoverLocalHockeyVideos() }
+                    .onFailure { if (it is CancellationException) throw it }
                     .getOrDefault(emptyList())
             }.let { list ->
                 if (list.isEmpty()) listOf("Bundled 30s Demo" to bundledUri) else list
@@ -354,6 +355,7 @@ class HockeyStudioViewModel(application: Application) : AndroidViewModel(applica
 
                 withContext(Dispatchers.IO) {
                     runCatching { clipLibraryRepository.saveRecentYouTubeVideo(displayTitle, cleanSource) }
+                        .onFailure { if (it is CancellationException) throw it }
                 }
                 refreshDiscoveredVideos(autoSelectFirst = false)
 

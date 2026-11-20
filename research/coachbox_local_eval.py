@@ -13,9 +13,9 @@ Ground-truth boxes/labels are used strictly for scoring outputs after inference.
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +25,10 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from scipy.optimize import linear_sum_assignment
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORK_DIR = Path(os.environ.get("HOCKEY_SCRATCH_DIR", str(REPO_ROOT / "research" / "scratch")))
+DEFAULT_BENCH_DIR = Path(os.environ.get("ENG_TEST_BENCH_DIR", str(REPO_ROOT)))
 
 # ---------------------------------------------------------------------------
 # Color & CIELAB Utilities (exact mirror of KitLabFeatures.kt)
@@ -1883,28 +1887,45 @@ def evaluate_video_sanity(mp4_path: Path, detector: YoloDetector, str_rec: Jerse
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--assets-dir", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/android/app/src/main/assets"))
-    ap.add_argument("--report-out", type=Path, default=Path("/home/windgone/workspace/eng-test-bench-pinkseven97/research/local_validation_report.json"))
+    ap.add_argument("--assets-dir", type=Path, default=REPO_ROOT / "android" / "app" / "src" / "main" / "assets")
+    ap.add_argument("--report-out", type=Path, default=REPO_ROOT / "research" / "local_validation_report.json")
+    ap.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR)
+    ap.add_argument("--external-bench-dir", type=Path, default=DEFAULT_BENCH_DIR)
     args = ap.parse_args()
 
     t0 = time.time()
     detector = YoloDetector(args.assets_dir / "coach_person_detector.onnx")
     str_rec = JerseyStrRecognizer(args.assets_dir / "coach_jersey_str.onnx")
 
-    compare_frames = sorted(Path(p) for p in glob.glob("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_compare/frames/frame_*.png"))
-    fs_frames = sorted(Path(p) for p in glob.glob("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/fs_1080p_crops/fs_*.png"))
+    compare_frames = sorted((args.work_dir / "coachbox_compare" / "frames").glob("frame_*.png"))
+    fs_frames = sorted((args.work_dir / "coachbox_v2" / "fs_1080p_crops").glob("fs_*.png"))
 
-    res_compare = evaluate_image_sequence("coachbox_compare_16frames_11m14s", compare_frames, dt_sec=2.0, eval_idx=8, gt_items=GT_FRAME_08, detector=detector, str_rec=str_rec)
-    res_1080p = evaluate_image_sequence("coachbox_1080p_23frames_11m14s", fs_frames, dt_sec=1.4, eval_idx=12, gt_items=GT_FS_674, detector=detector, str_rec=str_rec)
-
-    res_burst = evaluate_burst_ghost_suppression(
-        Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_compare/coachbox_tvbd_cougars_30s.mp4"),
-        Path("/home/windgone/.gemini/antigravity/brain/d4f6c85d-b213-4653-af5c-c83e4f23795d/scratch/coachbox_v2/coachbox_tvbd_cougars_cleanhold_30s.mp4"),
-        detector,
+    res_compare = (
+        evaluate_image_sequence("coachbox_compare_16frames_11m14s", compare_frames, dt_sec=2.0, eval_idx=8, gt_items=GT_FRAME_08, detector=detector, str_rec=str_rec)
+        if compare_frames else {"benchmark": "coachbox_compare_16frames_11m14s", "skipped": True, "reason": "frames_not_found"}
+    )
+    res_1080p = (
+        evaluate_image_sequence("coachbox_1080p_23frames_11m14s", fs_frames, dt_sec=1.4, eval_idx=12, gt_items=GT_FS_674, detector=detector, str_rec=str_rec)
+        if fs_frames else {"benchmark": "coachbox_1080p_23frames_11m14s", "skipped": True, "reason": "frames_not_found"}
     )
 
-    res_sample = evaluate_video_sanity(Path("/home/windgone/workspace/eng-test-bench/bench/hockey/sample_hockey_30s.mp4"), detector, str_rec, sample_stride_frames=30)
-    res_tvi = evaluate_video_sanity(Path("/home/windgone/workspace/eng-test-bench/bench/hockey/clips/tvi_iceland_clip_01_0240s_0270s.mp4"), detector, str_rec, sample_stride_frames=15)
+    crossfade_mp4 = args.work_dir / "coachbox_compare" / "coachbox_tvbd_cougars_30s.mp4"
+    cleanhold_mp4 = args.work_dir / "coachbox_v2" / "coachbox_tvbd_cougars_cleanhold_30s.mp4"
+    res_burst = (
+        evaluate_burst_ghost_suppression(crossfade_mp4, cleanhold_mp4, detector)
+        if (crossfade_mp4.exists() and cleanhold_mp4.exists()) else {"skipped": True, "reason": "clips_not_found"}
+    )
+
+    sample_mp4 = args.external_bench_dir / "bench" / "hockey" / "sample_hockey_30s.mp4"
+    tvi_mp4 = args.external_bench_dir / "bench" / "hockey" / "clips" / "tvi_iceland_clip_01_0240s_0270s.mp4"
+    res_sample = (
+        evaluate_video_sanity(sample_mp4, detector, str_rec, sample_stride_frames=30)
+        if sample_mp4.exists() else {"video": sample_mp4.name, "skipped": True, "reason": "file_not_found"}
+    )
+    res_tvi = (
+        evaluate_video_sanity(tvi_mp4, detector, str_rec, sample_stride_frames=15)
+        if tvi_mp4.exists() else {"video": tvi_mp4.name, "skipped": True, "reason": "file_not_found"}
+    )
 
     str_meta = json.loads((args.assets_dir / "coach_jersey_str.json").read_text())
     report = {

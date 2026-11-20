@@ -19,6 +19,7 @@ import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.ImagePart
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -106,6 +107,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
                 }
                 else -> "unavailable"
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Throwable) {
             Log.w(TAG, "NANO_STATUS check failed: ${e.javaClass.simpleName}: ${e.message}")
             "unavailable"
@@ -128,6 +131,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
                 val after = if (m.checkStatus() == FeatureStatus.AVAILABLE) "ready" else "unavailable"
                 _status.value = after
                 Log.i(TAG, "NANO_STATUS status=$after after=download")
+            } catch (ce: CancellationException) {
+                throw ce
             } catch (e: Throwable) {
                 _status.value = "unavailable"
                 Log.w(TAG, "NANO_STATUS download_failed=${e.message}")
@@ -185,6 +190,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
                 )
                 TeamKitLabels(fallbackA, fallbackB, nanoVerified = false, latencyMs = latencyMs, rawOutput = raw)
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Throwable) {
             val latencyMs = max(1L, System.currentTimeMillis() - startMs)
             if (isMultimodalUnsupported(e)) multimodalBroken = true
@@ -262,6 +269,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
                 "NANO_JERSEY_READ latencyMs=${latencyMs}ms n=${batch.size} count=${parsed.size} reads=\"$summary\" raw=\"${raw.replace('\n', ' ').take(120)}\"",
             )
             return parsed to latencyMs
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Throwable) {
             val latencyMs = max(1L, System.currentTimeMillis() - startMs)
             if (isPolicyCheckBlocked(e)) {
@@ -351,6 +360,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
             } else {
                 NanoTextResponse(fallback, fromNano = false, latencyMs = latencyMs)
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Throwable) {
             val latencyMs = max(1L, System.currentTimeMillis() - startMs)
             if (imageForPrompt != null && (isMultimodalUnsupported(e) || isPolicyCheckBlocked(e))) {
@@ -393,6 +404,8 @@ class GeminiNanoHockeyEngine(@Suppress("unused") private val context: Context) :
                 val cleaned = raw.ifEmpty { "No response returned by Gemini Nano." }
                 Log.i(TAG, "NANO_BENCH_ASSISTANT latencyMs=${latencyMs}ms q=\"${question.take(60)}\"")
                 NanoTextResponse(cleaned, fromNano = raw.isNotEmpty(), latencyMs = latencyMs)
+            } catch (ce: CancellationException) {
+                throw ce
             } catch (e: Throwable) {
                 val latencyMs = max(1L, System.currentTimeMillis() - startMs)
                 Log.w(TAG, "NANO_BENCH_ASSISTANT error latencyMs=${latencyMs}ms err=${e.message}")

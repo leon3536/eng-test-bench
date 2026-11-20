@@ -67,6 +67,7 @@ import com.engtestbench.hockeynano.ui.theme.TeamACyan
 import com.engtestbench.hockeynano.ui.theme.TeamBOrange
 import com.engtestbench.hockeynano.ui.theme.TextMuted
 import com.engtestbench.hockeynano.ui.theme.TextPrimary
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -96,7 +97,10 @@ fun BenchReportScreen(
                 report = loaded
                 selectedCell = loaded.cells.firstOrNull()
             }
-            .onFailure { loadError = it.message ?: "Failed to load bench_summary_seed.json" }
+            .onFailure {
+                if (it is CancellationException) throw it
+                loadError = it.message ?: "Failed to load bench_summary_seed.json"
+            }
     }
 
     val currentReport = report
@@ -107,10 +111,14 @@ fun BenchReportScreen(
         if (trimmed.isEmpty() || isAskingNano) return
         scope.launch {
             isAskingNano = true
-            val ctx = buildCompactReportContext(rep)
-            assistantAnswer = runCatching { onAskAssistant(trimmed, ctx) }
-                .getOrElse { "Assistant error: ${it.message ?: "unavailable"}" }
-            isAskingNano = false
+            try {
+                val ctx = buildCompactReportContext(rep)
+                assistantAnswer = runCatching { onAskAssistant(trimmed, ctx) }
+                    .onFailure { if (it is CancellationException) throw it }
+                    .getOrElse { "Assistant error: ${it.message ?: "unavailable"}" }
+            } finally {
+                isAskingNano = false
+            }
         }
     }
 
@@ -181,12 +189,15 @@ fun BenchReportScreen(
                         if (!isProbing && serverUrl.isNotBlank()) {
                             scope.launch {
                                 isProbing = true
-                                val res = benchSeedRepository.probeLiveBenchServer(serverUrl.trim())
-                                probeOutput = res.fold(
-                                    onSuccess = { "OK: $it" },
-                                    onFailure = { "Offline: ${it.message ?: "connection failed"}" }
-                                )
-                                isProbing = false
+                                try {
+                                    val res = benchSeedRepository.probeLiveBenchServer(serverUrl.trim())
+                                    probeOutput = res.fold(
+                                        onSuccess = { "OK: $it" },
+                                        onFailure = { "Offline: ${it.message ?: "connection failed"}" }
+                                    )
+                                } finally {
+                                    isProbing = false
+                                }
                             }
                         }
                     }

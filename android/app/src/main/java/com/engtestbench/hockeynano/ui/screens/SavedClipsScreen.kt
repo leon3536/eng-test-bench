@@ -77,6 +77,7 @@ import com.engtestbench.hockeynano.ui.theme.formatClock
 import com.engtestbench.hockeynano.ui.theme.teamColor
 import com.engtestbench.hockeynano.ui.theme.teamTag
 import com.engtestbench.hockeynano.video.ExportedClipInfo
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.util.Locale
 
@@ -95,7 +96,9 @@ fun SavedClipsScreen(
     var localRefresh by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshNonce, localRefresh) {
-        val loaded = runCatching { clipLibraryRepository.listExportedClips() }.getOrDefault(emptyList())
+        val loaded = runCatching { clipLibraryRepository.listExportedClips() }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrDefault(emptyList())
         clips = loaded
         if (selectedClip == null || loaded.none { it.id == selectedClip?.id }) {
             selectedClip = loaded.firstOrNull()

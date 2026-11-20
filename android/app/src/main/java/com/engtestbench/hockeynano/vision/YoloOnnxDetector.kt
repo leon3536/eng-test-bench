@@ -112,34 +112,55 @@ class YoloOnnxDetector private constructor(
 ) : Closeable {
 
     private val env = OrtEnvironment.getEnvironment()
-    private val detectorOptions = OrtSession.SessionOptions().apply {
-        setIntraOpNumThreads(threads)
-        setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-        runCatching { addConfigEntry("session.intra_op.allow_spinning", "0") }
-        runCatching { addConfigEntry("session.inter_op.allow_spinning", "0") }
-    }
-    private val xnnpackEnabled = runCatching {
-        detectorOptions.addXnnpack(mapOf("intra_op_num_threads" to threads.toString()))
-        true
-    }.getOrDefault(false)
-
-    private val liveHeadOptions = OrtSession.SessionOptions().apply {
-        setIntraOpNumThreads(min(2, threads))
-        setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-        runCatching { addConfigEntry("session.intra_op.allow_spinning", "0") }
-    }
-
-    private val detectorSession = env.createSession(
-        context.assets.open("coach_person_detector.onnx").use { it.readBytes() },
-        detectorOptions,
-    )
-    private val liveHeadSession = env.createSession(
-        context.assets.open("coach_live_head.onnx").use { it.readBytes() },
-        liveHeadOptions,
-    )
+    private val detectorOptions: OrtSession.SessionOptions
+    private val xnnpackEnabled: Boolean
+    private val liveHeadOptions: OrtSession.SessionOptions
+    private val detectorSession: OrtSession
+    private val liveHeadSession: OrtSession
 
     init {
-        Log.i("HockeyNanoBench", "YOLO_INIT threads=$threads xnnpack=$xnnpackEnabled")
+        var detOpts: OrtSession.SessionOptions? = null
+        var liveOpts: OrtSession.SessionOptions? = null
+        var detSess: OrtSession? = null
+        var liveSess: OrtSession? = null
+        try {
+            var xnnpack = false
+            detOpts = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(threads)
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                runCatching { addConfigEntry("session.intra_op.allow_spinning", "0") }
+                runCatching { addConfigEntry("session.inter_op.allow_spinning", "0") }
+                xnnpack = runCatching {
+                    addXnnpack(mapOf("intra_op_num_threads" to threads.toString()))
+                    true
+                }.getOrDefault(false)
+            }
+            liveOpts = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(min(2, threads))
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                runCatching { addConfigEntry("session.intra_op.allow_spinning", "0") }
+            }
+            detSess = env.createSession(
+                context.assets.open("coach_person_detector.onnx").use { it.readBytes() },
+                detOpts,
+            )
+            liveSess = env.createSession(
+                context.assets.open("coach_live_head.onnx").use { it.readBytes() },
+                liveOpts,
+            )
+            detectorOptions = detOpts
+            xnnpackEnabled = xnnpack
+            liveHeadOptions = liveOpts
+            detectorSession = detSess
+            liveHeadSession = liveSess
+            Log.i("HockeyNanoBench", "YOLO_INIT threads=$threads xnnpack=$xnnpackEnabled")
+        } catch (t: Throwable) {
+            runCatching { liveSess?.close() }
+            runCatching { detSess?.close() }
+            runCatching { liveOpts?.close() }
+            runCatching { detOpts?.close() }
+            throw t
+        }
     }
 
     private val detectLock = Any()
@@ -1701,6 +1722,11 @@ class YoloOnnxDetector private constructor(
             )
             if (cfg.features.size != MotionFeatureExtractor.N_FEATURES) null
             else YoloOnnxDetector(context, cfg, threads)
+        }.onFailure {
+            Log.w(
+                "HockeyNanoBench",
+                "YOLO_INIT unavailable (provision coach_person_detector.onnx & coach_live_head.onnx in app/src/main/assets/): ${it.javaClass.simpleName}: ${it.message}",
+            )
         }.getOrNull()
     }
 }

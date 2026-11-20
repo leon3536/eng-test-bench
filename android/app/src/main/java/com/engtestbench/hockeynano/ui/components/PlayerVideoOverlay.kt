@@ -105,6 +105,7 @@ import com.engtestbench.hockeynano.ui.theme.TextPrimary
 import com.engtestbench.hockeynano.ui.theme.formatClock
 import com.engtestbench.hockeynano.ui.theme.teamColor
 import com.engtestbench.hockeynano.ui.theme.teamTag
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -264,6 +265,7 @@ fun PlayerVideoOverlay(
                     if (bitmap != null) {
                         lastCapturedPos = posSec
                         runCatching { latestOnVideoFrame(bitmap, posSec) }
+                            .onFailure { if (it is CancellationException) throw it }
                     }
                     val elapsed = SystemClock.elapsedRealtime() - tStart
                     delay((180L - elapsed).coerceAtLeast(25L))
