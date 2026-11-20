@@ -1,0 +1,565 @@
+{
+  "roster_free_verified": true,
+  "elapsed_sec": 32.7,
+  "onnx_str_summary": {
+    "size_bytes": 10544519,
+    "opset": 17,
+    "ort_cpu_ms": 0.351,
+    "synthetic_val": {
+      "legible_top1": 0.7663,
+      "legible_top3": 0.8712,
+      "order_swap_top1": 0.7561,
+      "hard_neg_fp_rate": 0.0023,
+      "hard_neg_argmax_nonzero": 0.002,
+      "legibility_acc": 0.9987,
+      "back_acc": 0.8142,
+      "left_partial_digit_acc": 0.6383,
+      "right_partial_digit_acc": 0.6456,
+      "left_digit_acc": 0.8959,
+      "right_digit_acc": 0.8957
+    },
+    "calibration": {
+      "temperature_baked_in_onnx": true,
+      "effective_temperature": 1.0,
+      "fitted_raw_temperatures": {
+        "number_logits": 1.08,
+        "legibility_logit": 1.05,
+        "back_logit": 1.1244,
+        "digit_logits": 1.08
+      },
+      "val_nll_before": 0.7353,
+      "val_nll_after": 0.7345,
+      "val_ece_before": 0.0552,
+      "val_ece_after": 0.0574
+    }
+  },
+  "coachbox_compare": {
+    "benchmark": "coachbox_compare_16frames_11m14s",
+    "frames": 16,
+    "results": {
+      "baseline": {
+        "detection_recall": "12/12 (100.0%)",
+        "skater_team_acc": "9/10 (90.0%)",
+        "hash97_team_b_ok": true,
+        "hash97_predicted_num": null,
+        "referee_precision": 0.0,
+        "referee_recall": 0.0,
+        "referee_tp_fp_fn": [
+          0,
+          0,
+          2
+        ],
+        "hash14_referee_fp": false,
+        "jersey_exact_hits": "0/9",
+        "jersey_precision": 0.0,
+        "jersey_recall": 0.0,
+        "matches": [
+          {
+            "gt": "#11",
+            "gt_team": "TEAM_B",
+            "gt_num": "11",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 9
+          },
+          {
+            "gt": "REF_L",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 22
+          },
+          {
+            "gt": "#12",
+            "gt_team": "TEAM_B",
+            "gt_num": "12",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 21
+          },
+          {
+            "gt": "#97",
+            "gt_team": "TEAM_B",
+            "gt_num": "97",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 7
+          },
+          {
+            "gt": "#67",
+            "gt_team": "TEAM_A",
+            "gt_num": "67",
+            "pred_team": "TEAM_A",
+            "pred_num": "87",
+            "track_id": 16
+          },
+          {
+            "gt": "DARK_U",
+            "gt_team": "TEAM_A",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 2
+          },
+          {
+            "gt": "#34",
+            "gt_team": "TEAM_B",
+            "gt_num": "34",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 4
+          },
+          {
+            "gt": "REF_C",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 20
+          },
+          {
+            "gt": "#43",
+            "gt_team": "TEAM_A",
+            "gt_num": "43",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 10
+          },
+          {
+            "gt": "#77",
+            "gt_team": "TEAM_B",
+            "gt_num": "77",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 15
+          },
+          {
+            "gt": "#14",
+            "gt_team": "TEAM_A",
+            "gt_num": "14",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 19
+          },
+          {
+            "gt": "#57",
+            "gt_team": "TEAM_A",
+            "gt_num": "57",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 5
+          }
+        ]
+      },
+      "proposed_sota": {
+        "detection_recall": "12/12 (100.0%)",
+        "skater_team_acc": "10/10 (100.0%)",
+        "hash97_team_b_ok": true,
+        "hash97_predicted_num": null,
+        "referee_precision": 0.0,
+        "referee_recall": 0.0,
+        "referee_tp_fp_fn": [
+          0,
+          0,
+          2
+        ],
+        "hash14_referee_fp": false,
+        "jersey_exact_hits": "0/9",
+        "jersey_precision": 0.0,
+        "jersey_recall": 0.0,
+        "matches": [
+          {
+            "gt": "#11",
+            "gt_team": "TEAM_B",
+            "gt_num": "11",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 25
+          },
+          {
+            "gt": "REF_L",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 26
+          },
+          {
+            "gt": "#12",
+            "gt_team": "TEAM_B",
+            "gt_num": "12",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 16
+          },
+          {
+            "gt": "#97",
+            "gt_team": "TEAM_B",
+            "gt_num": "97",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 23
+          },
+          {
+            "gt": "#67",
+            "gt_team": "TEAM_A",
+            "gt_num": "67",
+            "pred_team": "TEAM_A",
+            "pred_num": "87",
+            "track_id": 11
+          },
+          {
+            "gt": "DARK_U",
+            "gt_team": "TEAM_A",
+            "gt_num": null,
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 27
+          },
+          {
+            "gt": "#34",
+            "gt_team": "TEAM_B",
+            "gt_num": "34",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 24
+          },
+          {
+            "gt": "REF_C",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 22
+          },
+          {
+            "gt": "#43",
+            "gt_team": "TEAM_A",
+            "gt_num": "43",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 1
+          },
+          {
+            "gt": "#77",
+            "gt_team": "TEAM_B",
+            "gt_num": "77",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 15
+          },
+          {
+            "gt": "#14",
+            "gt_team": "TEAM_A",
+            "gt_num": "14",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 21
+          },
+          {
+            "gt": "#57",
+            "gt_team": "TEAM_A",
+            "gt_num": "57",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 5
+          }
+        ]
+      }
+    }
+  },
+  "coachbox_1080p": {
+    "benchmark": "coachbox_1080p_23frames_11m14s",
+    "frames": 23,
+    "results": {
+      "baseline": {
+        "detection_recall": "12/12 (100.0%)",
+        "skater_team_acc": "9/10 (90.0%)",
+        "hash97_team_b_ok": true,
+        "hash97_predicted_num": null,
+        "referee_precision": 1.0,
+        "referee_recall": 0.5,
+        "referee_tp_fp_fn": [
+          1,
+          0,
+          1
+        ],
+        "hash14_referee_fp": false,
+        "jersey_exact_hits": "0/9",
+        "jersey_precision": 0.0,
+        "jersey_recall": 0.0,
+        "matches": [
+          {
+            "gt": "#11",
+            "gt_team": "TEAM_B",
+            "gt_num": "11",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 3
+          },
+          {
+            "gt": "REF_L",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 27
+          },
+          {
+            "gt": "#97",
+            "gt_team": "TEAM_B",
+            "gt_num": "97",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 5
+          },
+          {
+            "gt": "#12",
+            "gt_team": "TEAM_B",
+            "gt_num": "12",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 26
+          },
+          {
+            "gt": "#67",
+            "gt_team": "TEAM_A",
+            "gt_num": "67",
+            "pred_team": "TEAM_A",
+            "pred_num": "62",
+            "track_id": 24
+          },
+          {
+            "gt": "DARK_U",
+            "gt_team": "TEAM_A",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 23
+          },
+          {
+            "gt": "#34",
+            "gt_team": "TEAM_B",
+            "gt_num": "34",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 8
+          },
+          {
+            "gt": "REF_C",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "REFEREE",
+            "pred_num": null,
+            "track_id": 25
+          },
+          {
+            "gt": "#77",
+            "gt_team": "TEAM_B",
+            "gt_num": "77",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 16
+          },
+          {
+            "gt": "#43",
+            "gt_team": "TEAM_A",
+            "gt_num": "43",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 28
+          },
+          {
+            "gt": "#14",
+            "gt_team": "TEAM_A",
+            "gt_num": "14",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 18
+          },
+          {
+            "gt": "#57",
+            "gt_team": "TEAM_A",
+            "gt_num": "57",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 2
+          }
+        ]
+      },
+      "proposed_sota": {
+        "detection_recall": "12/12 (100.0%)",
+        "skater_team_acc": "9/10 (90.0%)",
+        "hash97_team_b_ok": true,
+        "hash97_predicted_num": null,
+        "referee_precision": 1.0,
+        "referee_recall": 0.5,
+        "referee_tp_fp_fn": [
+          1,
+          0,
+          1
+        ],
+        "hash14_referee_fp": false,
+        "jersey_exact_hits": "1/9",
+        "jersey_precision": 1.0,
+        "jersey_recall": 0.111,
+        "matches": [
+          {
+            "gt": "#11",
+            "gt_team": "TEAM_B",
+            "gt_num": "11",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 8
+          },
+          {
+            "gt": "REF_L",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 40
+          },
+          {
+            "gt": "#97",
+            "gt_team": "TEAM_B",
+            "gt_num": "97",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 3
+          },
+          {
+            "gt": "#12",
+            "gt_team": "TEAM_B",
+            "gt_num": "12",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 23
+          },
+          {
+            "gt": "#67",
+            "gt_team": "TEAM_A",
+            "gt_num": "67",
+            "pred_team": "TEAM_A",
+            "pred_num": "67",
+            "track_id": 37
+          },
+          {
+            "gt": "DARK_U",
+            "gt_team": "TEAM_A",
+            "gt_num": null,
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 39
+          },
+          {
+            "gt": "#34",
+            "gt_team": "TEAM_B",
+            "gt_num": "34",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 38
+          },
+          {
+            "gt": "REF_C",
+            "gt_team": "REFEREE",
+            "gt_num": null,
+            "pred_team": "REFEREE",
+            "pred_num": null,
+            "track_id": 35
+          },
+          {
+            "gt": "#77",
+            "gt_team": "TEAM_B",
+            "gt_num": "77",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 41
+          },
+          {
+            "gt": "#43",
+            "gt_team": "TEAM_A",
+            "gt_num": "43",
+            "pred_team": "TEAM_B",
+            "pred_num": null,
+            "track_id": 34
+          },
+          {
+            "gt": "#14",
+            "gt_team": "TEAM_A",
+            "gt_num": "14",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 15
+          },
+          {
+            "gt": "#57",
+            "gt_team": "TEAM_A",
+            "gt_num": "57",
+            "pred_team": "TEAM_A",
+            "pred_num": null,
+            "track_id": 30
+          }
+        ]
+      }
+    }
+  },
+  "burst_ghost_suppression": {
+    "crossfade_30s": {
+      "max_raw_detections": 22,
+      "burst_frames_gt12": 17,
+      "baseline_max_emitted": 22,
+      "sota_max_emitted": 15
+    },
+    "cleanhold_30s": {
+      "max_raw_detections": 12,
+      "burst_frames_gt12": 0,
+      "baseline_max_emitted": 12,
+      "sota_max_emitted": 12
+    }
+  },
+  "non_coachbox_sanity": {
+    "sample_hockey_30s": {
+      "video": "sample_hockey_30s.mp4",
+      "frames_sampled": 30,
+      "mean_on_ice_detections": 0.0,
+      "max_on_ice_detections": 0,
+      "track_team_counts": {
+        "TEAM_A": 0,
+        "TEAM_B": 0,
+        "REFEREE": 0,
+        "UNKNOWN": 0
+      },
+      "roster_free_jersey_numbers_resolved": []
+    },
+    "tvi_iceland_clip_01": {
+      "video": "tvi_iceland_clip_01_0240s_0270s.mp4",
+      "frames_sampled": 60,
+      "mean_on_ice_detections": 8.93,
+      "max_on_ice_detections": 13,
+      "track_team_counts": {
+        "TEAM_A": 32,
+        "TEAM_B": 28,
+        "REFEREE": 5,
+        "UNKNOWN": 0
+      },
+      "roster_free_jersey_numbers_resolved": [
+        "TEAM_A:#10",
+        "TEAM_A:#21",
+        "TEAM_A:#25",
+        "TEAM_A:#47",
+        "TEAM_A:#55",
+        "TEAM_A:#92",
+        "TEAM_B:#10",
+        "TEAM_B:#11",
+        "TEAM_B:#22",
+        "TEAM_B:#32",
+        "TEAM_B:#47",
+        "TEAM_B:#53",
+        "TEAM_B:#65",
+        "TEAM_B:#98"
+      ]
+    }
+  }
+}

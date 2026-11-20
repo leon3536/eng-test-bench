@@ -1,0 +1,192 @@
+{
+  "version": 5,
+  "model_name": "coach_jersey_str",
+  "architecture": "MobileNetV3Large_FPN_SR_Aux_TrainOnly_6Query2DCrossAttn_Compositional_Orientation",
+  "input_size": 128,
+  "opset": 17,
+  "size_bytes": 12487366,
+  "size_mb": 12.487,
+  "xnnpack_safe_ops": [
+    "Add",
+    "Concat",
+    "Constant",
+    "ConstantOfShape",
+    "Conv",
+    "Div",
+    "Equal",
+    "Expand",
+    "Gather",
+    "Gemm",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "HardSwish",
+    "Identity",
+    "LogSoftmax",
+    "MatMul",
+    "Mul",
+    "ReduceMean",
+    "Relu",
+    "Reshape",
+    "Resize",
+    "Shape",
+    "Slice",
+    "Softmax",
+    "Sub",
+    "Tanh",
+    "Transpose",
+    "Where"
+  ],
+  "input": {
+    "name": "images",
+    "dtype": "float32",
+    "shape": [
+      1,
+      3,
+      128,
+      128
+    ],
+    "layout": "NCHW_RGB_0_TO_1",
+    "normalization_embedded": true,
+    "imagenet_mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "imagenet_std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "letterbox_pad_rgb": [
+      114,
+      114,
+      114
+    ],
+    "recommended_torso_crop_rel": [
+      -0.06,
+      0.04,
+      1.06,
+      0.58
+    ]
+  },
+  "outputs": {
+    "legibility_logit": [
+      1,
+      1
+    ],
+    "back_logit": [
+      1,
+      1
+    ],
+    "number_logits": [
+      1,
+      101
+    ],
+    "left_digit_logits": [
+      1,
+      11
+    ],
+    "right_digit_logits": [
+      1,
+      11
+    ],
+    "orientation_deg": [
+      1,
+      1
+    ]
+  },
+  "orientation_convention": {
+    "sign": "+theta > 0 means CCW rotation in image space (cv2.getRotationMatrix2D(center, +theta, 1.0))",
+    "python_derotate": "cv2.getRotationMatrix2D(center, -orientation_deg, 1.0)",
+    "android_derotate": "matrix.postRotate(+orientationDeg, cx, cy)",
+    "range_deg": [
+      -60.0,
+      60.0
+    ]
+  },
+  "class_encoding": {
+    "number_logits": "0=illegible/none, 1..99=jersey 1..99, 100=\"00\"",
+    "left_digit_logits": "0..9=tens_or_only_digit, 10=blank",
+    "right_digit_logits": "0..9=ones_digit, 10=blank_or_single",
+    "prior": "uniform_1_to_99_plus_00_roster_free"
+  },
+  "calibration": {
+    "temperature_baked_in_onnx": true,
+    "effective_temperature": 1.0,
+    "fitted_raw_temperatures": {
+      "number_logits": 0.94,
+      "legibility_logit": 0.94,
+      "back_logit": 0.94,
+      "digit_logits": 0.94
+    },
+    "val_nll_before": 0.274,
+    "val_nll_after": 0.2588,
+    "val_ece_before": 0.0445,
+    "val_ece_after": 0.0189
+  },
+  "synthetic_validation_metrics": {
+    "legible_top1": 0.8957,
+    "legible_top3": 0.9597,
+    "order_swap_top1": 0.893,
+    "order_swap_acc": 0.9991,
+    "swap_error_count": 5.0,
+    "hard_neg_fp_rate": 0.0021,
+    "hard_neg_argmax_nonzero": 0.0021,
+    "legibility_acc": 0.9973,
+    "back_acc": 0.8283,
+    "tilt_mae_deg": 0.8687,
+    "tilt_wide_mae_deg": 0.9527,
+    "sr_dice": 0.0,
+    "left_partial_digit_acc": 0.9263,
+    "right_partial_digit_acc": 0.944,
+    "left_digit_acc": 0.9617,
+    "right_digit_acc": 0.9632
+  },
+  "benchmark": {
+    "onnxruntime_cpu_2thread_ms": 0.591,
+    "pytorch_onnx_max_abs_diff": 2.38e-06
+  },
+  "ccw35_derotation_sanity": {
+    "input_true_tilt_deg": 35.0,
+    "pass1_pred_cls": 27,
+    "pass1_prob": 0.9708,
+    "pass1_leg": 0.9917,
+    "pass1_orientation_deg": 36.42,
+    "pass2_derot_angle_opencv": -36.42,
+    "pass2_pred_cls": 27,
+    "pass2_prob": 0.9768,
+    "pass2_leg": 0.9912,
+    "pass2_residual_orientation_deg": -2.06,
+    "linear_check": {
+      "pass1_pred_cls": 27,
+      "pass1_prob": 0.9719,
+      "pass1_leg": 0.992,
+      "pass1_orientation_deg": 36.36,
+      "pass2_derot_angle_opencv": -36.36,
+      "pass2_pred_cls": 27,
+      "pass2_prob": 0.9761,
+      "pass2_leg": 0.9913,
+      "pass2_residual_orientation_deg": -1.62
+    }
+  },
+  "summary": {
+    "best_v5_val": {
+      "legible_top1": 0.8957,
+      "legible_top3": 0.9597,
+      "order_swap_top1": 0.893,
+      "order_swap_acc": 0.9991,
+      "swap_error_count": 5.0,
+      "hard_neg_fp_rate": 0.0021,
+      "hard_neg_argmax_nonzero": 0.0021,
+      "legibility_acc": 0.9973,
+      "back_acc": 0.8283,
+      "tilt_mae_deg": 0.8687,
+      "tilt_wide_mae_deg": 0.9527,
+      "sr_dice": 0.8873,
+      "left_partial_digit_acc": 0.9263,
+      "right_partial_digit_acc": 0.944,
+      "left_digit_acc": 0.9617,
+      "right_digit_acc": 0.9632
+    }
+  }
+}

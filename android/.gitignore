@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+build/
+*/build/
+**/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Local untracked runtime ONNX & demo video assets (see DESIGN.md §12.1)
+app/src/main/assets/coach_person_detector.onnx
+app/src/main/assets/coach_live_head.onnx
+app/src/main/res/raw/hockey_sample_30s.mp4

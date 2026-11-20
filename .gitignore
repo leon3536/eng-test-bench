@@ -42,3 +42,14 @@ __pycache__/
 # Local tool state: Claude Code's scheduler lock and the headless browser driver's pid file.
 .claude/scheduled_tasks.lock
 drv.pid
+
+# Research training artifacts & caches
+research/__pycache__/
+research/*shards*/
+research/*.pt
+research/*.pth
+research/*.npz
+research/checkpoints*/
+
+# Understand Anything local knowledge graph
+/.ua/

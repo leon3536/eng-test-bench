@@ -1,0 +1,935 @@
+{
+  "title": "Engineering Test Bench",
+  "subtitle": "Which AI coding agent (harness) gets the most out of each model, and at what cost?",
+  "totalTrials": 2468,
+  "totalSpendUsd": 404.18,
+  "taskCount": 27,
+  "harnesses": [
+    "Claude Code",
+    "Pi",
+    "Goose",
+    "OpenCode",
+    "Kilo",
+    "Cline",
+    "Terminus-2",
+    "mini-swe-agent",
+    "Strands",
+    "Droid",
+    "DeepSeek Harness"
+  ],
+  "models": [
+    "Opus 5.5 low",
+    "Opus 5.5 medium",
+    "Opus 5.5 high",
+    "Sonnet 5.5",
+    "Kimi K3",
+    "GPT-6.1 Terra",
+    "DeepSeek V4.1 Flash",
+    "GLM 5.3",
+    "Grok 4.7"
+  ],
+  "cells": [
+    {
+      "harness": "Claude Code",
+      "model": "Opus 5.5 low",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.07558,
+      "medianSec": 62.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "Opus 5.5 medium",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.084277,
+      "medianSec": 215.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "Opus 5.5 high",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.10516,
+      "medianSec": 82.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "Sonnet 5.5",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.035987,
+      "medianSec": 63.7,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "Kimi K3",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.132145,
+      "medianSec": 107.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "GPT-6.1 Terra",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.022915,
+      "medianSec": 75.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Claude Code",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.022511,
+      "medianSec": 120.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Opus 5.5 low",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.056491,
+      "medianSec": 101.1,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Opus 5.5 medium",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.058067,
+      "medianSec": 244.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.077837,
+      "medianSec": 115.5,
+      "badge": "column_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.021183,
+      "medianSec": 94.8,
+      "badge": "local_optimum",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Kimi K3",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.067734,
+      "medianSec": 144.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "GPT-6.1 Terra",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.016814,
+      "medianSec": 126.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.031237,
+      "medianSec": 160.4,
+      "badge": "column_winner",
+      "lookupFail": 1
+    },
+    {
+      "harness": "Pi",
+      "model": "GLM 5.3",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.026136,
+      "medianSec": 271.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Pi",
+      "model": "Grok 4.7",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.204522,
+      "medianSec": 485.4,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Goose",
+      "model": "Opus 5.5 low",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.059985,
+      "medianSec": 63.0,
+      "badge": "local_optimum",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "Opus 5.5 medium",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.074053,
+      "medianSec": 132.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.087605,
+      "medianSec": 115.4,
+      "badge": "column_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.022913,
+      "medianSec": 63.0,
+      "badge": "column_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "Kimi K3",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.070168,
+      "medianSec": 140.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "GPT-6.1 Terra",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.016162,
+      "medianSec": 87.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 23,
+      "total": 27,
+      "costUsd": 0.030522,
+      "medianSec": 148.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "GLM 5.3",
+      "passed": 21,
+      "total": 27,
+      "costUsd": 0.026401,
+      "medianSec": 162.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Goose",
+      "model": "Grok 4.7",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.125932,
+      "medianSec": 275.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Opus 5.5 low",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.10071,
+      "medianSec": 107.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Opus 5.5 medium",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.092999,
+      "medianSec": 190.7,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.100222,
+      "medianSec": 106.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.02627,
+      "medianSec": 100.8,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Kimi K3",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.137792,
+      "medianSec": 207.3,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "GPT-6.1 Terra",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.035659,
+      "medianSec": 166.3,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.021802,
+      "medianSec": 187.1,
+      "badge": "local_optimum",
+      "lookupFail": 2
+    },
+    {
+      "harness": "OpenCode",
+      "model": "GLM 5.3",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.07275,
+      "medianSec": 278.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "OpenCode",
+      "model": "Grok 4.7",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.243562,
+      "medianSec": 345.0,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Kilo",
+      "model": "Opus 5.5 low",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.167876,
+      "medianSec": 119.4,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "Opus 5.5 medium",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.079286,
+      "medianSec": 80.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.146079,
+      "medianSec": 121.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.028769,
+      "medianSec": 96.1,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "Kimi K3",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.146864,
+      "medianSec": 160.4,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "GPT-6.1 Terra",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.047399,
+      "medianSec": 222.8,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.039048,
+      "medianSec": 181.2,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Kilo",
+      "model": "GLM 5.3",
+      "passed": 20,
+      "total": 27,
+      "costUsd": 0.076946,
+      "medianSec": 205.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Kilo",
+      "model": "Grok 4.7",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.18503,
+      "medianSec": 331.1,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Opus 5.5 low",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.077154,
+      "medianSec": 144.7,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Opus 5.5 medium",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.123214,
+      "medianSec": 227.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.138452,
+      "medianSec": 161.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.03908,
+      "medianSec": 147.4,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Kimi K3",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.087575,
+      "medianSec": 188.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "GPT-6.1 Terra",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.028542,
+      "medianSec": 186.8,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.049734,
+      "medianSec": 295.8,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "GLM 5.3",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.055783,
+      "medianSec": 180.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Cline",
+      "model": "Grok 4.7",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.324448,
+      "medianSec": 380.9,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Opus 5.5 low",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.073034,
+      "medianSec": 112.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Opus 5.5 medium",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.105405,
+      "medianSec": 128.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.124999,
+      "medianSec": 178.3,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.040999,
+      "medianSec": 115.3,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Kimi K3",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.060494,
+      "medianSec": 198.1,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "GPT-6.1 Terra",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.01849,
+      "medianSec": 108.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.025941,
+      "medianSec": 157.2,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "GLM 5.3",
+      "passed": 23,
+      "total": 27,
+      "costUsd": 0.049389,
+      "medianSec": 280.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Terminus-2",
+      "model": "Grok 4.7",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.128485,
+      "medianSec": 301.3,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Opus 5.5 low",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.054405,
+      "medianSec": 88.0,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Opus 5.5 medium",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.074904,
+      "medianSec": 186.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Opus 5.5 high",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.089223,
+      "medianSec": 103.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Sonnet 5.5",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.025974,
+      "medianSec": 74.0,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Kimi K3",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.139235,
+      "medianSec": 180.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "GPT-6.1 Terra",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.023527,
+      "medianSec": 127.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.02723,
+      "medianSec": 150.1,
+      "badge": "column_winner",
+      "lookupFail": 2
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "GLM 5.3",
+      "passed": 20,
+      "total": 27,
+      "costUsd": 0.09975,
+      "medianSec": 662.1,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "mini-swe-agent",
+      "model": "Grok 4.7",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.212132,
+      "medianSec": 505.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Opus 5.5 low",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.084767,
+      "medianSec": 74.5,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Opus 5.5 medium",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.086033,
+      "medianSec": 130.4,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Opus 5.5 high",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.116133,
+      "medianSec": 83.1,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Sonnet 5.5",
+      "passed": 27,
+      "total": 27,
+      "costUsd": 0.025157,
+      "medianSec": 73.4,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Kimi K3",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.095044,
+      "medianSec": 165.7,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "GPT-6.1 Terra",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.077877,
+      "medianSec": 121.0,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.061168,
+      "medianSec": 271.1,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Strands",
+      "model": "GLM 5.3",
+      "passed": 21,
+      "total": 27,
+      "costUsd": 0.050795,
+      "medianSec": 184.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Strands",
+      "model": "Grok 4.7",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.153182,
+      "medianSec": 257.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Opus 5.5 low",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.058086,
+      "medianSec": 155.4,
+      "badge": "row_winner",
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Opus 5.5 medium",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.088795,
+      "medianSec": 131.6,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Opus 5.5 high",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.091245,
+      "medianSec": 163.3,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Sonnet 5.5",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.031075,
+      "medianSec": 94.5,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Kimi K3",
+      "passed": 26,
+      "total": 27,
+      "costUsd": 0.114418,
+      "medianSec": 272.4,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "GPT-6.1 Terra",
+      "passed": 23,
+      "total": 27,
+      "costUsd": 0.03434,
+      "medianSec": 197.9,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 25,
+      "total": 27,
+      "costUsd": 0.026696,
+      "medianSec": 231.7,
+      "badge": null,
+      "lookupFail": 1
+    },
+    {
+      "harness": "Droid",
+      "model": "GLM 5.3",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.072916,
+      "medianSec": 233.8,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "Droid",
+      "model": "Grok 4.7",
+      "passed": 22,
+      "total": 27,
+      "costUsd": 0.130788,
+      "medianSec": 163.8,
+      "badge": null,
+      "lookupFail": 0
+    },
+    {
+      "harness": "DeepSeek Harness",
+      "model": "DeepSeek V4.1 Flash",
+      "passed": 24,
+      "total": 27,
+      "costUsd": 0.028696,
+      "medianSec": 303.9,
+      "badge": "column_winner",
+      "lookupFail": 1
+    }
+  ],
+  "findings": [
+    "Model choice correlates more with task success; harness choice correlates more with cost.",
+    "Sonnet 5.5 stood out among the mid-tier models: it passed 97% of tasks across the 8 harnesses that ran every model in the 3 Nov results (before Droid), was the fastest, and tied with Terra as the cheapest.",
+    "Claude Code was the fastest harness at Opus 5.5 medium (agent run time, task by task), not the cheapest. At Opus low and high and on Sonnet, Goose was about as fast or faster.",
+    "DeepSeek and GLM cost less than Opus 5.5 medium on every harness (for GLM on Kilo, mini-swe-agent and Droid, no difference is also possible), and each open model tended to do best on a particular harness.",
+    "Grok 4.7 was the most expensive option in this test, and the slowest on most harnesses.",
+    "Some agents with internet access looked up the benchmark's answers. We count those as fails.",
+    "Droid's handling of the agent's background processes correlated with failures on tasks that ask the agent to leave a service running. In 17 of Droid's 20 failed trials on those tasks, the Droid program's log shows it stopping the server the task needed when it exited (Droid 1.0.0, `droid exec`); without those three tasks Droid passed as many tasks as the reference harness, or more, in 8 of 9 model columns.",
+    "Gateway (6 Nov 2026, $16.37 reported separately from main $404.18 total): Claude Code on Opus passed 26/27 through the LiteLLM gateway vs 27/27 direct at 1.48x cost; translated DeepSeek passed 23/27 vs 26/27 on the native route; Kimi K3 passed 25/27 on pass-through; Terra cost corrected from $11.41 to $2.01 from the gateway spend log.",
+    "Totals breakdown (docs/results.md & docs/report.html): 2,225 trials and $357.95 across 41 runs with 12 answer lookups (3 Nov 2026) plus 243 Droid trials, $46.23, and 1 answer lookup (13 Nov 2026) = 2,468 trials, $404.18 spend, and 13 answer lookups counted as fails."
+  ],
+  "designsCount": 28
+}
